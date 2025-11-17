@@ -1,0 +1,11 @@
+fastapi
+uvicorn
+pandas
+plotly
+kaleido
+openpyxl
+python-multipart
+dotenv
+openia
+tailwindcss 
+
