@@ -1,5 +1,6 @@
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Depends
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from fastapi.security import HTTPBearer
 import pandas as pd
 import io
@@ -33,15 +34,14 @@ logging.basicConfig(
 app = FastAPI(title="Intelligent Data Analyzer")
 
 # -----------------------------
-# CORS CONFIGURACIÓN COMPLETA
+# 🔧 CONFIGURACIÓN CORS MEJORADA (FUNCIONA EN RENDER)
 # -----------------------------
 allowed_origins = [
     FRONTEND_URL,
     "http://localhost:5173",
     "http://localhost:3000",
-    # dominios render frontend (usa siempre ambos)
     "https://nvp-informabf-front.onrender.com",
-    "https://nvp-informabf-front-wxdb.onrender.com"
+    "https://nvp-informabf-front-wxdb.onrender.com",
 ]
 
 app.add_middleware(
@@ -54,6 +54,21 @@ app.add_middleware(
 
 logging.info(f"🚀 Backend iniciado en modo: {ENV}")
 logging.info(f"🌐 Orígenes permitidos: {allowed_origins}")
+
+# 🔹 NUEVO: Manejo manual del preflight (CORS OPTIONS)
+@app.options("/{rest_of_path:path}")
+async def preflight_handler(request: Request, rest_of_path: str):
+    """Responde a las solicitudes preflight OPTIONS"""
+    origin = request.headers.get("origin")
+    if origin in allowed_origins:
+        headers = {
+            "Access-Control-Allow-Origin": origin,
+            "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+            "Access-Control-Allow-Headers": "Authorization, Content-Type",
+            "Access-Control-Allow-Credentials": "true",
+        }
+        return JSONResponse(content={"status": "ok"}, headers=headers)
+    return JSONResponse(content={"status": "CORS denied"}, status_code=403)
 
 # -----------------------------
 # ROUTER AUTH
