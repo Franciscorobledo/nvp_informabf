@@ -6,6 +6,7 @@ kaleido
 openpyxl
 python-multipart
 python-dotenv
-pyjwt
 openai
-tailwindcss
+seaborn
+matplotlib
+numpy
