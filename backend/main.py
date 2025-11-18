@@ -10,7 +10,7 @@ from dotenv import load_dotenv
 
 from utils.file_utils import validate_file
 from analysis import analyze_file, detect_column_types
-from auth import router as auth_router  # <--- Importación del router de autenticación
+from auth import router as auth_router  # Importación del router de autenticación
 
 # -----------------------------
 # CONFIGURACIÓN GLOBAL
@@ -30,19 +30,21 @@ logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(message)s"
 )
 
+# -----------------------------
+# CREACIÓN DE LA APP
+# -----------------------------
 app = FastAPI(title="Intelligent Data Analyzer")
 
 # -----------------------------
-# CORS CONFIGURACIÓN COMPLETA
+# CONFIGURACIÓN CORS
 # -----------------------------
-allowed_origins = list(set([
-    FRONTEND_URL,
+allowed_origins = [
+    FRONTEND_URL,  # dinámico desde el entorno
     "http://localhost:5173",
     "http://localhost:3000",
-    # 🔹 Dominios Render frontend (principal y temporales)
     "https://nvp-informabf-front.onrender.com",
     "https://nvp-informabf-front-wxdb.onrender.com",
-]))
+]
 
 app.add_middleware(
     CORSMiddleware,
@@ -105,6 +107,7 @@ async def upload_preview(file: UploadFile = File(...)):
         "sample": sample
     }
 
+
 @app.post("/upload", dependencies=[Depends(verify_token)])
 async def upload_file(
     file: UploadFile = File(...),
@@ -138,6 +141,7 @@ async def upload_file(
         raise HTTPException(status_code=500, detail=f"Error en el análisis: {e}")
 
     return result
+
 
 # -----------------------------
 # ENDPOINT RAÍZ
