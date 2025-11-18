@@ -10,7 +10,7 @@ from dotenv import load_dotenv
 
 from utils.file_utils import validate_file
 from analysis import analyze_file, detect_column_types
-from auth import router as auth_router  # Importación del router de autenticación
+from auth import router as auth_router
 
 # -----------------------------
 # CONFIGURACIÓN GLOBAL
@@ -30,20 +30,18 @@ logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(message)s"
 )
 
-# -----------------------------
-# CREACIÓN DE LA APP
-# -----------------------------
 app = FastAPI(title="Intelligent Data Analyzer")
 
 # -----------------------------
-# CONFIGURACIÓN CORS
+# CORS CONFIGURACIÓN COMPLETA
 # -----------------------------
 allowed_origins = [
-    FRONTEND_URL,  # dinámico desde el entorno
+    FRONTEND_URL,
     "http://localhost:5173",
     "http://localhost:3000",
+    # dominios render frontend (usa siempre ambos)
     "https://nvp-informabf-front.onrender.com",
-    "https://nvp-informabf-front-wxdb.onrender.com",
+    "https://nvp-informabf-front-wxdb.onrender.com"
 ]
 
 app.add_middleware(
@@ -58,7 +56,7 @@ logging.info(f"🚀 Backend iniciado en modo: {ENV}")
 logging.info(f"🌐 Orígenes permitidos: {allowed_origins}")
 
 # -----------------------------
-# INCLUSIÓN DE ROUTER AUTH
+# ROUTER AUTH
 # -----------------------------
 app.include_router(auth_router, prefix="/auth", tags=["Autenticación"])
 
@@ -80,7 +78,6 @@ def verify_token(credentials=Depends(security)):
 # -----------------------------
 @app.post("/upload/preview", dependencies=[Depends(verify_token)])
 async def upload_preview(file: UploadFile = File(...)):
-    """Analiza la estructura del archivo y devuelve columnas detectadas."""
     logging.info(f"📂 Recibido archivo: {file.filename}")
 
     if not validate_file(file.filename):
@@ -107,7 +104,6 @@ async def upload_preview(file: UploadFile = File(...)):
         "sample": sample
     }
 
-
 @app.post("/upload", dependencies=[Depends(verify_token)])
 async def upload_file(
     file: UploadFile = File(...),
@@ -115,7 +111,6 @@ async def upload_file(
     metric_field: str = Form(None),
     segment_field: str = Form(None)
 ):
-    """Analiza el archivo completo según la selección del usuario."""
     logging.info(f"📊 Analizando archivo {file.filename}")
 
     content = await file.read()
@@ -142,7 +137,6 @@ async def upload_file(
 
     return result
 
-
 # -----------------------------
 # ENDPOINT RAÍZ
 # -----------------------------
@@ -153,6 +147,5 @@ def root():
         "message": "🚀 Intelligent Data Analyzer API operativa",
         "environment": ENV,
         "frontend_allowed": FRONTEND_URL,
-        "openai_key_detected": bool(OPENAI_API_KEY),
         "origins": allowed_origins
     }
