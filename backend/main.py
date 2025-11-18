@@ -40,8 +40,7 @@ allowed_origins = [
     FRONTEND_URL,
     "http://localhost:5173",
     "http://localhost:3000",
-    "https://nvp-informabf-front.onrender.com",
-    "https://nvp-informabf-front-wxdb.onrender.com"
+    "https://nvp-informabf-front-wxbb.onrender.com"
 ]
 
 app.add_middleware(
