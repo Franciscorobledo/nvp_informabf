@@ -34,14 +34,14 @@ logging.basicConfig(
 app = FastAPI(title="Intelligent Data Analyzer")
 
 # -----------------------------
-# 🔧 CONFIGURACIÓN CORS MEJORADA (FUNCIONA EN RENDER)
+# CORS CONFIGURACIÓN FORZADA
 # -----------------------------
 allowed_origins = [
     FRONTEND_URL,
     "http://localhost:5173",
     "http://localhost:3000",
     "https://nvp-informabf-front.onrender.com",
-    "https://nvp-informabf-front-wxdb.onrender.com",
+    "https://nvp-informabf-front-wxdb.onrender.com"
 ]
 
 app.add_middleware(
@@ -55,12 +55,29 @@ app.add_middleware(
 logging.info(f"🚀 Backend iniciado en modo: {ENV}")
 logging.info(f"🌐 Orígenes permitidos: {allowed_origins}")
 
-# 🔹 NUEVO: Manejo manual del preflight (CORS OPTIONS)
+
+# -----------------------------
+# MIDDLEWARE EXTRA: FORZAR CORS HEADERS EN TODA RESPUESTA
+# -----------------------------
+@app.middleware("http")
+async def add_cors_headers(request: Request, call_next):
+    response = await call_next(request)
+    origin = request.headers.get("origin")
+    if origin and origin in allowed_origins:
+        response.headers["Access-Control-Allow-Origin"] = origin
+        response.headers["Access-Control-Allow-Credentials"] = "true"
+        response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
+        response.headers["Access-Control-Allow-Headers"] = "Authorization, Content-Type"
+    return response
+
+
+# -----------------------------
+# OPCIONES MANUALES (preflight)
+# -----------------------------
 @app.options("/{rest_of_path:path}")
 async def preflight_handler(request: Request, rest_of_path: str):
-    """Responde a las solicitudes preflight OPTIONS"""
     origin = request.headers.get("origin")
-    if origin in allowed_origins:
+    if origin and origin in allowed_origins:
         headers = {
             "Access-Control-Allow-Origin": origin,
             "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
@@ -68,12 +85,14 @@ async def preflight_handler(request: Request, rest_of_path: str):
             "Access-Control-Allow-Credentials": "true",
         }
         return JSONResponse(content={"status": "ok"}, headers=headers)
-    return JSONResponse(content={"status": "CORS denied"}, status_code=403)
+    return JSONResponse(content={"status": "denied"}, status_code=403)
+
 
 # -----------------------------
 # ROUTER AUTH
 # -----------------------------
 app.include_router(auth_router, prefix="/auth", tags=["Autenticación"])
+
 
 # -----------------------------
 # VERIFICACIÓN DE TOKEN
@@ -87,6 +106,7 @@ def verify_token(credentials=Depends(security)):
         raise HTTPException(status_code=401, detail="Token expirado")
     except jwt.InvalidTokenError:
         raise HTTPException(status_code=401, detail="Token inválido o mal formado")
+
 
 # -----------------------------
 # ENDPOINTS DE ANÁLISIS
@@ -118,6 +138,7 @@ async def upload_preview(file: UploadFile = File(...)):
         "columns": [{"name": c, "type": types[c]} for c in df.columns],
         "sample": sample
     }
+
 
 @app.post("/upload", dependencies=[Depends(verify_token)])
 async def upload_file(
@@ -151,6 +172,7 @@ async def upload_file(
         raise HTTPException(status_code=500, detail=f"Error en el análisis: {e}")
 
     return result
+
 
 # -----------------------------
 # ENDPOINT RAÍZ
