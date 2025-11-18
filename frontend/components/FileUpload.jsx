@@ -24,7 +24,12 @@ const FileUpload = ({ onDataReceived }) => {
     setLoading(true);
 
     try {
-      const res = await fetch("http://localhost:8000/upload", {
+      // ✅ URL dinámica desde .env
+      const API_URL = import.meta.env.VITE_API_URL || "http://localhost:10000";
+
+      console.log("🌐 Subiendo archivo a:", `${API_URL}/upload`);
+
+      const res = await fetch(`${API_URL}/upload`, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` },
         body: formData,
@@ -32,6 +37,7 @@ const FileUpload = ({ onDataReceived }) => {
 
       if (!res.ok) {
         const msg = await res.text();
+        console.error("❌ Error del servidor:", msg);
         alert(`Error del servidor: ${msg}`);
         return;
       }
@@ -41,8 +47,8 @@ const FileUpload = ({ onDataReceived }) => {
       setAnalysis(data);
       onDataReceived?.(data);
     } catch (err) {
-      console.error("Error al subir archivo:", err);
-      alert("Error al conectar con el backend.");
+      console.error("💥 Error al conectar con el backend:", err);
+      alert("Error de conexión. Verifica que el backend esté corriendo.");
     } finally {
       setLoading(false);
     }
@@ -121,7 +127,6 @@ const FileUpload = ({ onDataReceived }) => {
     }
   };
 
-  // --- Tabs principales ---
   const tabs = [
     { id: "resumen", label: "🧾 Resumen" },
     { id: "graficos", label: "📊 Visualizaciones" },
@@ -152,10 +157,10 @@ const FileUpload = ({ onDataReceived }) => {
         </button>
       </div>
 
-      {/* Panel de resultados */}
+      {/* Resultados */}
       {analysis && (
         <div className="mt-10 w-full bg-white rounded-2xl p-8 shadow-xl border border-gray-200">
-          {/* Navegación por pestañas */}
+          {/* Tabs */}
           <div className="flex justify-center mb-6 border-b border-gray-200">
             {tabs.map((tab) => (
               <button
@@ -172,11 +177,12 @@ const FileUpload = ({ onDataReceived }) => {
             ))}
           </div>
 
-          {/* CONTENIDO SEGÚN TAB */}
           <div className="p-4">
             {activeTab === "resumen" && (
               <div>
-                <h3 className="text-lg font-semibold mb-2 text-gray-800">📄 Resumen del dataset</h3>
+                <h3 className="text-lg font-semibold mb-2 text-gray-800">
+                  📄 Resumen del dataset
+                </h3>
                 <pre className="bg-gray-50 p-4 rounded-lg border text-sm overflow-x-auto">
                   {JSON.stringify(analysis.summary, null, 2)}
                 </pre>

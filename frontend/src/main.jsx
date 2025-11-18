@@ -1,10 +1,10 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import ReactDOM from "react-dom/client";
 import FileUpload from "../components/FileUpload.jsx";
 import "./index.css";
 
 // ---------------------------
-// COMPONENTE LOGIN (con backend real)
+// COMPONENTE LOGIN
 // ---------------------------
 const Login = ({ onLogin }) => {
   const [username, setUsername] = useState("");
@@ -25,9 +25,12 @@ const Login = ({ onLogin }) => {
       formData.append("username", username);
       formData.append("password", password);
 
-      console.log("🔄 Iniciando sesión con:", username);
+      console.log("🔄 Intentando iniciar sesión:", username);
 
-      const res = await fetch("http://localhost:8000/auth/login", {
+      // ✅ URL dinámica desde .env
+      const API_URL = import.meta.env.VITE_API_URL || "http://localhost:10000";
+
+      const res = await fetch(`${API_URL}/auth/login`, {
         method: "POST",
         body: formData,
       });
@@ -35,7 +38,7 @@ const Login = ({ onLogin }) => {
       if (!res.ok) {
         const msg = await res.text();
         console.error("❌ Error del backend:", msg);
-        alert("Usuario o contraseña incorrectos.");
+        alert("Usuario o contraseña incorrectos o servidor no disponible.");
         return;
       }
 
@@ -48,16 +51,17 @@ const Login = ({ onLogin }) => {
         return;
       }
 
-      // Guardamos token y usuario
+      // Guardar token y usuario
       localStorage.setItem("token", token);
-      localStorage.setItem("user", data.user || username);
+      localStorage.setItem("user", data.username || username);
 
-      console.log("🔐 Token guardado en localStorage:", token);
+      console.log("🔐 Token guardado:", token);
+      console.log("👤 Usuario logueado:", data.username || username);
 
-      onLogin({ username: data.user || username });
+      onLogin({ username: data.username || username });
     } catch (err) {
       console.error("💥 Error de conexión:", err);
-      alert("No se pudo conectar con el servidor.");
+      alert("No se pudo conectar con el servidor. Verifica que el backend esté activo.");
     } finally {
       setLoading(false);
     }
@@ -158,7 +162,17 @@ const Dashboard = ({ user, onLogout }) => {
 // COMPONENTE PRINCIPAL APP
 // ---------------------------
 const App = () => {
-  const [user, setUser] = useState(localStorage.getItem("user") || null);
+  const [user, setUser] = useState(null);
+
+  // ✅ Mantener sesión activa si hay datos en localStorage
+  useEffect(() => {
+    const savedUser = localStorage.getItem("user");
+    const savedToken = localStorage.getItem("token");
+    if (savedUser && savedToken) {
+      console.log("🔁 Sesión restaurada automáticamente:", savedUser);
+      setUser(savedUser);
+    }
+  }, []);
 
   const handleLogin = (u) => {
     setUser(u.username);

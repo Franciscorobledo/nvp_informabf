@@ -5,7 +5,7 @@ plotly
 kaleido
 openpyxl
 python-multipart
-dotenv
-openia
-tailwindcss 
-
+python-dotenv
+pyjwt
+openai
+tailwindcss

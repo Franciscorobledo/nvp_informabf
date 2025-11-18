@@ -1,4 +1,3 @@
-# backend/main.py
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer
@@ -21,6 +20,8 @@ load_dotenv()
 SECRET_KEY = os.getenv("SECRET_KEY", "DEV_SECRET_KEY")
 ALGORITHM = os.getenv("ALGORITHM", "HS256")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+ENV = os.getenv("ENV", "development")
+FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
 
 security = HTTPBearer()
 
@@ -32,15 +33,26 @@ logging.basicConfig(
 app = FastAPI(title="Intelligent Data Analyzer")
 
 # -----------------------------
-# CORS (Frontend: React)
+# CORS DINÁMICO
 # -----------------------------
+allowed_origins = list(
+    set([
+        FRONTEND_URL,
+        "http://localhost:5173",
+        "https://nvp-informabf-front.onrender.com"
+    ])
+)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+logging.info(f"🚀 Backend iniciado en modo: {ENV}")
+logging.info(f"🌐 Orígenes permitidos: {allowed_origins}")
 
 # -----------------------------
 # INCLUSIÓN DE ROUTER AUTH
@@ -136,5 +148,8 @@ def root():
     return {
         "status": "ok",
         "message": "🚀 Intelligent Data Analyzer API operativa",
-        "openai_key_detected": bool(OPENAI_API_KEY)
+        "environment": ENV,
+        "frontend_allowed": FRONTEND_URL,
+        "openai_key_detected": bool(OPENAI_API_KEY),
+        "origins": allowed_origins
     }
