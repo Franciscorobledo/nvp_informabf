@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import API_URL from "./api"; // ← Importa la URL centralizada
 
 const Login = ({ onLogin }) => {
   const [username, setUsername] = useState("");
@@ -7,6 +8,7 @@ const Login = ({ onLogin }) => {
 
   const handleLogin = async (e) => {
     e.preventDefault();
+
     if (!username.trim() || !password.trim()) {
       alert("Por favor, ingresa tus credenciales.");
       return;
@@ -16,13 +18,11 @@ const Login = ({ onLogin }) => {
 
     try {
       console.log("🚀 Enviando credenciales al backend:", { username });
+      console.log("🌐 Usando API_URL:", API_URL);
 
       const formData = new FormData();
       formData.append("username", username);
       formData.append("password", password);
-
-      // ✅ URL dinámica desde el entorno (.env)
-      const API_URL = import.meta.env.VITE_API_URL || "http://localhost:10000";
 
       const res = await fetch(`${API_URL}/auth/login`, {
         method: "POST",
@@ -41,7 +41,6 @@ const Login = ({ onLogin }) => {
       const data = await res.json();
       console.log("📩 Datos recibidos:", data);
 
-      // ✅ Leer token con compatibilidad total
       const token = data.access_token || data.token;
       if (!token) {
         console.error("⚠️ No se recibió token válido:", data);
@@ -49,15 +48,15 @@ const Login = ({ onLogin }) => {
         return;
       }
 
-      // ✅ Guardar sesión local
+      // Guardar token y usuario
       localStorage.setItem("token", token);
       localStorage.setItem("user", data.username || username);
 
       console.log("🔐 Token guardado en localStorage:", token);
-      console.log("👤 Usuario:", data.username || username);
 
-      // ✅ Notificar al componente padre
+      // Notificar al padre
       onLogin({ username: data.username || username });
+
     } catch (err) {
       console.error("💥 Error de red o conexión:", err);
       alert("No se pudo conectar con el servidor. Verifica que esté activo.");
@@ -69,6 +68,7 @@ const Login = ({ onLogin }) => {
   return (
     <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-slate-800 text-white">
       <div className="bg-slate-800/70 backdrop-blur-xl p-8 rounded-2xl shadow-2xl w-full max-w-md border border-slate-700 animate-fade-in">
+
         <div className="flex flex-col items-center mb-6">
           <img src="/logo.png" alt="Logo" className="w-24 mb-3 drop-shadow-lg" />
           <h2 className="text-2xl font-bold tracking-wide text-blue-400">
@@ -85,17 +85,23 @@ const Login = ({ onLogin }) => {
             placeholder="Usuario"
             value={username}
             onChange={(e) => setUsername(e.target.value)}
-            className="p-3 rounded-lg bg-slate-900 border border-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 text-white placeholder-gray-500 transition-all duration-200"
+            className="p-3 rounded-lg bg-slate-900 border border-slate-700 
+                       focus:outline-none focus:ring-2 focus:ring-blue-500
+                       text-white placeholder-gray-500 transition-all duration-200"
             required
           />
+
           <input
             type="password"
             placeholder="Contraseña"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="p-3 rounded-lg bg-slate-900 border border-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 text-white placeholder-gray-500 transition-all duration-200"
+            className="p-3 rounded-lg bg-slate-900 border border-slate-700 
+                       focus:outline-none focus:ring-2 focus:ring-blue-500
+                       text-white placeholder-gray-500 transition-all duration-200"
             required
           />
+
           <button
             type="submit"
             disabled={loading}
