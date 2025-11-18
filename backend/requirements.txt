@@ -10,3 +10,4 @@ openai
 seaborn
 matplotlib
 numpy
+PyJWT
