@@ -33,15 +33,16 @@ logging.basicConfig(
 app = FastAPI(title="Intelligent Data Analyzer")
 
 # -----------------------------
-# CORS DINÁMICO
+# CORS CONFIGURACIÓN COMPLETA
 # -----------------------------
-allowed_origins = list(
-    set([
-        FRONTEND_URL,
-        "http://localhost:5173",
-        "https://nvp-informabf-front.onrender.com"
-    ])
-)
+allowed_origins = list(set([
+    FRONTEND_URL,
+    "http://localhost:5173",
+    "http://localhost:3000",
+    # 🔹 Dominios Render frontend (principal y temporales)
+    "https://nvp-informabf-front.onrender.com",
+    "https://nvp-informabf-front-wxdb.onrender.com",
+]))
 
 app.add_middleware(
     CORSMiddleware,
@@ -104,7 +105,6 @@ async def upload_preview(file: UploadFile = File(...)):
         "sample": sample
     }
 
-
 @app.post("/upload", dependencies=[Depends(verify_token)])
 async def upload_file(
     file: UploadFile = File(...),
@@ -138,7 +138,6 @@ async def upload_file(
         raise HTTPException(status_code=500, detail=f"Error en el análisis: {e}")
 
     return result
-
 
 # -----------------------------
 # ENDPOINT RAÍZ
