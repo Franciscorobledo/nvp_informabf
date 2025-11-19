@@ -38,13 +38,17 @@ app = FastAPI(title="InformeBF - Intelligent Data Visualizer")
 # ==============================
 # CONFIGURACIÓN DE CORS
 # ==============================
-allowed_origins = [
-    FRONTEND_URL,
+# Permite definir múltiples orígenes en la variable FRONTEND_URL separados por comas
+dynamic_origins = [origin.strip() for origin in FRONTEND_URL.split(",") if origin.strip()]
+
+allowed_origins = list({
+    *dynamic_origins,
     "http://localhost:5173",
     "http://127.0.0.1:5173",
     "http://localhost:1000",
-    "https://nvp-informabf.onrender.com"
-]
+    "https://nvp-informabf.onrender.com",
+    "https://nvp-informabf-front.onrender.com",
+})
 
 app.add_middleware(
     CORSMiddleware,
