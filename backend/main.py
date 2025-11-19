@@ -25,6 +25,7 @@ ALGORITHM = os.getenv("ALGORITHM", "HS256")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 ENV = os.getenv("ENV", "development")
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
+ALLOW_ONRENDER_WILDCARD = os.getenv("ALLOW_ONRENDER_WILDCARD", "true").lower() in {"1", "true", "yes"}
 
 security = HTTPBearer()
 
@@ -46,13 +47,24 @@ allowed_origins = list({
     "http://localhost:5173",
     "http://127.0.0.1:5173",
     "http://localhost:1000",
+    # Variantes de producción conocidas
     "https://nvp-informabf.onrender.com",
     "https://nvp-informabf-front.onrender.com",
+    "https://nvp.informabf.onrender.com",
+    "https://nvp.informabf-front.onrender.com",
 })
+
+allow_origin_regex = None
+if ALLOW_ONRENDER_WILDCARD:
+    # Render asigna subdominios dinámicos (p. ej., nombre-app.onrender.com).
+    # Esta expresión permite cualquier origen HTTPS dentro de onrender.com
+    # sin exponer el API a orígenes arbitrarios.
+    allow_origin_regex = r"https://.*\.onrender\.com"
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
+    allow_origin_regex=allow_origin_regex,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -60,6 +72,8 @@ app.add_middleware(
 
 logging.info(f"🚀 Backend iniciado en modo: {ENV}")
 logging.info(f"🌐 Orígenes permitidos: {allowed_origins}")
+if allow_origin_regex:
+    logging.info(f"🌐 Regex de orígenes permitidos: {allow_origin_regex}")
 
 # ==============================
 # AUTENTICACIÓN
