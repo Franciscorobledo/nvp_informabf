@@ -105,9 +105,12 @@ async def login(request: Request):
             "message": f"Inicio de sesión exitoso para {user['username']}"
         }
 
+    except HTTPException:
+        # Reenvía las excepciones controladas (401, 400, etc.)
+        raise
     except Exception as e:
-        logging.error(f"❌ Error en /auth/login: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logging.error(f"❌ Error inesperado en /auth/login: {e}")
+        raise HTTPException(status_code=500, detail="Error interno en el login")
 
 
 # -----------------------------
