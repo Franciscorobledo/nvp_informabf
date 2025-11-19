@@ -114,11 +114,24 @@ def read_dataframes(upload: UploadFile, content: bytes) -> list[pd.DataFrame]:
     """Lee un archivo subido (csv, xlsx o zip) y devuelve una lista de DataFrames."""
     ext = os.path.splitext(upload.filename)[1].lower()
 
+    common_kwargs = {
+        "na_values": ["", " ", "NA", "NaN", "null", "None"],
+        "keep_default_na": True,
+    }
+
     def _read_csv(buffer):
-        return pd.read_csv(buffer)
+        return pd.read_csv(
+            buffer,
+            parse_dates=True,
+            infer_datetime_format=True,
+            dtype_backend="numpy_nullable",
+            **common_kwargs,
+        )
 
     def _read_excel(buffer):
-        return pd.read_excel(buffer, engine="openpyxl")
+        return pd.read_excel(
+            buffer, engine="openpyxl", dtype_backend="numpy_nullable", **common_kwargs
+        )
 
     if ext in {".csv", ".xlsx"}:
         buffer = io.BytesIO(content)
@@ -240,11 +253,14 @@ def build_executive_report(analysis_data: dict) -> io.BytesIO:
 
     # Gráficos
     graphs = analysis_data.get("graphs", [])
-    if graphs:
+    chart_configs = analysis_data.get("charts", [])
+    if graphs or chart_configs:
         ensure_space(40)
         c.setFont("Helvetica-Bold", 14)
         c.drawString(margin, y, "Visualizaciones destacadas")
         y -= 20
+
+        # Renderizar imágenes heredadas (compatibilidad)
         for graph in graphs:
             image_bytes = clean_base64_image(graph.get("image"))
             if not image_bytes:
@@ -278,6 +294,19 @@ def build_executive_report(analysis_data: dict) -> io.BytesIO:
                 y -= render_height + 20
             except Exception as err:
                 logging.error(f"No se pudo añadir un gráfico al PDF: {err}")
+
+        # Si solo hay configuraciones, agregar descripciones
+        if not graphs and chart_configs:
+            c.setFont("Helvetica", 10)
+            for chart in chart_configs:
+                ensure_space(30)
+                title = chart.get("description") or chart.get("chart_type") or "Gráfico"
+                line = f"• {title}"
+                y = add_wrapped_text(c, line, margin, y, width=90)
+                if chart.get("x_column") and chart.get("y_columns"):
+                    details = f"   Eje X: {chart['x_column']} | Métricas: {', '.join(chart['y_columns'])}"
+                    y = add_wrapped_text(c, details, margin, y, width=90)
+                y -= 6
 
     c.showPage()
     c.save()
@@ -370,7 +399,7 @@ async def upload_file(
         response = json_safe_deep({
             "summary": result.get("summary", {}),
             "sample": safe_sample,
-            "graphs": result.get("graphs", []),
+            "charts": result.get("charts", []),
             "ai_summary": result.get("ai_summary", "No se generó resumen automático.")
         })
 
