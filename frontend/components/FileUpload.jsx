@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import ChartView from "./ChartView";
 
 const FileUpload = ({ onDataReceived }) => {
   const [files, setFiles] = useState([]);
@@ -170,29 +171,8 @@ const FileUpload = ({ onDataReceived }) => {
 
             {/* 📊 GRÁFICOS */}
             {activeTab === "graficos" && (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                {analysis.graphs?.length > 0 ? (
-                  analysis.graphs.map((chart, i) => (
-                    <div
-                      key={i}
-                      className="bg-gradient-to-br from-white to-gray-50 border border-gray-200 rounded-xl shadow-md hover:shadow-lg transition-all duration-300 p-4"
-                    >
-                      <h4 className="text-gray-800 font-semibold mb-2 text-center">
-                        {chart.column || `Gráfico ${i + 1}`}
-                      </h4>
-                      <img
-                        src={chart.image}
-                        alt={chart.column}
-                        className="rounded-lg shadow-sm border border-gray-100 mx-auto"
-                        style={{ maxHeight: "320px", objectFit: "contain" }}
-                      />
-                    </div>
-                  ))
-                ) : (
-                  <p className="text-gray-500 italic text-center">
-                    No hay gráficos disponibles.
-                  </p>
-                )}
+              <div className="space-y-4">
+                <ChartView charts={analysis.charts || analysis.graphs || []} />
               </div>
             )}
 
