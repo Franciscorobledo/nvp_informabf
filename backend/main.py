@@ -11,6 +11,8 @@ import numpy as np
 from datetime import datetime
 import base64
 import textwrap
+import zipfile
+from typing import List
 from dotenv import load_dotenv
 
 from utils.file_utils import validate_file
@@ -97,6 +99,55 @@ def json_safe(obj):
     if pd.isna(obj):
         return None
     return obj
+
+
+def read_dataframes(upload: UploadFile, content: bytes) -> list[pd.DataFrame]:
+    """Lee un archivo subido (csv, xlsx o zip) y devuelve una lista de DataFrames."""
+    ext = os.path.splitext(upload.filename)[1].lower()
+
+    def _read_csv(buffer):
+        return pd.read_csv(buffer)
+
+    def _read_excel(buffer):
+        return pd.read_excel(buffer, engine="openpyxl")
+
+    if ext in {".csv", ".xlsx"}:
+        buffer = io.BytesIO(content)
+        reader = _read_excel if ext == ".xlsx" else _read_csv
+        return [reader(buffer)]
+
+    if ext == ".zip":
+        try:
+            dataframes = []
+            with zipfile.ZipFile(io.BytesIO(content)) as archive:
+                for name in archive.namelist():
+                    lower_name = name.lower()
+                    if lower_name.endswith("/"):
+                        continue
+                    if lower_name.endswith(".csv"):
+                        with archive.open(name) as f:
+                            dataframes.append(_read_csv(f))
+                    elif lower_name.endswith(".xlsx"):
+                        with archive.open(name) as f:
+                            dataframes.append(_read_excel(f))
+
+            if not dataframes:
+                raise HTTPException(
+                    status_code=400,
+                    detail="El ZIP no contiene archivos .csv o .xlsx válidos.",
+                )
+            return dataframes
+        except HTTPException:
+            raise
+        except Exception as exc:
+            raise HTTPException(
+                status_code=400,
+                detail=f"No se pudo leer el archivo comprimido: {exc}",
+            )
+
+    raise HTTPException(
+        status_code=400, detail="Formato no soportado (.csv, .xlsx o .zip)"
+    )
 
 
 def clean_base64_image(image_data: str):
@@ -241,23 +292,24 @@ def root():
 # ENDPOINT DE PREVISUALIZACIÓN
 # ==============================
 @app.post("/upload/preview", dependencies=[Depends(security)])
-async def upload_preview(file: UploadFile = File(...)):
-    logging.info(f"📂 Recibido archivo: {file.filename}")
+async def upload_preview(files: List[UploadFile] = File(...)):
+    if not files:
+        raise HTTPException(status_code=400, detail="No se recibió ningún archivo para previsualizar.")
 
-    if not validate_file(file.filename):
-        raise HTTPException(status_code=400, detail="Formato no soportado (.csv o .xlsx)")
+    logging.info(f"📂 Recibidos {len(files)} archivo(s) para previsualización")
 
-    content = await file.read()
-    buffer = io.BytesIO(content)
+    dataframes = []
+    for upload in files:
+        if not validate_file(upload.filename):
+            raise HTTPException(status_code=400, detail="Formato no soportado (.csv, .xlsx o .zip)")
+
+        content = await upload.read()
+        dataframes.extend(read_dataframes(upload, content))
 
     try:
-        df = (
-            pd.read_excel(buffer, engine="openpyxl")
-            if file.filename.endswith(".xlsx")
-            else pd.read_csv(buffer)
-        )
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"No se pudo leer el archivo: {e}")
+        df = pd.concat(dataframes, ignore_index=True)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"No se pudo combinar la información: {exc}")
 
     df = df.dropna(how="all").fillna("")
     sample = df.head(5).applymap(json_safe).to_dict(orient="records")
@@ -273,24 +325,28 @@ async def upload_preview(file: UploadFile = File(...)):
 # ==============================
 @app.post("/upload", dependencies=[Depends(security)])
 async def upload_file(
-    file: UploadFile = File(...),
+    files: List[UploadFile] = File(...),
     date_field: str = Form(None),
     metric_field: str = Form(None),
     segment_field: str = Form(None)
 ):
-    logging.info(f"📊 Analizando archivo {file.filename}")
+    if not files:
+        raise HTTPException(status_code=400, detail="No se recibió ningún archivo para analizar.")
 
-    content = await file.read()
-    buffer = io.BytesIO(content)
+    logging.info(f"📊 Analizando {len(files)} archivo(s) enviados")
+
+    dataframes = []
+    for upload in files:
+        if not validate_file(upload.filename):
+            raise HTTPException(status_code=400, detail="Formato no soportado (.csv, .xlsx o .zip)")
+
+        content = await upload.read()
+        dataframes.extend(read_dataframes(upload, content))
 
     try:
-        df = (
-            pd.read_excel(buffer, engine="openpyxl")
-            if file.filename.endswith(".xlsx")
-            else pd.read_csv(buffer)
-        )
+        df = pd.concat(dataframes, ignore_index=True)
     except Exception as e:
-        raise HTTPException(status_code=400, detail=f"No se pudo leer el archivo: {e}")
+        raise HTTPException(status_code=400, detail=f"No se pudo combinar la información: {e}")
 
     try:
         result = analyze_file(

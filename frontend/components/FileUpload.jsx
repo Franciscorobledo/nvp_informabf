@@ -1,21 +1,22 @@
 import React, { useState } from "react";
 
 const FileUpload = ({ onDataReceived }) => {
-  const [file, setFile] = useState(null);
+  const [files, setFiles] = useState([]);
   const [loading, setLoading] = useState(false);
   const [analysis, setAnalysis] = useState(null);
   const [activeTab, setActiveTab] = useState("resumen");
   const [downloading, setDownloading] = useState(false);
 
-  const handleFileChange = (e) => setFile(e.target.files[0]);
+  const handleFileChange = (e) => setFiles(Array.from(e.target.files || []));
 
   const handleUpload = async () => {
-    if (!file) return alert("Selecciona un archivo .csv o .xlsx primero.");
+    if (!files.length)
+      return alert("Selecciona al menos un archivo .csv, .xlsx o .zip primero.");
     const token = localStorage.getItem("token");
     if (!token) return alert("⚠️ No se encontró token. Inicia sesión nuevamente.");
 
     const formData = new FormData();
-    formData.append("file", file);
+    files.forEach((fileItem) => formData.append("files", fileItem));
     setLoading(true);
 
     try {
@@ -103,15 +104,23 @@ const FileUpload = ({ onDataReceived }) => {
           htmlFor="fileInput"
           className="w-full sm:w-auto text-sm font-medium text-gray-700 text-center"
         >
-          Selecciona tu archivo (.csv o .xlsx)
+          Selecciona uno o varios archivos (.csv, .xlsx o .zip)
         </label>
         <input
           id="fileInput"
           type="file"
           onChange={handleFileChange}
-          accept=".csv, .xlsx"
+          accept=".csv, .xlsx, .zip"
+          multiple
           className="w-full sm:w-auto border border-gray-300 p-3 rounded-lg shadow-sm focus:ring focus:ring-blue-300 bg-white"
         />
+        {files.length > 0 && (
+          <p className="text-xs text-gray-500 text-center sm:text-left">
+            {files.length === 1
+              ? `Archivo seleccionado: ${files[0].name}`
+              : `${files.length} archivos seleccionados`}
+          </p>
+        )}
         <button
           onClick={handleUpload}
           disabled={loading}
@@ -121,7 +130,7 @@ const FileUpload = ({ onDataReceived }) => {
               : "bg-blue-600 hover:bg-blue-700 text-white shadow"
           }`}
         >
-          {loading ? "Analizando..." : "Analizar archivo"}
+          {loading ? "Analizando..." : "Analizar archivo(s)"}
         </button>
       </div>
 
