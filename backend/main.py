@@ -7,15 +7,17 @@ import io
 import logging
 import jwt
 import os
+import numpy as np
+from datetime import datetime
 from dotenv import load_dotenv
 
 from utils.file_utils import validate_file
 from analysis import analyze_file, detect_column_types
 from auth import router as auth_router
 
-# -----------------------------
+# ==============================
 # CONFIGURACIÓN GLOBAL
-# -----------------------------
+# ==============================
 load_dotenv()
 
 SECRET_KEY = os.getenv("SECRET_KEY", "DEV_SECRET_KEY")
@@ -31,16 +33,17 @@ logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(message)s"
 )
 
-app = FastAPI(title="Intelligent Data Analyzer")
+app = FastAPI(title="InformeBF - Intelligent Data Visualizer")
 
-# -----------------------------
-# CORS CONFIGURACIÓN FORZADA
-# -----------------------------
+# ==============================
+# CONFIGURACIÓN DE CORS
+# ==============================
 allowed_origins = [
     FRONTEND_URL,
     "http://localhost:5173",
-    "http://localhost:3000",
-    "https://nvp-informabf-front-wxbb.onrender.com"
+    "http://127.0.0.1:5173",
+    "http://localhost:1000",
+    "https://nvp-informabf.onrender.com"
 ]
 
 app.add_middleware(
@@ -54,63 +57,41 @@ app.add_middleware(
 logging.info(f"🚀 Backend iniciado en modo: {ENV}")
 logging.info(f"🌐 Orígenes permitidos: {allowed_origins}")
 
-
-# -----------------------------
-# MIDDLEWARE EXTRA: FORZAR CORS HEADERS EN TODA RESPUESTA
-# -----------------------------
-@app.middleware("http")
-async def add_cors_headers(request: Request, call_next):
-    response = await call_next(request)
-    origin = request.headers.get("origin")
-    if origin and origin in allowed_origins:
-        response.headers["Access-Control-Allow-Origin"] = origin
-        response.headers["Access-Control-Allow-Credentials"] = "true"
-        response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
-        response.headers["Access-Control-Allow-Headers"] = "Authorization, Content-Type"
-    return response
-
-
-# -----------------------------
-# OPCIONES MANUALES (preflight)
-# -----------------------------
-@app.options("/{rest_of_path:path}")
-async def preflight_handler(request: Request, rest_of_path: str):
-    origin = request.headers.get("origin")
-    if origin and origin in allowed_origins:
-        headers = {
-            "Access-Control-Allow-Origin": origin,
-            "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-            "Access-Control-Allow-Headers": "Authorization, Content-Type",
-            "Access-Control-Allow-Credentials": "true",
-        }
-        return JSONResponse(content={"status": "ok"}, headers=headers)
-    return JSONResponse(content={"status": "denied"}, status_code=403)
-
-
-# -----------------------------
-# ROUTER AUTH
-# -----------------------------
+# ==============================
+# AUTENTICACIÓN
+# ==============================
 app.include_router(auth_router, prefix="/auth", tags=["Autenticación"])
 
+# ==============================
+# FUNCIONES AUXILIARES
+# ==============================
+def json_safe(obj):
+    """Convierte cualquier tipo no serializable (Timestamp, NaN, numpy types) a algo JSON compatible."""
+    if isinstance(obj, (pd.Timestamp, datetime)):
+        return obj.isoformat()
+    if isinstance(obj, (np.int64, np.int32, np.float64)):
+        return float(obj)
+    if pd.isna(obj):
+        return None
+    return obj
 
-# -----------------------------
-# VERIFICACIÓN DE TOKEN
-# -----------------------------
-def verify_token(credentials=Depends(security)):
-    token = credentials.credentials
-    try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        return payload
-    except jwt.ExpiredSignatureError:
-        raise HTTPException(status_code=401, detail="Token expirado")
-    except jwt.InvalidTokenError:
-        raise HTTPException(status_code=401, detail="Token inválido o mal formado")
+# ==============================
+# ENDPOINTS
+# ==============================
+@app.get("/")
+def root():
+    return {
+        "status": "ok",
+        "message": "🚀 InformeBF API operativa",
+        "environment": ENV,
+        "frontend_allowed": FRONTEND_URL,
+        "origins": allowed_origins
+    }
 
-
-# -----------------------------
-# ENDPOINTS DE ANÁLISIS
-# -----------------------------
-@app.post("/upload/preview", dependencies=[Depends(verify_token)])
+# ==============================
+# ENDPOINT DE PREVISUALIZACIÓN
+# ==============================
+@app.post("/upload/preview", dependencies=[Depends(security)])
 async def upload_preview(file: UploadFile = File(...)):
     logging.info(f"📂 Recibido archivo: {file.filename}")
 
@@ -130,16 +111,18 @@ async def upload_preview(file: UploadFile = File(...)):
         raise HTTPException(status_code=400, detail=f"No se pudo leer el archivo: {e}")
 
     df = df.dropna(how="all").fillna("")
+    sample = df.head(5).applymap(json_safe).to_dict(orient="records")
     types = detect_column_types(df)
-    sample = df.head(5).to_dict(orient="records")
 
     return {
         "columns": [{"name": c, "type": types[c]} for c in df.columns],
         "sample": sample
     }
 
-
-@app.post("/upload", dependencies=[Depends(verify_token)])
+# ==============================
+# ENDPOINT DE ANÁLISIS COMPLETO
+# ==============================
+@app.post("/upload", dependencies=[Depends(security)])
 async def upload_file(
     file: UploadFile = File(...),
     date_field: str = Form(None),
@@ -167,21 +150,19 @@ async def upload_file(
             metric_field=metric_field,
             segment_by=segment_field
         )
+
+        # 🔹 Normalizar todo para JSON seguro
+        safe_sample = df.head(10).applymap(json_safe).to_dict(orient="records")
+        response = {
+            "summary": result.get("summary", {}),
+            "sample": safe_sample,
+            "graphs": result.get("graphs", []),
+            "ai_summary": result.get("ai_summary", "No se generó resumen automático.")
+        }
+
+        logging.info("✅ Análisis completado correctamente.")
+        return JSONResponse(content=response)
+
     except Exception as e:
+        logging.error(f"❌ Error en el análisis: {e}")
         raise HTTPException(status_code=500, detail=f"Error en el análisis: {e}")
-
-    return result
-
-
-# -----------------------------
-# ENDPOINT RAÍZ
-# -----------------------------
-@app.get("/")
-def root():
-    return {
-        "status": "ok",
-        "message": "🚀 Intelligent Data Analyzer API operativa",
-        "environment": ENV,
-        "frontend_allowed": FRONTEND_URL,
-        "origins": allowed_origins
-    }

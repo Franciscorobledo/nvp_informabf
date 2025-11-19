@@ -1,10 +1,4 @@
 import React, { useState } from "react";
-import {
-  BarChart, Bar, LineChart, Line, PieChart, Pie, Cell,
-  XAxis, YAxis, Tooltip, CartesianGrid, Legend, ResponsiveContainer
-} from "recharts";
-
-const COLORS = ["#1E3A8A", "#3B82F6", "#60A5FA", "#93C5FD", "#BFDBFE"];
 
 const FileUpload = ({ onDataReceived }) => {
   const [file, setFile] = useState(null);
@@ -24,14 +18,14 @@ const FileUpload = ({ onDataReceived }) => {
     setLoading(true);
 
     try {
-      // ✅ URL dinámica desde .env
-      const API_URL = import.meta.env.VITE_API_URL || "http://localhost:10000";
-
+      const API_URL = import.meta.env.VITE_API_URL || "http://localhost:1000";
       console.log("🌐 Subiendo archivo a:", `${API_URL}/upload`);
 
       const res = await fetch(`${API_URL}/upload`, {
         method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
         body: formData,
       });
 
@@ -48,87 +42,14 @@ const FileUpload = ({ onDataReceived }) => {
       onDataReceived?.(data);
     } catch (err) {
       console.error("💥 Error al conectar con el backend:", err);
-      alert("Error de conexión. Verifica que el backend esté corriendo.");
+      alert("Error de conexión. Verifica que el backend esté corriendo en el puerto 1000.");
     } finally {
       setLoading(false);
     }
   };
 
-  // --- Detección del tipo de variable ---
-  const detectChartType = (data, key) => {
-    const values = data.map((row) => row[key]);
-    if (values.every((v) => !isNaN(parseFloat(v)))) return "numeric";
-    if (values.every((v) => /\d{4}-\d{2}-\d{2}/.test(v))) return "date";
-    return "categorical";
-  };
-
-  // --- Renderizado automático de gráficos ---
-  const renderChart = (data, key) => {
-    const type = detectChartType(data, key);
-    const formattedData = data.map((row) => ({
-      name: row[key],
-      value: parseFloat(row[key]) || 1,
-    }));
-
-    switch (type) {
-      case "numeric":
-        return (
-          <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={formattedData}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="name" />
-              <YAxis />
-              <Tooltip />
-              <Legend />
-              <Bar dataKey="value" fill="#3B82F6" />
-            </BarChart>
-          </ResponsiveContainer>
-        );
-
-      case "categorical":
-        return (
-          <ResponsiveContainer width="100%" height={300}>
-            <PieChart>
-              <Pie
-                data={formattedData}
-                dataKey="value"
-                nameKey="name"
-                cx="50%"
-                cy="50%"
-                outerRadius={100}
-                label
-              >
-                {formattedData.map((_, i) => (
-                  <Cell key={i} fill={COLORS[i % COLORS.length]} />
-                ))}
-              </Pie>
-              <Tooltip />
-              <Legend />
-            </PieChart>
-          </ResponsiveContainer>
-        );
-
-      case "date":
-        return (
-          <ResponsiveContainer width="100%" height={300}>
-            <LineChart data={formattedData}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="name" />
-              <YAxis />
-              <Tooltip />
-              <Legend />
-              <Line type="monotone" dataKey="value" stroke="#2563EB" />
-            </LineChart>
-          </ResponsiveContainer>
-        );
-
-      default:
-        return <p className="text-gray-500 italic text-center">Tipo no reconocido</p>;
-    }
-  };
-
   const tabs = [
-    { id: "resumen", label: "🧾 Resumen" },
+    { id: "resumen", label: "📄 Resumen" },
     { id: "graficos", label: "📊 Visualizaciones" },
     { id: "insights", label: "🤖 Insights IA" },
     { id: "correlacion", label: "🔗 Correlaciones" },
@@ -136,7 +57,7 @@ const FileUpload = ({ onDataReceived }) => {
 
   return (
     <div className="flex flex-col items-center space-y-6 w-full">
-      {/* Subida */}
+      {/* Subida de archivo */}
       <div className="flex flex-col items-center">
         <input
           type="file"
@@ -157,7 +78,7 @@ const FileUpload = ({ onDataReceived }) => {
         </button>
       </div>
 
-      {/* Resultados */}
+      {/* Resultados del análisis */}
       {analysis && (
         <div className="mt-10 w-full bg-white rounded-2xl p-8 shadow-xl border border-gray-200">
           {/* Tabs */}
@@ -177,7 +98,9 @@ const FileUpload = ({ onDataReceived }) => {
             ))}
           </div>
 
+          {/* Contenido dinámico */}
           <div className="p-4">
+            {/* 📄 RESUMEN */}
             {activeTab === "resumen" && (
               <div>
                 <h3 className="text-lg font-semibold mb-2 text-gray-800">
@@ -189,37 +112,14 @@ const FileUpload = ({ onDataReceived }) => {
               </div>
             )}
 
+            {/* 📊 GRÁFICOS */}
             {activeTab === "graficos" && (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                {analysis.sample &&
-                  Object.keys(analysis.sample[0]).map((key, i) => (
-                    <div
-                      key={i}
-                      className="bg-gradient-to-br from-white to-gray-50 border border-gray-200 rounded-xl shadow-md hover:shadow-lg transition-all duration-300 p-4"
-                    >
-                      <h4 className="text-gray-800 font-semibold mb-2 text-center">{key}</h4>
-                      {renderChart(analysis.sample, key)}
-                    </div>
-                  ))}
-              </div>
-            )}
-
-            {activeTab === "insights" && (
-              <div className="bg-blue-50 p-6 rounded-xl border-l-4 border-blue-500 shadow-sm">
-                <h4 className="font-semibold text-blue-700 mb-2">💬 Análisis de IA</h4>
-                <p className="text-blue-800 whitespace-pre-wrap leading-relaxed">
-                  {analysis.ai_summary || "No se recibieron insights de IA."}
-                </p>
-              </div>
-            )}
-
-            {activeTab === "correlacion" && (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                {analysis.graphs && analysis.graphs.length > 0 ? (
+                {analysis.graphs?.length > 0 ? (
                   analysis.graphs.map((chart, i) => (
                     <div
                       key={i}
-                      className="bg-gray-50 border border-gray-200 rounded-xl shadow-md hover:shadow-lg transition-all duration-300 p-4"
+                      className="bg-gradient-to-br from-white to-gray-50 border border-gray-200 rounded-xl shadow-md hover:shadow-lg transition-all duration-300 p-4"
                     >
                       <h4 className="text-gray-800 font-semibold mb-2 text-center">
                         {chart.column || `Gráfico ${i + 1}`}
@@ -232,6 +132,50 @@ const FileUpload = ({ onDataReceived }) => {
                       />
                     </div>
                   ))
+                ) : (
+                  <p className="text-gray-500 italic text-center">
+                    No hay gráficos disponibles.
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* 🤖 INSIGHTS */}
+            {activeTab === "insights" && (
+              <div className="bg-blue-50 p-6 rounded-xl border-l-4 border-blue-500 shadow-sm">
+                <h4 className="font-semibold text-blue-700 mb-2">💬 Análisis de IA</h4>
+                <p className="text-blue-800 whitespace-pre-wrap leading-relaxed">
+                  {analysis.ai_summary || "No se recibieron insights de IA."}
+                </p>
+              </div>
+            )}
+
+            {/* 🔗 CORRELACIONES */}
+            {activeTab === "correlacion" && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                {analysis.graphs?.filter((g) =>
+                  g.column?.toLowerCase().includes("correlación")
+                ).length > 0 ? (
+                  analysis.graphs
+                    .filter((g) =>
+                      g.column?.toLowerCase().includes("correlación")
+                    )
+                    .map((chart, i) => (
+                      <div
+                        key={i}
+                        className="bg-gray-50 border border-gray-200 rounded-xl shadow-md hover:shadow-lg transition-all duration-300 p-4"
+                      >
+                        <h4 className="text-gray-800 font-semibold mb-2 text-center">
+                          {chart.column}
+                        </h4>
+                        <img
+                          src={chart.image}
+                          alt={chart.column}
+                          className="rounded-lg shadow-sm border border-gray-100 mx-auto"
+                          style={{ maxHeight: "320px", objectFit: "contain" }}
+                        />
+                      </div>
+                    ))
                 ) : (
                   <p className="text-gray-500 italic text-center">
                     No hay correlaciones disponibles.

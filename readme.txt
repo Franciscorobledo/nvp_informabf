@@ -1,6 +1,9 @@
 uvicorn main:app --reload   || back
 npm run dev   -- front 
 
+uvicorn main:app --reload --port 1000
+
+
 
 secret provisional open ia 
 

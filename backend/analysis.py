@@ -13,6 +13,7 @@ plt.switch_backend("Agg")  # Evita errores en entornos sin display
 sns.set_palette("crest")
 plt.style.use("seaborn-v0_8-whitegrid")
 
+
 # ---------------------------------------------------------------------
 # 🔧 FUNCIONES AUXILIARES
 # ---------------------------------------------------------------------
@@ -41,6 +42,22 @@ def detect_column_types(df):
                 column_types[col] = "text"
     return column_types
 
+
+def json_safe(value):
+    """Convierte cualquier valor a formato serializable para JSON."""
+    if isinstance(value, (pd.Timestamp, datetime)):
+        return value.isoformat()
+    elif isinstance(value, (np.int64, np.int32)):
+        return int(value)
+    elif isinstance(value, (np.float64, np.float32)):
+        return float(value)
+    elif isinstance(value, (np.bool_)):
+        return bool(value)
+    elif pd.isna(value):
+        return None
+    return value
+
+
 # ---------------------------------------------------------------------
 # 🧠 FUNCIÓN PRINCIPAL DE ANÁLISIS
 # ---------------------------------------------------------------------
@@ -60,13 +77,13 @@ def analyze_file(df, date_field=None, metric_field=None, segment_by=None):
         try:
             if t == "numeric":
                 desc = df[col].describe().to_dict()
-                summary[col] = {k: round(v, 2) for k, v in desc.items()}
+                summary[col] = {k: json_safe(v) for k, v in desc.items()}
             elif t == "categorical":
                 summary[col] = df[col].value_counts().head(5).to_dict()
             elif t == "date":
                 summary[col] = {
-                    "min": str(df[col].min()),
-                    "max": str(df[col].max()),
+                    "min": json_safe(df[col].min()),
+                    "max": json_safe(df[col].max()),
                     "count": int(df[col].count()),
                 }
             else:
@@ -118,6 +135,7 @@ def analyze_file(df, date_field=None, metric_field=None, segment_by=None):
                     counts.plot(ax=ax, color="#2563EB", linewidth=2)
                     ax.set_title(f"Tendencia temporal ({col})", fontsize=11, weight="bold")
                     graphs.append({"column": f"Tendencia {col}", "image": fig_to_base64(fig)})
+
         except Exception as e:
             print(f"⚠️ Error generando gráfico para {col}: {e}")
 
@@ -153,31 +171,16 @@ def analyze_file(df, date_field=None, metric_field=None, segment_by=None):
     )
 
     # --------------------------------------------------------------
-    # 5️⃣ MUESTRA DE DATOS Y LIMPIEZA PARA JSON
+    # 5️⃣ MUESTRA DE DATOS LIMPIA PARA JSON
     # --------------------------------------------------------------
-    def clean_for_json(obj):
-        if isinstance(obj, dict):
-            return {k: clean_for_json(v) for k, v in obj.items()}
-        elif isinstance(obj, list):
-            return [clean_for_json(v) for v in obj]
-        elif isinstance(obj, (np.int64, np.int32)):
-            return int(obj)
-        elif isinstance(obj, (np.float64, np.float32)):
-            return float(obj)
-        elif isinstance(obj, (np.bool_)):
-            return bool(obj)
-        elif pd.isna(obj):
-            return None
-        return obj
-
     try:
-        sample_data = df.head(100).to_dict(orient="records")
+        sample_data = df.head(100).applymap(json_safe).to_dict(orient="records")
     except Exception:
         sample_data = []
 
     return {
-        "summary": clean_for_json(summary),
+        "summary": summary,
         "graphs": graphs,
         "ai_summary": ai_summary,
-        "sample": clean_for_json(sample_data),
+        "sample": sample_data,
     }
