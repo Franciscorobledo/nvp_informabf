@@ -5,6 +5,7 @@ const FileUpload = ({ onDataReceived }) => {
   const [loading, setLoading] = useState(false);
   const [analysis, setAnalysis] = useState(null);
   const [activeTab, setActiveTab] = useState("resumen");
+  const [downloading, setDownloading] = useState(false);
 
   const handleFileChange = (e) => setFile(e.target.files[0]);
 
@@ -48,11 +49,50 @@ const FileUpload = ({ onDataReceived }) => {
     }
   };
 
+  const handleDownloadReport = async () => {
+    if (!analysis) return;
+    const token = localStorage.getItem("token");
+    if (!token) return alert("⚠️ No se encontró token. Inicia sesión nuevamente.");
+
+    try {
+      setDownloading(true);
+      const API_URL = import.meta.env.VITE_API_URL || "http://localhost:1000";
+      const res = await fetch(`${API_URL}/report`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ analysis }),
+      });
+
+      if (!res.ok) {
+        const message = await res.text();
+        throw new Error(message || "No se pudo generar el reporte.");
+      }
+
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "Reporte_InformeBF.pdf";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error("Error al generar el reporte:", error);
+      alert(`No se pudo generar el reporte: ${error.message}`);
+    } finally {
+      setDownloading(false);
+    }
+  };
+
   const tabs = [
     { id: "resumen", label: "📄 Resumen" },
     { id: "graficos", label: "📊 Visualizaciones" },
     { id: "insights", label: "🤖 Insights IA" },
-    { id: "correlacion", label: "🔗 Correlaciones" },
+    { id: "reporte", label: "📑 Reporte ejecutivo" },
   ];
 
   return (
@@ -150,37 +190,27 @@ const FileUpload = ({ onDataReceived }) => {
               </div>
             )}
 
-            {/* 🔗 CORRELACIONES */}
-            {activeTab === "correlacion" && (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                {analysis.graphs?.filter((g) =>
-                  g.column?.toLowerCase().includes("correlación")
-                ).length > 0 ? (
-                  analysis.graphs
-                    .filter((g) =>
-                      g.column?.toLowerCase().includes("correlación")
-                    )
-                    .map((chart, i) => (
-                      <div
-                        key={i}
-                        className="bg-gray-50 border border-gray-200 rounded-xl shadow-md hover:shadow-lg transition-all duration-300 p-4"
-                      >
-                        <h4 className="text-gray-800 font-semibold mb-2 text-center">
-                          {chart.column}
-                        </h4>
-                        <img
-                          src={chart.image}
-                          alt={chart.column}
-                          className="rounded-lg shadow-sm border border-gray-100 mx-auto"
-                          style={{ maxHeight: "320px", objectFit: "contain" }}
-                        />
-                      </div>
-                    ))
-                ) : (
-                  <p className="text-gray-500 italic text-center">
-                    No hay correlaciones disponibles.
-                  </p>
-                )}
+            {/* 📑 REPORTE EJECUTIVO */}
+            {activeTab === "reporte" && (
+              <div className="flex flex-col items-center text-center space-y-4">
+                <p className="text-gray-700 max-w-2xl">
+                  Genera un reporte ejecutivo en PDF con los principales insights,
+                  estadísticas y visualizaciones detectadas automáticamente en tu
+                  dataset.
+                </p>
+                <button
+                  onClick={handleDownloadReport}
+                  disabled={downloading}
+                  className={`px-6 py-3 rounded-lg font-semibold transition-all duration-300 ${
+                    downloading
+                      ? "bg-gray-400 cursor-not-allowed"
+                      : "bg-green-600 hover:bg-green-700 text-white shadow"
+                  }`}
+                >
+                  {downloading
+                    ? "Generando reporte..."
+                    : "Descargar reporte ejecutivo"}
+                </button>
               </div>
             )}
           </div>
