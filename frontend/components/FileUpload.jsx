@@ -97,12 +97,12 @@ const FileUpload = ({ onDataReceived }) => {
   ];
 
   return (
-    <div className="flex flex-col items-center space-y-6 w-full max-w-5xl mx-auto">
+    <div className="flex flex-col items-center space-y-6 w-full max-w-5xl mx-auto text-gray-800 dark:text-slate-100">
       {/* Subida de archivo */}
       <div className="flex flex-col items-stretch sm:items-center gap-3 w-full px-2">
         <label
           htmlFor="fileInput"
-          className="w-full sm:w-auto text-sm font-medium text-gray-700 text-center"
+          className="w-full sm:w-auto text-sm font-medium text-gray-700 dark:text-slate-200 text-center"
         >
           Selecciona uno o varios archivos (.csv, .xlsx o .zip)
         </label>
@@ -112,10 +112,10 @@ const FileUpload = ({ onDataReceived }) => {
           onChange={handleFileChange}
           accept=".csv, .xlsx, .zip"
           multiple
-          className="w-full sm:w-auto border border-gray-300 p-3 rounded-lg shadow-sm focus:ring focus:ring-blue-300 bg-white"
+          className="w-full sm:w-auto border border-gray-300 dark:border-slate-700 p-3 rounded-lg shadow-sm focus:ring focus:ring-blue-300 bg-white dark:bg-slate-900 dark:text-slate-100 dark:placeholder-slate-400"
         />
         {files.length > 0 && (
-          <p className="text-xs text-gray-500 text-center sm:text-left">
+          <p className="text-xs text-gray-500 dark:text-slate-400 text-center sm:text-left">
             {files.length === 1
               ? `Archivo seleccionado: ${files[0].name}`
               : `${files.length} archivos seleccionados`}
@@ -136,17 +136,17 @@ const FileUpload = ({ onDataReceived }) => {
 
       {/* Resultados del análisis */}
       {analysis && (
-        <div className="mt-10 w-full bg-white rounded-2xl p-8 shadow-xl border border-gray-200">
+        <div className="mt-10 w-full bg-white dark:bg-slate-900 rounded-2xl p-8 shadow-xl border border-gray-200 dark:border-slate-800">
           {/* Tabs */}
-          <div className="flex flex-wrap justify-center gap-2 mb-6 border-b border-gray-200 pb-2">
+          <div className="flex flex-wrap justify-center gap-2 mb-6 border-b border-gray-200 dark:border-slate-800 pb-2">
             {tabs.map((tab) => (
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
                 className={`px-4 py-2 text-sm font-semibold rounded-lg transition-all duration-300 ${
                   activeTab === tab.id
-                    ? "text-blue-700 bg-blue-50 border border-blue-200 shadow-sm"
-                    : "text-gray-600 hover:text-blue-600"
+                    ? "text-blue-700 bg-blue-50 dark:text-blue-200 dark:bg-slate-800 border border-blue-200 dark:border-slate-700 shadow-sm"
+                    : "text-gray-600 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-300"
                 }`}
               >
                 {tab.label}
@@ -159,10 +159,10 @@ const FileUpload = ({ onDataReceived }) => {
             {/* 📄 RESUMEN */}
             {activeTab === "resumen" && (
               <div>
-                <h3 className="text-lg font-semibold mb-2 text-gray-800">
+                <h3 className="text-lg font-semibold mb-2 text-gray-800 dark:text-slate-100">
                   📄 Resumen del dataset
                 </h3>
-                <pre className="bg-gray-50 p-4 rounded-lg border text-sm overflow-x-auto">
+                <pre className="bg-gray-50 dark:bg-slate-800 p-4 rounded-lg border border-gray-200 dark:border-slate-700 text-sm overflow-x-auto">
                   {JSON.stringify(analysis.summary, null, 2)}
                 </pre>
               </div>
@@ -175,9 +175,9 @@ const FileUpload = ({ onDataReceived }) => {
                   analysis.graphs.map((chart, i) => (
                     <div
                       key={i}
-                      className="bg-gradient-to-br from-white to-gray-50 border border-gray-200 rounded-xl shadow-md hover:shadow-lg transition-all duration-300 p-4"
+                      className="bg-gradient-to-br from-white to-gray-50 dark:from-slate-900 dark:to-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl shadow-md hover:shadow-lg transition-all duration-300 p-4"
                     >
-                      <h4 className="text-gray-800 font-semibold mb-2 text-center">
+                      <h4 className="text-gray-800 dark:text-slate-100 font-semibold mb-2 text-center">
                         {chart.column || `Gráfico ${i + 1}`}
                       </h4>
                       <img
@@ -189,7 +189,7 @@ const FileUpload = ({ onDataReceived }) => {
                     </div>
                   ))
                 ) : (
-                  <p className="text-gray-500 italic text-center">
+                  <p className="text-gray-500 dark:text-slate-400 italic text-center">
                     No hay gráficos disponibles.
                   </p>
                 )}
@@ -198,9 +198,9 @@ const FileUpload = ({ onDataReceived }) => {
 
             {/* 🤖 INSIGHTS */}
             {activeTab === "insights" && (
-              <div className="bg-blue-50 p-6 rounded-xl border-l-4 border-blue-500 shadow-sm">
-                <h4 className="font-semibold text-blue-700 mb-2">💬 Análisis de IA</h4>
-                <p className="text-blue-800 whitespace-pre-wrap leading-relaxed">
+              <div className="bg-blue-50 dark:bg-slate-800 p-6 rounded-xl border-l-4 border-blue-500 dark:border-blue-400 shadow-sm">
+                <h4 className="font-semibold text-blue-700 dark:text-blue-200 mb-2">💬 Análisis de IA</h4>
+                <p className="text-blue-800 dark:text-blue-100 whitespace-pre-wrap leading-relaxed">
                   {analysis.ai_summary || "No se recibieron insights de IA."}
                 </p>
               </div>
@@ -209,7 +209,7 @@ const FileUpload = ({ onDataReceived }) => {
             {/* 📑 REPORTE EJECUTIVO */}
             {activeTab === "reporte" && (
               <div className="flex flex-col items-center text-center space-y-4">
-                <p className="text-gray-700 max-w-2xl">
+                <p className="text-gray-700 dark:text-slate-200 max-w-2xl">
                   Genera un reporte ejecutivo en PDF con los principales insights,
                   estadísticas y visualizaciones detectadas automáticamente en tu
                   dataset.
