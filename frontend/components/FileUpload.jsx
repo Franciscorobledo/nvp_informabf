@@ -201,15 +201,19 @@ const FileUpload = ({ onDataReceived }) => {
                 <button
                   onClick={handleDownloadReport}
                   disabled={downloading}
-                  className={`px-6 py-3 rounded-lg font-semibold transition-all duration-300 ${
+                  className={`group relative inline-flex items-center justify-center gap-2 px-8 py-3 rounded-full font-semibold tracking-wide transition-all duration-300 shadow-lg focus:outline-none focus:ring-4 focus:ring-emerald-200 ${
                     downloading
-                      ? "bg-gray-400 cursor-not-allowed"
-                      : "bg-green-600 hover:bg-green-700 text-white shadow"
+                      ? "bg-gray-300 text-gray-500 cursor-not-allowed"
+                      : "bg-gradient-to-r from-emerald-400 via-emerald-500 to-emerald-600 text-white hover:scale-[1.02]"
                   }`}
                 >
-                  {downloading
-                    ? "Generando reporte..."
-                    : "Descargar reporte ejecutivo"}
+                  <span className="text-xl">📥</span>
+                  <span className="text-sm sm:text-base">
+                    {downloading ? "Generando reporte..." : "Descargar reporte"}
+                  </span>
+                  {!downloading && (
+                    <span className="absolute inset-0 rounded-full border border-white/20 blur-sm opacity-0 group-hover:opacity-100 transition" />
+                  )}
                 </button>
               </div>
             )}
