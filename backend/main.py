@@ -1,7 +1,6 @@
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
-from fastapi.security import HTTPBearer
 import pandas as pd
 import io
 import logging
@@ -17,7 +16,7 @@ from dotenv import load_dotenv
 
 from utils.file_utils import validate_file
 from analysis import analyze_file, detect_column_types
-from auth import router as auth_router
+from auth import get_current_user, router as auth_router
 from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
 from reportlab.lib.utils import ImageReader
@@ -33,8 +32,6 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 ENV = os.getenv("ENV", "development")
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
 ALLOW_ONRENDER_WILDCARD = os.getenv("ALLOW_ONRENDER_WILDCARD", "true").lower() in {"1", "true", "yes"}
-
-security = HTTPBearer()
 
 logging.basicConfig(
     level=logging.INFO,
@@ -300,7 +297,7 @@ def root():
 # ==============================
 # ENDPOINT DE PREVISUALIZACIÓN
 # ==============================
-@app.post("/upload/preview", dependencies=[Depends(security)])
+@app.post("/upload/preview", dependencies=[Depends(get_current_user)])
 async def upload_preview(files: List[UploadFile] = File(...)):
     if not files:
         raise HTTPException(status_code=400, detail="No se recibió ningún archivo para previsualizar.")
@@ -332,7 +329,7 @@ async def upload_preview(files: List[UploadFile] = File(...)):
 # ==============================
 # ENDPOINT DE ANÁLISIS COMPLETO
 # ==============================
-@app.post("/upload", dependencies=[Depends(security)])
+@app.post("/upload", dependencies=[Depends(get_current_user)])
 async def upload_file(
     files: List[UploadFile] = File(...),
     date_field: str = Form(None),
@@ -382,7 +379,7 @@ async def upload_file(
         raise HTTPException(status_code=500, detail=f"Error en el análisis: {e}")
 
 
-@app.post("/report", dependencies=[Depends(security)])
+@app.post("/report", dependencies=[Depends(get_current_user)])
 async def generate_report(request: Request):
     """Recibe el resultado del análisis y devuelve un PDF ejecutivo."""
     payload = await request.json()
