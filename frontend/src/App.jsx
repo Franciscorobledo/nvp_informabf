@@ -57,7 +57,7 @@ const App = () => {
   // 🧩 Renderizado condicional
   // -------------------------------
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center font-sans">
+    <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center font-sans px-4 py-6">
       {!user ? (
         <>
           <p className="text-gray-700 mb-2 text-sm">
@@ -66,16 +66,16 @@ const App = () => {
           <Login onLogin={handleLogin} />
         </>
       ) : (
-        <div className="w-full max-w-4xl p-6 bg-white rounded-2xl shadow-xl border border-gray-200">
+        <div className="w-full max-w-5xl p-6 bg-white rounded-2xl shadow-xl border border-gray-200">
           {/* HEADER */}
-          <header className="flex justify-between items-center mb-6 border-b pb-3">
-            <div>
+          <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-6 border-b pb-3">
+            <div className="text-center sm:text-left">
               <h1 className="text-2xl font-bold text-blue-700">InformeBF</h1>
               <p className="text-sm text-gray-500">AI Data Visualizer</p>
             </div>
             <button
               onClick={handleLogout}
-              className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg transition-all duration-200"
+              className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg transition-all duration-200 w-full sm:w-auto"
             >
               Cerrar sesión
             </button>

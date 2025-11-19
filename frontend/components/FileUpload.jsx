@@ -96,21 +96,28 @@ const FileUpload = ({ onDataReceived }) => {
   ];
 
   return (
-    <div className="flex flex-col items-center space-y-6 w-full">
+    <div className="flex flex-col items-center space-y-6 w-full max-w-5xl mx-auto">
       {/* Subida de archivo */}
-      <div className="flex flex-col items-center">
+      <div className="flex flex-col items-stretch sm:items-center gap-3 w-full px-2">
+        <label
+          htmlFor="fileInput"
+          className="w-full sm:w-auto text-sm font-medium text-gray-700 text-center"
+        >
+          Selecciona tu archivo (.csv o .xlsx)
+        </label>
         <input
+          id="fileInput"
           type="file"
           onChange={handleFileChange}
           accept=".csv, .xlsx"
-          className="mb-4 border border-gray-300 p-2 rounded-lg shadow-sm focus:ring focus:ring-blue-300"
+          className="w-full sm:w-auto border border-gray-300 p-3 rounded-lg shadow-sm focus:ring focus:ring-blue-300 bg-white"
         />
         <button
           onClick={handleUpload}
           disabled={loading}
-          className={`px-6 py-3 rounded-lg font-semibold transition-all duration-300 ${
+          className={`w-full sm:w-auto px-6 py-3 rounded-lg font-semibold transition-all duration-300 ${
             loading
-              ? "bg-gray-400 cursor-not-allowed"
+              ? "bg-gray-400 text-white cursor-not-allowed"
               : "bg-blue-600 hover:bg-blue-700 text-white shadow"
           }`}
         >
@@ -122,15 +129,15 @@ const FileUpload = ({ onDataReceived }) => {
       {analysis && (
         <div className="mt-10 w-full bg-white rounded-2xl p-8 shadow-xl border border-gray-200">
           {/* Tabs */}
-          <div className="flex justify-center mb-6 border-b border-gray-200">
+          <div className="flex flex-wrap justify-center gap-2 mb-6 border-b border-gray-200 pb-2">
             {tabs.map((tab) => (
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`px-4 py-2 mx-2 text-sm font-semibold rounded-t-lg transition-all duration-300 ${
+                className={`px-4 py-2 text-sm font-semibold rounded-lg transition-all duration-300 ${
                   activeTab === tab.id
-                    ? "text-blue-700 border-b-4 border-blue-600"
-                    : "text-gray-500 hover:text-blue-600"
+                    ? "text-blue-700 bg-blue-50 border border-blue-200 shadow-sm"
+                    : "text-gray-600 hover:text-blue-600"
                 }`}
               >
                 {tab.label}
@@ -204,15 +211,15 @@ const FileUpload = ({ onDataReceived }) => {
                   className={`group relative inline-flex items-center justify-center gap-2 px-8 py-3 rounded-full font-semibold tracking-wide transition-all duration-300 shadow-lg focus:outline-none focus:ring-4 focus:ring-emerald-200 ${
                     downloading
                       ? "bg-gray-300 text-gray-500 cursor-not-allowed"
-                      : "bg-gradient-to-r from-emerald-400 via-emerald-500 to-emerald-600 text-white hover:scale-[1.02]"
+                      : "bg-gradient-to-r from-emerald-400 via-emerald-500 to-emerald-600 text-white hover:scale-[1.02] hover:shadow-xl"
                   }`}
                 >
                   <span className="text-xl">📥</span>
-                  <span className="text-sm sm:text-base">
+                  <span className="text-sm sm:text-base font-semibold">
                     {downloading ? "Generando reporte..." : "Descargar reporte"}
                   </span>
                   {!downloading && (
-                    <span className="absolute inset-0 rounded-full border border-white/20 blur-sm opacity-0 group-hover:opacity-100 transition" />
+                    <span className="pointer-events-none absolute inset-0 rounded-full border border-white/30 blur-sm opacity-0 group-hover:opacity-100 transition" />
                   )}
                 </button>
               </div>
