@@ -101,6 +101,15 @@ def json_safe(obj):
     return obj
 
 
+def json_safe_deep(data):
+    """Normaliza estructuras anidadas para evitar valores NaN/inf en la respuesta JSON."""
+    if isinstance(data, dict):
+        return {k: json_safe_deep(v) for k, v in data.items()}
+    if isinstance(data, (list, tuple, set)):
+        return [json_safe_deep(v) for v in data]
+    return json_safe(data)
+
+
 def read_dataframes(upload: UploadFile, content: bytes) -> list[pd.DataFrame]:
     """Lee un archivo subido (csv, xlsx o zip) y devuelve una lista de DataFrames."""
     ext = os.path.splitext(upload.filename)[1].lower()
@@ -358,12 +367,12 @@ async def upload_file(
 
         # 🔹 Normalizar todo para JSON seguro
         safe_sample = df.head(10).applymap(json_safe).to_dict(orient="records")
-        response = {
+        response = json_safe_deep({
             "summary": result.get("summary", {}),
             "sample": safe_sample,
             "graphs": result.get("graphs", []),
             "ai_summary": result.get("ai_summary", "No se generó resumen automático.")
-        }
+        })
 
         logging.info("✅ Análisis completado correctamente.")
         return JSONResponse(content=response)
