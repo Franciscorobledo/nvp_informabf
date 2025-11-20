@@ -49,6 +49,7 @@ def _normalize_record(username: str, record) -> dict:
             "full_name": record.get("full_name") or username,
             "hashed_password": record.get("hashed_password") or "",
             "role": record.get("role", "user"),
+            "expires_at": record.get("expires_at"),
         }
         return normalized
 
@@ -111,6 +112,29 @@ def save_users(users: Dict[str, dict]) -> None:
     USERS_FILE.write_text(json.dumps(users, indent=2), encoding="utf-8")
 
 
+def _parse_expiration(raw_value: str | None) -> datetime | None:
+    if not raw_value:
+        return None
+
+    try:
+        return datetime.fromisoformat(raw_value)
+    except ValueError:
+        if raw_value.endswith("Z"):
+            try:
+                return datetime.fromisoformat(raw_value.replace("Z", "+00:00"))
+            except ValueError:
+                logging.warning("Formato de expiración inválido para usuario")
+    return None
+
+
+def _is_user_expired(user: dict) -> bool:
+    expires_at = _parse_expiration(user.get("expires_at"))
+    if not expires_at:
+        return False
+
+    return datetime.utcnow() > expires_at
+
+
 def authenticate_user(username: str, password: str):
     users = load_users()
     user = users.get(username)
@@ -120,6 +144,9 @@ def authenticate_user(username: str, password: str):
     if not verify_password(password, user["hashed_password"]):
         logging.warning(f"Intento de login fallido: contraseña incorrecta para '{username}'.")
         return None
+    if _is_user_expired(user):
+        logging.warning(f"Intento de login con cuenta expirada: '{username}'.")
+        raise HTTPException(status_code=403, detail="La cuenta está expirada")
     logging.info(f"✅ Usuario autenticado: {username}")
     return user
 
@@ -150,6 +177,9 @@ def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(securit
     if not user:
         raise HTTPException(status_code=401, detail="Usuario no encontrado")
 
+    if _is_user_expired(user):
+        raise HTTPException(status_code=403, detail="La cuenta está expirada")
+
     return user
 
 
@@ -164,6 +194,7 @@ class UserCreate(BaseModel):
     password: str = Field(..., min_length=4)
     full_name: str | None = None
     role: Literal["admin", "user"] = "user"
+    expires_at: datetime | None = None
 
 
 class RoleUpdate(BaseModel):
@@ -243,6 +274,7 @@ def list_users():
             "username": user["username"],
             "full_name": user.get("full_name"),
             "role": user.get("role", "user"),
+            "expires_at": user.get("expires_at"),
         }
         for user in users.values()
     ]
@@ -260,6 +292,7 @@ def create_user(user: UserCreate):
         "full_name": user.full_name or user.username,
         "hashed_password": hash_password(user.password),
         "role": user.role,
+        "expires_at": user.expires_at.isoformat() if user.expires_at else None,
     }
     save_users(users)
     return {"status": "success", "message": f"Usuario {user.username} creado"}

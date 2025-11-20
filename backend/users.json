@@ -3,6 +3,14 @@
     "username": "admin",
     "full_name": "Administrador del Sistema",
     "hashed_password": "03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4",
-    "role": "admin"
+    "role": "admin",
+    "expires_at": null
+  },
+  "usertest": {
+    "username": "usertest",
+    "full_name": "usertest",
+    "hashed_password": "94107fd7014d452f34033ad0a548322d35f32d4322857d841641697df286847d",
+    "role": "user",
+    "expires_at": "2025-11-22T23:59:59+00:00"
   }
 }
