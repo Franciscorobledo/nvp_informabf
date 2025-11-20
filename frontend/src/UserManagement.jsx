@@ -6,6 +6,7 @@ const defaultFormState = {
   fullName: "",
   password: "",
   role: "user",
+  active: true,
   expiresAt: "",
 };
 
@@ -16,6 +17,7 @@ const UserManagement = () => {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [formData, setFormData] = useState(defaultFormState);
+  const [editingUser, setEditingUser] = useState(null);
 
   const token = useMemo(() => localStorage.getItem("token"), []);
 
@@ -43,7 +45,10 @@ const UserManagement = () => {
       });
 
       if (!response.ok) {
-        throw new Error("No se pudo obtener la lista de usuarios");
+        const backendMessage = await response.text();
+        throw new Error(
+          backendMessage || "No se pudo obtener la lista de usuarios"
+        );
       }
 
       const data = await response.json();
@@ -71,71 +76,103 @@ const UserManagement = () => {
     setMessage("");
     setError("");
 
-    if (!formData.username.trim() || !formData.password.trim()) {
-      setError("Usuario y contraseña son obligatorios.");
+    const isEditing = Boolean(editingUser);
+
+    if (!isEditing && (!formData.username.trim() || !formData.password.trim())) {
+      setError("Usuario y contraseña son obligatorios para crear una cuenta.");
       setSubmitting(false);
       return;
     }
 
-    const payload = {
-      username: formData.username.trim(),
-      password: formData.password.trim(),
-      full_name: formData.fullName.trim() || formData.username.trim(),
-      role: formData.role,
-      expires_at: formData.expiresAt
-        ? new Date(formData.expiresAt).toISOString()
-        : null,
-    };
+    const payload = isEditing
+      ? {
+          full_name: formData.fullName.trim(),
+          role: formData.role,
+          active: formData.active,
+          expires_at: formData.expiresAt
+            ? new Date(formData.expiresAt).toISOString()
+            : null,
+        }
+      : {
+          username: formData.username.trim(),
+          password: formData.password.trim(),
+          full_name: formData.fullName.trim() || formData.username.trim(),
+          role: formData.role,
+          active: formData.active,
+          expires_at: formData.expiresAt
+            ? new Date(formData.expiresAt).toISOString()
+            : null,
+        };
 
     try {
-      const response = await fetch(`${API_URL}/auth/users`, {
-        method: "POST",
+      const url = isEditing
+        ? `${API_URL}/auth/users/${editingUser}`
+        : `${API_URL}/auth/users`;
+      const method = isEditing ? "PUT" : "POST";
+
+      const response = await fetch(url, {
+        method,
         headers: authHeaders,
         body: JSON.stringify(payload),
       });
 
       if (!response.ok) {
         const backendMessage = await response.text();
-        throw new Error(backendMessage || "No se pudo crear el usuario");
+        throw new Error(
+          backendMessage ||
+            (isEditing
+              ? "No se pudo actualizar el usuario"
+              : "No se pudo crear el usuario")
+        );
       }
 
-      setMessage(`Usuario ${payload.username} creado correctamente.`);
+      setMessage(
+        isEditing
+          ? `Usuario ${editingUser} actualizado correctamente.`
+          : `Usuario ${payload.username} creado correctamente.`
+      );
+      setEditingUser(null);
       setFormData(defaultFormState);
       fetchUsers();
     } catch (err) {
-      console.error("Error al crear usuario:", err);
-      setError(err.message || "No se pudo crear el usuario.");
+      console.error("Error al guardar usuario:", err);
+      setError(
+        err.message ||
+          (isEditing
+            ? "No se pudo actualizar el usuario."
+            : "No se pudo crear el usuario.")
+      );
     } finally {
       setSubmitting(false);
     }
   };
 
-  const handleRoleChange = async (username, newRole) => {
+  const handleUserUpdate = async (username, payload, successMessage) => {
     setError("");
     setMessage("");
 
     try {
-      const response = await fetch(`${API_URL}/auth/users/${username}/role`, {
+      const response = await fetch(`${API_URL}/auth/users/${username}`, {
         method: "PUT",
         headers: authHeaders,
-        body: JSON.stringify({ role: newRole }),
+        body: JSON.stringify(payload),
       });
 
       if (!response.ok) {
         const backendMessage = await response.text();
-        throw new Error(backendMessage || "No se pudo actualizar el rol");
+        throw new Error(backendMessage || "No se pudo actualizar el usuario");
       }
 
-      setMessage(`Rol de ${username} actualizado a ${newRole}.`);
-      setUsers((prev) =>
-        prev.map((user) =>
-          user.username === username ? { ...user, role: newRole } : user
-        )
-      );
+      setMessage(successMessage);
+      fetchUsers();
     } catch (err) {
-      console.error("Error al actualizar rol:", err);
-      setError(err.message || "No se pudo actualizar el rol.");
+      console.error("Error al actualizar usuario:", err);
+      setError(err.message || "No se pudo actualizar el usuario.");
     }
+  };
+
+  const handleRoleChange = async (username, newRole) => {
+    await handleUserUpdate(username, { role: newRole }, `Rol de ${username} actualizado.`);
   };
 
   const handleDelete = async (username) => {
@@ -161,10 +198,85 @@ const UserManagement = () => {
 
       setMessage(`Usuario ${username} eliminado.`);
       setUsers((prev) => prev.filter((user) => user.username !== username));
+      if (editingUser === username) {
+        setEditingUser(null);
+        setFormData(defaultFormState);
+      }
     } catch (err) {
       console.error("Error al eliminar usuario:", err);
       setError(err.message || "No se pudo eliminar el usuario.");
     }
+  };
+
+  const handleToggleActive = async (user) => {
+    const nextState = !user.active;
+    const actionLabel = nextState ? "activar" : "desactivar";
+    const confirmed = window.confirm(
+      `¿Deseas ${actionLabel} la cuenta de "${user.username}"?`
+    );
+
+    if (!confirmed) return;
+
+    await handleUserUpdate(
+      user.username,
+      { active: nextState },
+      `Usuario ${user.username} ${nextState ? "activado" : "desactivado"}.`
+    );
+  };
+
+  const handleEdit = (user) => {
+    setEditingUser(user.username);
+    setFormData({
+      username: user.username,
+      fullName: user.full_name || user.fullName || "",
+      password: "",
+      role: user.role || "user",
+      active: user.active ?? true,
+      expiresAt: user.expires_at
+        ? new Date(user.expires_at).toISOString().slice(0, 16)
+        : "",
+    });
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const handlePasswordChange = async (username) => {
+    const newPassword = window.prompt(
+      `Nueva contraseña para ${username} (mínimo 4 caracteres):`
+    );
+
+    if (!newPassword) return;
+    if (newPassword.trim().length < 4) {
+      setError("La contraseña debe tener al menos 4 caracteres.");
+      return;
+    }
+
+    setError("");
+    setMessage("");
+
+    try {
+      const response = await fetch(`${API_URL}/auth/users/${username}/password`, {
+        method: "POST",
+        headers: authHeaders,
+        body: JSON.stringify({ password: newPassword.trim() }),
+      });
+
+      if (!response.ok) {
+        const backendMessage = await response.text();
+        throw new Error(backendMessage || "No se pudo actualizar la contraseña");
+      }
+
+      setMessage(`Contraseña de ${username} actualizada.`);
+    } catch (err) {
+      console.error("Error al actualizar contraseña:", err);
+      setError(err.message || "No se pudo actualizar la contraseña.");
+    }
+  };
+
+  const formatDate = (dateString) => {
+    if (!dateString) return "—";
+    const date = new Date(dateString);
+    if (Number.isNaN(date.getTime())) return dateString;
+    return date.toLocaleString();
   };
 
   return (
@@ -213,7 +325,8 @@ const UserManagement = () => {
             onChange={handleInputChange}
             className="w-full p-3 rounded-lg border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-900"
             placeholder="Ej: ana.garcia"
-            required
+            required={!editingUser}
+            disabled={Boolean(editingUser)}
           />
         </div>
 
@@ -241,7 +354,9 @@ const UserManagement = () => {
             value={formData.password}
             onChange={handleInputChange}
             className="w-full p-3 rounded-lg border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-900"
-            required
+            required={!editingUser}
+            placeholder={editingUser ? "(opcional, use 'Cambiar contraseña')" : ""}
+            disabled={Boolean(editingUser)}
           />
         </div>
 
@@ -257,6 +372,23 @@ const UserManagement = () => {
           >
             <option value="user">Usuario</option>
             <option value="admin">Administrador</option>
+          </select>
+        </div>
+
+        <div className="space-y-2">
+          <label className="text-sm font-medium text-gray-700 dark:text-slate-200">
+            Estado
+          </label>
+          <select
+            name="active"
+            value={String(formData.active)}
+            onChange={(e) =>
+              setFormData((prev) => ({ ...prev, active: e.target.value === "true" }))
+            }
+            className="w-full p-3 rounded-lg border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-900"
+          >
+            <option value="true">Activo</option>
+            <option value="false">Inactivo</option>
           </select>
         </div>
 
@@ -276,13 +408,29 @@ const UserManagement = () => {
           </p>
         </div>
 
-        <div className="md:col-span-2 flex justify-end">
+        <div className="md:col-span-2 flex justify-end gap-3">
+          {editingUser && (
+            <button
+              type="button"
+              onClick={() => {
+                setEditingUser(null);
+                setFormData(defaultFormState);
+              }}
+              className="px-6 py-3 rounded-lg bg-gray-200 dark:bg-slate-700 text-gray-800 dark:text-slate-100 font-semibold shadow"
+            >
+              Cancelar edición
+            </button>
+          )}
           <button
             type="submit"
             disabled={submitting}
             className="px-6 py-3 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-semibold shadow disabled:bg-blue-400"
           >
-            {submitting ? "Guardando..." : "Crear usuario"}
+            {submitting
+              ? "Guardando..."
+              : editingUser
+              ? "Actualizar usuario"
+              : "Crear usuario"}
           </button>
         </div>
       </form>
@@ -294,6 +442,8 @@ const UserManagement = () => {
               <th className="p-3">Usuario</th>
               <th className="p-3">Nombre</th>
               <th className="p-3">Rol</th>
+              <th className="p-3">Estado</th>
+              <th className="p-3">Creado</th>
               <th className="p-3">Expira</th>
               <th className="p-3 text-right">Acciones</th>
             </tr>
@@ -301,13 +451,13 @@ const UserManagement = () => {
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan="5" className="p-4 text-center text-gray-500">
+                <td colSpan="7" className="p-4 text-center text-gray-500">
                   Cargando usuarios...
                 </td>
               </tr>
             ) : users.length === 0 ? (
               <tr>
-                <td colSpan="5" className="p-4 text-center text-gray-500">
+                <td colSpan="7" className="p-4 text-center text-gray-500">
                   No hay usuarios registrados.
                 </td>
               </tr>
@@ -334,24 +484,55 @@ const UserManagement = () => {
                       <option value="admin">Administrador</option>
                     </select>
                   </td>
-                  <td className="p-3 text-gray-600 dark:text-slate-300">
-                    {user.expires_at || user.expiresAt || "Sin expiración"}
+                  <td className="p-3 font-semibold">
+                    <span
+                      className={`px-2 py-1 rounded-full text-xs ${
+                        user.active
+                          ? "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-200"
+                          : "bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-200"
+                      }`}
+                    >
+                      {user.active ? "Activo" : "Inactivo"}
+                    </span>
                   </td>
-                  <td className="p-3 text-right space-x-2">
-                    <button
-                      onClick={() => handleRoleChange(user.username, user.role)}
-                      disabled={user.username === "admin"}
-                      className="px-3 py-2 rounded-lg bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 disabled:opacity-60"
-                    >
-                      Guardar rol
-                    </button>
-                    <button
-                      onClick={() => handleDelete(user.username)}
-                      disabled={user.username === "admin"}
-                      className="px-3 py-2 rounded-lg bg-red-50 dark:bg-red-950 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-800 disabled:opacity-60"
-                    >
-                      Eliminar
-                    </button>
+                  <td className="p-3 text-gray-600 dark:text-slate-300">
+                    {formatDate(user.created_at)}
+                  </td>
+                  <td className="p-3 text-gray-600 dark:text-slate-300">
+                    {user.expires_at || user.expiresAt
+                      ? formatDate(user.expires_at || user.expiresAt)
+                      : "Sin expiración"}
+                  </td>
+                  <td className="p-3 text-right whitespace-nowrap">
+                    <div className="flex flex-wrap justify-end gap-2">
+                      <button
+                        onClick={() => handleEdit(user)}
+                        className="px-3 py-2 rounded-lg bg-gray-100 dark:bg-slate-800 text-gray-800 dark:text-slate-100 border border-gray-200 dark:border-slate-700"
+                      >
+                        Editar
+                      </button>
+                      <button
+                        onClick={() => handlePasswordChange(user.username)}
+                        disabled={user.username === "admin"}
+                        className="px-3 py-2 rounded-lg bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-200 border border-indigo-200 dark:border-indigo-800 disabled:opacity-60"
+                      >
+                        Contraseña
+                      </button>
+                      <button
+                        onClick={() => handleToggleActive(user)}
+                        disabled={user.username === "admin"}
+                        className="px-3 py-2 rounded-lg bg-amber-50 dark:bg-amber-950 text-amber-700 dark:text-amber-200 border border-amber-200 dark:border-amber-800 disabled:opacity-60"
+                      >
+                        {user.active ? "Desactivar" : "Activar"}
+                      </button>
+                      <button
+                        onClick={() => handleDelete(user.username)}
+                        disabled={user.username === "admin"}
+                        className="px-3 py-2 rounded-lg bg-red-50 dark:bg-red-950 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-800 disabled:opacity-60"
+                      >
+                        Eliminar
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))

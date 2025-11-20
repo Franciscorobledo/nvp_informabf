@@ -4,7 +4,7 @@ import json
 import logging
 import os
 from pathlib import Path
-from typing import Dict, Literal
+from typing import Dict, Literal, Optional
 
 import jwt
 from dotenv import load_dotenv
@@ -49,6 +49,8 @@ def _normalize_record(username: str, record) -> dict:
             "full_name": record.get("full_name") or username,
             "hashed_password": record.get("hashed_password") or "",
             "role": record.get("role", "user"),
+            "active": record.get("active", True),
+            "created_at": record.get("created_at") or datetime.utcnow().isoformat(),
             "expires_at": record.get("expires_at"),
         }
         return normalized
@@ -60,6 +62,8 @@ def _normalize_record(username: str, record) -> dict:
             "full_name": username,
             "hashed_password": record,
             "role": "admin" if username == "admin" else "user",
+            "active": True,
+            "created_at": datetime.utcnow().isoformat(),
         }
 
     raise ValueError(f"Formato de usuario no soportado para '{username}'")
@@ -74,6 +78,8 @@ def _ensure_storage() -> None:
             "full_name": "Administrador del Sistema",
             "hashed_password": hash_password(DEFAULT_ADMIN_PASSWORD),
             "role": "admin",
+            "active": True,
+            "created_at": datetime.utcnow().isoformat(),
         }
         USERS_FILE.write_text(json.dumps({"admin": admin_record}, indent=2), encoding="utf-8")
         return
@@ -91,6 +97,8 @@ def _ensure_storage() -> None:
             "full_name": "Administrador del Sistema",
             "hashed_password": hash_password(DEFAULT_ADMIN_PASSWORD),
             "role": "admin",
+            "active": True,
+            "created_at": datetime.utcnow().isoformat(),
         }
     else:
         data["admin"] = _normalize_record("admin", admin_record)
@@ -141,6 +149,9 @@ def authenticate_user(username: str, password: str):
     if not user:
         logging.warning(f"Intento de login fallido: usuario '{username}' no encontrado.")
         return None
+    if not user.get("active", True):
+        logging.warning(f"Intento de login fallido: cuenta desactivada para '{username}'.")
+        raise HTTPException(status_code=403, detail="La cuenta está desactivada")
     if not verify_password(password, user["hashed_password"]):
         logging.warning(f"Intento de login fallido: contraseña incorrecta para '{username}'.")
         return None
@@ -177,6 +188,9 @@ def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(securit
     if not user:
         raise HTTPException(status_code=401, detail="Usuario no encontrado")
 
+    if not user.get("active", True):
+        raise HTTPException(status_code=403, detail="La cuenta está desactivada")
+
     if _is_user_expired(user):
         raise HTTPException(status_code=403, detail="La cuenta está expirada")
 
@@ -194,11 +208,23 @@ class UserCreate(BaseModel):
     password: str = Field(..., min_length=4)
     full_name: str | None = None
     role: Literal["admin", "user"] = "user"
+    active: bool = True
     expires_at: datetime | None = None
 
 
 class RoleUpdate(BaseModel):
     role: Literal["admin", "user"]
+
+
+class UserUpdate(BaseModel):
+    full_name: Optional[str] = None
+    role: Optional[Literal["admin", "user"]] = None
+    active: Optional[bool] = None
+    expires_at: Optional[datetime] = None
+
+
+class PasswordUpdate(BaseModel):
+    password: str = Field(..., min_length=4)
 
 
 # -----------------------------
@@ -274,6 +300,8 @@ def list_users():
             "username": user["username"],
             "full_name": user.get("full_name"),
             "role": user.get("role", "user"),
+            "active": user.get("active", True),
+            "created_at": user.get("created_at"),
             "expires_at": user.get("expires_at"),
         }
         for user in users.values()
@@ -292,26 +320,52 @@ def create_user(user: UserCreate):
         "full_name": user.full_name or user.username,
         "hashed_password": hash_password(user.password),
         "role": user.role,
+        "active": user.active,
+        "created_at": datetime.utcnow().isoformat(),
         "expires_at": user.expires_at.isoformat() if user.expires_at else None,
     }
     save_users(users)
     return {"status": "success", "message": f"Usuario {user.username} creado"}
 
 
-@router.put("/users/{username}/role", dependencies=[Depends(admin_required)])
-def update_user_role(username: str, role_update: RoleUpdate):
+@router.put("/users/{username}", dependencies=[Depends(admin_required)])
+def update_user(username: str, user_update: UserUpdate):
     users = load_users()
     user = users.get(username)
     if not user:
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
 
-    if username == "admin" and role_update.role != "admin":
+    if user_update.role and username == "admin" and user_update.role != "admin":
         raise HTTPException(status_code=400, detail="El rol del admin no puede modificarse")
 
-    user["role"] = role_update.role
+    if user_update.full_name is not None:
+        user["full_name"] = user_update.full_name
+    if user_update.role is not None:
+        user["role"] = user_update.role
+    if user_update.active is not None:
+        user["active"] = user_update.active
+    if user_update.expires_at is not None:
+        user["expires_at"] = user_update.expires_at.isoformat()
+
     users[username] = user
     save_users(users)
-    return {"status": "success", "message": f"Rol actualizado a {role_update.role}"}
+    return {"status": "success", "message": f"Usuario {username} actualizado"}
+
+
+@router.post("/users/{username}/password", dependencies=[Depends(admin_required)])
+def update_user_password(username: str, password_update: PasswordUpdate):
+    users = load_users()
+    user = users.get(username)
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+
+    if not user.get("active", True):
+        raise HTTPException(status_code=400, detail="No se puede cambiar contraseña de un usuario desactivado")
+
+    user["hashed_password"] = hash_password(password_update.password)
+    users[username] = user
+    save_users(users)
+    return {"status": "success", "message": f"Contraseña de {username} actualizada"}
 
 
 @router.delete("/users/{username}", dependencies=[Depends(admin_required)])
