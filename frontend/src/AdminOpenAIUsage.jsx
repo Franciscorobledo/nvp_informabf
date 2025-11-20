@@ -17,6 +17,7 @@ const AdminOpenAIUsage = () => {
     const token = localStorage.getItem("token");
     if (!token) {
       setError("No se encontró token. Inicia sesión nuevamente.");
+      setLoading(false);
       return;
     }
 
@@ -60,6 +61,54 @@ const AdminOpenAIUsage = () => {
       {helper && <span className="text-xs text-gray-400 dark:text-slate-500">{helper}</span>}
     </div>
   );
+
+  const renderLogs = () => {
+    const events = snapshot?.events || [];
+
+    if (!events.length) {
+      return (
+        <p className="text-sm text-gray-500 dark:text-slate-400">
+          Aún no hay registros de llamadas a OpenAI.
+        </p>
+      );
+    }
+
+    return (
+      <div className="overflow-auto rounded-xl border border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm">
+        <div className="grid grid-cols-5 gap-3 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400 bg-gray-50 dark:bg-slate-800/60">
+          <span>Fecha</span>
+          <span>Modelo</span>
+          <span className="text-right">Prompt</span>
+          <span className="text-right">Completion</span>
+          <span className="text-right">Costo</span>
+        </div>
+        <div className="divide-y divide-gray-100 dark:divide-slate-800">
+          {events
+            .slice()
+            .reverse()
+            .map((event, index) => (
+              <div
+                key={`${event.timestamp}-${index}`}
+                className="grid grid-cols-5 gap-3 px-4 py-3 text-sm text-gray-700 dark:text-slate-200"
+              >
+                <span className="text-xs text-gray-500 dark:text-slate-400">
+                  {event.timestamp ? new Date(event.timestamp).toLocaleString() : "—"}
+                </span>
+                <span className="font-medium">{event.model || "n/a"}</span>
+                <span className="text-right">{integerFormatter.format(event.prompt_tokens || 0)}</span>
+                <span className="text-right">{integerFormatter.format(event.completion_tokens || 0)}</span>
+                <span className="text-right">
+                  ${numberFormatter.format(event.cost_usd || 0)}
+                  <span className="block text-[10px] text-gray-500 dark:text-slate-400">
+                    Total: ${numberFormatter.format(event.cumulative_cost_usd || 0)}
+                  </span>
+                </span>
+              </div>
+            ))}
+        </div>
+      </div>
+    );
+  };
 
   return (
     <section className="w-full mt-8">
@@ -137,6 +186,13 @@ const AdminOpenAIUsage = () => {
               `$${numberFormatter.format((snapshot.total_cost_usd / Math.max((snapshot.total_prompt_tokens + snapshot.total_completion_tokens) / 1000 || 1, 1)))}`,
               "Basado en los costos registrados"
             )}
+          </div>
+
+          <div className="mt-6 space-y-2">
+            <h4 className="text-sm font-semibold text-gray-700 dark:text-slate-200">
+              Registro de consumo reciente
+            </h4>
+            {renderLogs()}
           </div>
         </div>
       )}

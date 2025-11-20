@@ -16,29 +16,30 @@ DEFAULT_OUTPUT_COST = float(os.getenv("OPENAI_OUTPUT_COST_PER_1K", "0.000600"))
 BUDGET_USD = float(os.getenv("OPENAI_BUDGET_USD", "20"))
 
 
+def _base_usage_template() -> Dict[str, Any]:
+    return {
+        "total_prompt_tokens": 0,
+        "total_completion_tokens": 0,
+        "total_cost_usd": 0.0,
+        "last_call": None,
+        "last_model": None,
+        "events": [],
+    }
+
+
 def _load_usage() -> Dict[str, Any]:
     if not USAGE_FILE.exists():
-        return {
-            "total_prompt_tokens": 0,
-            "total_completion_tokens": 0,
-            "total_cost_usd": 0.0,
-            "last_call": None,
-            "last_model": None,
-        }
+        return _base_usage_template()
 
     try:
         with USAGE_FILE.open("r", encoding="utf-8") as f:
             data = json.load(f)
+        # Garantiza que siempre exista la clave de eventos para el historial
+        data.setdefault("events", [])
         return data
     except Exception as exc:
         logging.error(f"No se pudo leer el historial de uso de OpenAI: {exc}")
-        return {
-            "total_prompt_tokens": 0,
-            "total_completion_tokens": 0,
-            "total_cost_usd": 0.0,
-            "last_call": None,
-            "last_model": None,
-        }
+        return _base_usage_template()
 
 
 def _save_usage(data: Dict[str, Any]) -> None:
@@ -71,8 +72,23 @@ def record_openai_usage(
     usage["total_prompt_tokens"] = usage.get("total_prompt_tokens", 0) + prompt_tokens
     usage["total_completion_tokens"] = usage.get("total_completion_tokens", 0) + completion_tokens
     usage["total_cost_usd"] = round(usage.get("total_cost_usd", 0.0) + total_cost, 6)
-    usage["last_call"] = datetime.utcnow().isoformat()
+    timestamp = datetime.utcnow().isoformat()
+    usage["last_call"] = timestamp
     usage["last_model"] = model
+
+    event = {
+        "timestamp": timestamp,
+        "model": model,
+        "prompt_tokens": prompt_tokens,
+        "completion_tokens": completion_tokens,
+        "cost_usd": total_cost,
+        "cumulative_cost_usd": usage["total_cost_usd"],
+    }
+
+    # Mantiene un historial corto para mostrar en el panel de administración
+    events = usage.get("events", [])
+    events.append(event)
+    usage["events"] = events[-50:]
 
     _save_usage(usage)
     logging.info(
@@ -88,6 +104,7 @@ def record_openai_usage(
 def get_usage_snapshot() -> Dict[str, Any]:
     usage = _load_usage()
     remaining_budget = max(BUDGET_USD - usage.get("total_cost_usd", 0.0), 0)
+    events = usage.get("events", [])
     return {
         "budget_usd": BUDGET_USD,
         "remaining_budget_usd": round(remaining_budget, 6),
@@ -96,4 +113,6 @@ def get_usage_snapshot() -> Dict[str, Any]:
         "total_cost_usd": usage.get("total_cost_usd", 0.0),
         "last_call": usage.get("last_call"),
         "last_model": usage.get("last_model"),
+        # Solo enviamos los últimos 25 eventos para evitar respuestas demasiado grandes
+        "events": events[-25:],
     }
