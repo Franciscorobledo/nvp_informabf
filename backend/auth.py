@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import hashlib
 import json
 import logging
@@ -132,7 +132,10 @@ def _is_user_expired(user: dict) -> bool:
     if not expires_at:
         return False
 
-    return datetime.utcnow() > expires_at
+    if expires_at.tzinfo is None or expires_at.tzinfo.utcoffset(expires_at) is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+
+    return datetime.now(tz=expires_at.tzinfo) > expires_at
 
 
 def authenticate_user(username: str, password: str):
