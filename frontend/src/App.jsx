@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import Login from "./Login";
 import FileUpload from "../components/FileUpload";
 import UserManagement from "./UserManagement";
+import AdminOpenAIUsage from "./AdminOpenAIUsage";
 
 const App = () => {
   const [user, setUser] = useState(null);
@@ -192,6 +193,7 @@ const App = () => {
                   👤 Administración de usuarios
                 </h3>
                 <UserManagement />
+                <AdminOpenAIUsage />
               </div>
             )}
 
