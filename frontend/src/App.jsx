@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import Login from "./Login";
 import FileUpload from "../components/FileUpload";
+import UserManagement from "./UserManagement";
 
 const App = () => {
   const [user, setUser] = useState(null);
@@ -17,7 +18,16 @@ const App = () => {
 
     if (token && storedUser) {
       console.log("✅ Sesión activa detectada.");
-      setUser({ username: storedUser });
+      try {
+        const parsed = JSON.parse(storedUser);
+        if (parsed?.username) {
+          setUser({ username: parsed.username, role: parsed.role || "user" });
+        } else {
+          setUser({ username: storedUser, role: "user" });
+        }
+      } catch {
+        setUser({ username: storedUser, role: "user" });
+      }
     } else {
       console.log("⚠️ No hay sesión activa, mostrando pantalla de login.");
     }
@@ -49,7 +59,7 @@ const App = () => {
       return;
     }
 
-    setUser(data);
+    setUser({ username: data.username, role: data.role || "user" });
   };
 
   // 🔒 Cierre de sesión
@@ -175,6 +185,15 @@ const App = () => {
                 console.log("📈 Resultado del análisis:", data)
               }
             />
+
+            {user.role === "admin" && (
+              <div className="mt-10 space-y-3">
+                <h3 className="text-lg font-semibold text-gray-700 dark:text-slate-100 text-center">
+                  👤 Administración de usuarios
+                </h3>
+                <UserManagement />
+              </div>
+            )}
 
             <div className="mt-10 text-gray-600 dark:text-slate-300 text-sm text-center italic">
               Carga tus archivos .CSV o .XLSX para generar visualizaciones automáticas.
