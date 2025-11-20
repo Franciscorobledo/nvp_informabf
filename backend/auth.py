@@ -5,6 +5,7 @@ import logging
 import os
 from pathlib import Path
 from typing import Dict, Literal, Optional
+import shutil
 
 import jwt
 from dotenv import load_dotenv
@@ -23,8 +24,15 @@ SECRET_KEY = os.getenv("SECRET_KEY", "DEV_SECRET_KEY")
 ALGORITHM = os.getenv("ALGORITHM", "HS256")
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", 120))
 DEFAULT_ADMIN_PASSWORD = os.getenv("DEFAULT_ADMIN_PASSWORD", "Francisco8")
-USERS_FILE = Path(__file__).with_name("users.json")
-DELETED_USERS_FILE = Path(__file__).with_name("deleted_users.json")
+STORAGE_DIR = Path(os.getenv("AUTH_STORAGE_DIR", Path(__file__).parent / "data"))
+
+# Archivos de compatibilidad con la ruta anterior. Si existen, se usarán como
+# base para inicializar el nuevo almacenamiento persistente en STORAGE_DIR.
+LEGACY_USERS_FILE = Path(__file__).with_name("users.json")
+LEGACY_DELETED_USERS_FILE = Path(__file__).with_name("deleted_users.json")
+
+USERS_FILE = STORAGE_DIR / "users.json"
+DELETED_USERS_FILE = STORAGE_DIR / "deleted_users.json"
 
 security = HTTPBearer()
 
@@ -71,18 +79,30 @@ def _normalize_record(username: str, record) -> dict:
 
 
 def _ensure_storage() -> None:
-    """Garantiza la existencia del archivo de usuarios con el admin inicial."""
+    """Garantiza la existencia del archivo de usuarios con el admin inicial.
+
+    A partir de este cambio, el archivo vivo se almacena en ``backend/data``
+    (o en la ruta definida por ``AUTH_STORAGE_DIR``) para evitar que los
+    despliegues sobrescriban las cuentas creadas. Si existen los archivos
+    originales junto al código, se migran automáticamente a la nueva ubicación.
+    """
+    STORAGE_DIR.mkdir(parents=True, exist_ok=True)
+
     if not USERS_FILE.exists():
-        logging.info("Creando archivo de usuarios con cuenta de administrador por defecto")
-        admin_record = {
-            "username": "admin",
-            "full_name": "Administrador del Sistema",
-            "hashed_password": hash_password(DEFAULT_ADMIN_PASSWORD),
-            "role": "admin",
-            "active": True,
-            "created_at": datetime.utcnow().isoformat(),
-        }
-        USERS_FILE.write_text(json.dumps({"admin": admin_record}, indent=2), encoding="utf-8")
+        if LEGACY_USERS_FILE.exists():
+            logging.info("Migrando usuarios desde el archivo legado")
+            shutil.copy2(LEGACY_USERS_FILE, USERS_FILE)
+        else:
+            logging.info("Creando archivo de usuarios con cuenta de administrador por defecto")
+            admin_record = {
+                "username": "admin",
+                "full_name": "Administrador del Sistema",
+                "hashed_password": hash_password(DEFAULT_ADMIN_PASSWORD),
+                "role": "admin",
+                "active": True,
+                "created_at": datetime.utcnow().isoformat(),
+            }
+            USERS_FILE.write_text(json.dumps({"admin": admin_record}, indent=2), encoding="utf-8")
         return
 
     try:
@@ -124,7 +144,14 @@ def save_users(users: Dict[str, dict]) -> None:
 
 
 def _ensure_deleted_storage() -> None:
-    if not DELETED_USERS_FILE.exists():
+    STORAGE_DIR.mkdir(parents=True, exist_ok=True)
+    if DELETED_USERS_FILE.exists():
+        return
+
+    if LEGACY_DELETED_USERS_FILE.exists():
+        logging.info("Migrando historial de eliminaciones desde el archivo legado")
+        shutil.copy2(LEGACY_DELETED_USERS_FILE, DELETED_USERS_FILE)
+    else:
         DELETED_USERS_FILE.write_text("[]", encoding="utf-8")
 
 
