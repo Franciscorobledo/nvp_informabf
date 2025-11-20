@@ -66,3 +66,14 @@ body {
 .btn-danger {
   @apply bg-red-500 hover:bg-red-600 text-white font-semibold py-2 px-4 rounded-lg transition-all duration-300;
 }
+
+/* -----------------------------
+   🔐 Layout de login
+------------------------------ */
+.login-layout {
+  @apply flex items-center justify-center min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-slate-800 text-white px-4;
+}
+
+.login-card {
+  @apply bg-slate-800/70 backdrop-blur-xl p-8 md:p-10 rounded-2xl shadow-2xl w-full max-w-md border border-slate-700 animate-fade-in;
+}
