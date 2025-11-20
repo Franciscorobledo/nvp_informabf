@@ -7,6 +7,8 @@ from typing import Any, Dict, Optional
 
 import requests
 
+from utils.openai_keys import get_openai_api_key
+
 # Archivo persistente para consolidar el uso de OpenAI
 USAGE_FILE = Path(__file__).resolve().parent.parent / "openai_usage.json"
 
@@ -56,7 +58,7 @@ def _save_usage(data: Dict[str, Any]) -> None:
 
 
 def _get_api_key(api_key: Optional[str] = None) -> str:
-    key = api_key or os.getenv("OPENAI_API_KEY")
+    key = api_key or get_openai_api_key()
     if not key:
         raise ValueError(
             "OPENAI_API_KEY no está configurada. Asegúrate de definirla para consultar el uso real."

@@ -13,11 +13,13 @@ import textwrap
 import zipfile
 from typing import List
 from dotenv import load_dotenv
+from pydantic import BaseModel
 
 from utils.file_utils import validate_file
 from analysis import analyze_file, detect_column_types
 from auth import admin_required, get_current_user, router as auth_router
 from ai_module import check_openai_status
+from utils.openai_keys import get_openai_api_key, persist_openai_api_key
 from utils.openai_monitor import get_usage_snapshot
 from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
@@ -32,7 +34,6 @@ load_dotenv(dotenv_path=DOTENV_PATH, override=False)
 
 SECRET_KEY = os.getenv("SECRET_KEY", "DEV_SECRET_KEY")
 ALGORITHM = os.getenv("ALGORITHM", "HS256")
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 ENV = os.getenv("ENV", "development")
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
 ALLOW_ONRENDER_WILDCARD = os.getenv("ALLOW_ONRENDER_WILDCARD", "true").lower() in {"1", "true", "yes"}
@@ -43,14 +44,13 @@ logging.basicConfig(
 )
 
 logging.info("📄 Variables de entorno cargadas desde: %s", DOTENV_PATH)
-
-if not OPENAI_API_KEY:
-    raise ValueError(
-        "❌ No se encontró la variable OPENAI_API_KEY. Verifica tu configuración de despliegue o el archivo backend/.env."
-    )
-logging.info("🔐 OPENAI_API_KEY presente: %s", "sí" if OPENAI_API_KEY else "no")
+logging.info("🔐 OPENAI_API_KEY presente: %s", "sí" if get_openai_api_key() else "no")
 
 app = FastAPI(title="InformeBF - Intelligent Data Visualizer")
+
+
+class OpenAITokenPayload(BaseModel):
+    api_key: str
 
 # ==============================
 # CONFIGURACIÓN DE CORS
@@ -314,13 +314,34 @@ def openai_admin_status():
     status = check_openai_status()
     usage = status.get("usage") or get_usage_snapshot()
     billing = status.get("billing")
+    key_present = bool(get_openai_api_key())
 
     return {
         "status": status.get("status"),
         "message": status.get("message"),
-        "openai_key_present": True,
+        "openai_key_present": key_present,
         "usage": usage,
         "billing": billing,
+    }
+
+
+@app.post("/admin/openai/token", dependencies=[Depends(admin_required)])
+def update_openai_token(payload: OpenAITokenPayload):
+    """Permite actualizar el token de OpenAI sin reiniciar el backend."""
+
+    api_key = payload.api_key.strip()
+    if not api_key:
+        raise HTTPException(status_code=400, detail="El token de OpenAI no puede estar vacío.")
+
+    try:
+        persist_openai_api_key(api_key)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    logging.info("🔄 Token de OpenAI actualizado por un administrador.")
+    return {
+        "status": "ok",
+        "message": "Token de OpenAI actualizado correctamente.",
     }
 
 # ==============================

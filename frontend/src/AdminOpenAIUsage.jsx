@@ -8,8 +8,13 @@ const numberFormatter = new Intl.NumberFormat("es-ES", {
 
 const AdminOpenAIUsage = () => {
   const [snapshot, setSnapshot] = useState(null);
+  const [billing, setBilling] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+  const [tokenInput, setTokenInput] = useState("");
+  const [savingToken, setSavingToken] = useState(false);
+  const [hasKey, setHasKey] = useState(false);
 
   const fetchStatus = useCallback(async () => {
     const token = localStorage.getItem("token");
@@ -21,6 +26,7 @@ const AdminOpenAIUsage = () => {
 
     setLoading(true);
     setError("");
+    setSuccess("");
 
     try {
       const response = await fetch(`${API_URL}/admin/openai/status`, {
@@ -40,9 +46,13 @@ const AdminOpenAIUsage = () => {
         message: data.message,
         ...data.usage,
       });
+      setBilling(data.billing || null);
+      setHasKey(Boolean(data.openai_key_present));
     } catch (err) {
       console.error("Error al consultar diagnóstico de OpenAI", err);
       setError(err.message || "Error desconocido al consultar el estado");
+      setBilling(null);
+      setHasKey(false);
     } finally {
       setLoading(false);
     }
@@ -51,6 +61,49 @@ const AdminOpenAIUsage = () => {
   useEffect(() => {
     fetchStatus();
   }, [fetchStatus]);
+
+  const handleTokenSave = async () => {
+    const token = localStorage.getItem("token");
+    if (!token) {
+      setError("No se encontró token. Inicia sesión nuevamente.");
+      return;
+    }
+
+    if (!tokenInput.trim()) {
+      setError("Ingresa un token de OpenAI válido para guardarlo.");
+      return;
+    }
+
+    setSavingToken(true);
+    setError("");
+    setSuccess("");
+
+    try {
+      const response = await fetch(`${API_URL}/admin/openai/token`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ api_key: tokenInput.trim() }),
+      });
+
+      if (!response.ok) {
+        const body = await response.json().catch(() => null);
+        const msg = body?.detail || body?.message || "No se pudo guardar el token";
+        throw new Error(msg);
+      }
+
+      setSuccess("Token actualizado correctamente. Se usará en las próximas llamadas.");
+      setTokenInput("");
+      fetchStatus();
+    } catch (err) {
+      console.error("Error al actualizar token de OpenAI", err);
+      setError(err.message || "No se pudo actualizar el token");
+    } finally {
+      setSavingToken(false);
+    }
+  };
 
   const renderCard = (label, value, helper) => (
     <div className="flex flex-col gap-1 p-4 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-sm">
@@ -84,6 +137,93 @@ const AdminOpenAIUsage = () => {
           {error}
         </div>
       )}
+
+      {success && (
+        <div className="mb-4 p-3 rounded-lg border border-green-200 bg-green-50 text-green-700 text-sm">
+          {success}
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+        <div className="p-4 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-sm space-y-3">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex flex-col">
+              <span className="text-sm font-semibold text-gray-800 dark:text-slate-100">
+                Token de OpenAI
+              </span>
+              <span className="text-xs text-gray-500 dark:text-slate-400">
+                Guarda o actualiza el token usado por el sistema sin reiniciar el backend.
+              </span>
+            </div>
+            {hasKey ? (
+              <span className="px-2 py-1 rounded-md text-xs bg-green-100 text-green-700">Activo</span>
+            ) : (
+              <span className="px-2 py-1 rounded-md text-xs bg-amber-100 text-amber-700">No detectado</span>
+            )}
+          </div>
+
+          {!hasKey && (
+            <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2">
+              No se detectó un token configurado. Ingresa uno válido para consultar el consumo real.
+            </p>
+          )}
+
+          <div className="flex flex-col sm:flex-row gap-2">
+            <input
+              type="password"
+              value={tokenInput}
+              onChange={(e) => setTokenInput(e.target.value)}
+              placeholder="sk-..."
+              className="flex-1 px-3 py-2 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            <button
+              onClick={handleTokenSave}
+              disabled={savingToken}
+              className={`px-3 py-2 rounded-lg text-sm font-semibold shadow-sm transition-all duration-200 ${
+                savingToken
+                  ? "bg-gray-100 dark:bg-slate-800 text-gray-400 cursor-not-allowed"
+                  : "bg-blue-600 text-white hover:bg-blue-700"
+              }`}
+            >
+              {savingToken ? "Guardando..." : "Guardar token"}
+            </button>
+          </div>
+        </div>
+
+        {snapshot && (
+          <div className="p-4 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-sm">
+            <p className="text-sm font-semibold text-gray-800 dark:text-slate-100 mb-1">Consumo real (últimos 30 días)</p>
+            {billing && billing.status === "ok" ? (
+              <div className="space-y-2 text-sm text-gray-700 dark:text-slate-200">
+                <div className="flex items-center justify-between">
+                  <span>Total facturado</span>
+                  <span className="font-semibold">${numberFormatter.format(billing.total_usage_usd ?? 0)}</span>
+                </div>
+                {billing.credits && (
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
+                    <div className="p-2 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+                      <span className="block text-slate-500">Créditos otorgados</span>
+                      <span className="font-semibold">${numberFormatter.format(billing.credits.granted_usd ?? 0)}</span>
+                    </div>
+                    <div className="p-2 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+                      <span className="block text-slate-500">Usado</span>
+                      <span className="font-semibold">${numberFormatter.format(billing.credits.used_usd ?? 0)}</span>
+                    </div>
+                    <div className="p-2 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+                      <span className="block text-slate-500">Disponible</span>
+                      <span className="font-semibold">${numberFormatter.format(billing.credits.available_usd ?? 0)}</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <p className="text-sm text-gray-500 dark:text-slate-400">
+                {billing?.message || "Sin datos de consumo real. Verifica que el token sea válido."}
+              </p>
+            )}
+          </div>
+        )}
+      </div>
 
       {!snapshot && !loading && !error && (
         <p className="text-sm text-gray-500 dark:text-slate-400">
