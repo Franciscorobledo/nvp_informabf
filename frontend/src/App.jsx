@@ -6,6 +6,7 @@ const App = () => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [theme, setTheme] = useState("light");
+  const [menuOpen, setMenuOpen] = useState(false);
 
   // 🧠 Verifica si existe sesión al iniciar
   useEffect(() => {
@@ -59,6 +60,11 @@ const App = () => {
     setUser(null);
   };
 
+  const toggleTheme = () => {
+    setTheme((prev) => (prev === "dark" ? "light" : "dark"));
+    setMenuOpen(false);
+  };
+
   // ⏳ Pantalla de carga inicial
   if (loading) {
     return (
@@ -83,33 +89,78 @@ const App = () => {
       ) : (
         <div className="w-full max-w-5xl p-6 bg-white dark:bg-slate-900 rounded-2xl shadow-xl border border-gray-200 dark:border-slate-800 transition-colors duration-300">
           {/* HEADER */}
-          <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-6 border-b pb-4">
+          <header className="relative flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-6 border-b pb-4">
             <div className="text-center sm:text-left space-y-1">
               <h1 className="text-2xl font-bold text-blue-700 dark:text-blue-300">InformeBF</h1>
               <p className="text-sm text-gray-500 dark:text-slate-300">AI Data Visualizer</p>
             </div>
 
-            <div className="flex flex-wrap items-center justify-center sm:justify-end gap-3 w-full sm:w-auto">
-              <button
-                onClick={() => setTheme((prev) => (prev === "dark" ? "light" : "dark"))}
-                className="flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 text-gray-700 dark:text-slate-100 shadow-sm hover:shadow-md transition"
-                aria-pressed={theme === "dark"}
-              >
-                <span className="text-lg" role="img" aria-hidden="true">
-                  {theme === "dark" ? "🌙" : "☀️"}
-                </span>
-                <span className="text-sm font-semibold">
-                  {theme === "dark" ? "Modo oscuro" : "Modo claro"}
-                </span>
-              </button>
+            <div className="flex items-center justify-between sm:justify-end gap-3 w-full sm:w-auto">
+              <div className="hidden sm:flex flex-wrap items-center justify-end gap-3">
+                <button
+                  onClick={toggleTheme}
+                  className="flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 text-gray-700 dark:text-slate-100 shadow-sm hover:shadow-md transition"
+                  aria-pressed={theme === "dark"}
+                >
+                  <span className="text-lg" role="img" aria-hidden="true">
+                    {theme === "dark" ? "🌙" : "☀️"}
+                  </span>
+                  <span className="text-sm font-semibold">
+                    {theme === "dark" ? "Modo oscuro" : "Modo claro"}
+                  </span>
+                </button>
+
+                <button
+                  onClick={handleLogout}
+                  className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg transition-all duration-200"
+                >
+                  Cerrar sesión
+                </button>
+              </div>
 
               <button
-                onClick={handleLogout}
-                className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg transition-all duration-200 w-full sm:w-auto"
+                className="sm:hidden inline-flex items-center justify-center rounded-lg border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 text-gray-700 dark:text-slate-100 p-2 shadow-sm hover:shadow-md transition"
+                onClick={() => setMenuOpen((prev) => !prev)}
+                aria-expanded={menuOpen}
+                aria-label="Abrir menú"
               >
-                Cerrar sesión
+                <span className="text-xl" role="img" aria-hidden="true">
+                  ☰
+                </span>
               </button>
             </div>
+
+            {menuOpen && (
+              <div className="sm:hidden absolute top-full right-0 mt-3 w-full rounded-xl border border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xl p-4 z-10">
+                <div className="flex flex-col gap-3">
+                  <button
+                    onClick={toggleTheme}
+                    className="flex items-center justify-between px-4 py-2 rounded-lg border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 text-gray-700 dark:text-slate-100 shadow-sm hover:shadow-md transition"
+                    aria-pressed={theme === "dark"}
+                  >
+                    <span className="flex items-center gap-2 text-sm font-semibold">
+                      <span className="text-lg" role="img" aria-hidden="true">
+                        {theme === "dark" ? "🌙" : "☀️"}
+                      </span>
+                      Modo oscuro
+                    </span>
+                    <span className="text-xs text-gray-500 dark:text-slate-300">
+                      {theme === "dark" ? "Activo" : "Desactivado"}
+                    </span>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      setMenuOpen(false);
+                      handleLogout();
+                    }}
+                    className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg transition-all duration-200"
+                  >
+                    Cerrar sesión
+                  </button>
+                </div>
+              </div>
+            )}
           </header>
 
           {/* MAIN */}
