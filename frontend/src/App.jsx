@@ -91,7 +91,7 @@ const App = () => {
     <div className="min-h-screen bg-gray-50 dark:bg-slate-950 flex flex-col items-center justify-center font-sans px-4 py-6 text-gray-900 dark:text-slate-100 transition-colors duration-300">
       {!user ? (
         <>
-          <p className="text-gray-700 mb-2 text-sm">
+          <p className="text-gray-700 mb-3 text-base font-semibold">
             🔐 Inicia sesión para acceder al panel de análisis
           </p>
           <Login onLogin={handleLogin} />
