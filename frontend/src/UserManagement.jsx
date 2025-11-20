@@ -78,6 +78,12 @@ const UserManagement = () => {
 
     const isEditing = Boolean(editingUser);
 
+    if (editingUser === "admin") {
+      setError("La cuenta maestra 'admin' no puede modificarse desde este panel.");
+      setSubmitting(false);
+      return;
+    }
+
     if (!isEditing && (!formData.username.trim() || !formData.password.trim())) {
       setError("Usuario y contraseña son obligatorios para crear una cuenta.");
       setSubmitting(false);
@@ -177,7 +183,7 @@ const UserManagement = () => {
 
   const handleDelete = async (username) => {
     const confirmed = window.confirm(
-      `¿Estás seguro de eliminar al usuario "${username}"?`
+      `¿Estás seguro de eliminar al usuario "${username}"? Esta acción no se puede deshacer.`
     );
 
     if (!confirmed) return;
@@ -225,6 +231,10 @@ const UserManagement = () => {
   };
 
   const handleEdit = (user) => {
+    if (user.username === "admin") {
+      setError("La cuenta 'admin' está protegida y no puede editarse.");
+      return;
+    }
     setEditingUser(user.username);
     setFormData({
       username: user.username,
@@ -507,7 +517,8 @@ const UserManagement = () => {
                     <div className="flex flex-wrap justify-end gap-2">
                       <button
                         onClick={() => handleEdit(user)}
-                        className="px-3 py-2 rounded-lg bg-gray-100 dark:bg-slate-800 text-gray-800 dark:text-slate-100 border border-gray-200 dark:border-slate-700"
+                        disabled={user.username === "admin"}
+                        className="px-3 py-2 rounded-lg bg-gray-100 dark:bg-slate-800 text-gray-800 dark:text-slate-100 border border-gray-200 dark:border-slate-700 disabled:opacity-60 disabled:cursor-not-allowed"
                       >
                         Editar
                       </button>

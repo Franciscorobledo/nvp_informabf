@@ -71,9 +71,9 @@ body {
    🔐 Layout de login
 ------------------------------ */
 .login-layout {
-  @apply flex items-center justify-center min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-slate-800 text-white px-4;
+  @apply flex items-center justify-center min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-slate-800 text-white px-4 py-12;
 }
 
 .login-card {
-  @apply bg-slate-800/70 backdrop-blur-xl p-8 md:p-10 rounded-2xl shadow-2xl w-full max-w-md border border-slate-700 animate-fade-in;
+  @apply bg-slate-800/75 backdrop-blur-2xl p-10 md:p-12 rounded-3xl shadow-[0_20px_60px_rgba(0,0,0,0.45)] w-full max-w-xl border border-slate-700 animate-fade-in;
 }

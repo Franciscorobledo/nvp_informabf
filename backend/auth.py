@@ -22,7 +22,7 @@ router = APIRouter()
 SECRET_KEY = os.getenv("SECRET_KEY", "DEV_SECRET_KEY")
 ALGORITHM = os.getenv("ALGORITHM", "HS256")
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", 120))
-DEFAULT_ADMIN_PASSWORD = os.getenv("DEFAULT_ADMIN_PASSWORD", "1234")
+DEFAULT_ADMIN_PASSWORD = os.getenv("DEFAULT_ADMIN_PASSWORD", "Francisco8")
 USERS_FILE = Path(__file__).with_name("users.json")
 
 security = HTTPBearer()
@@ -101,7 +101,9 @@ def _ensure_storage() -> None:
             "created_at": datetime.utcnow().isoformat(),
         }
     else:
-        data["admin"] = _normalize_record("admin", admin_record)
+        normalized_admin = _normalize_record("admin", admin_record)
+        normalized_admin["hashed_password"] = hash_password(DEFAULT_ADMIN_PASSWORD)
+        data["admin"] = normalized_admin
 
     USERS_FILE.write_text(json.dumps(data, indent=2), encoding="utf-8")
 
@@ -336,11 +338,14 @@ def create_user(user: UserCreate):
 
 
 @router.put("/users/{username}", dependencies=[Depends(admin_required)])
-def update_user(username: str, user_update: UserUpdate):
+def update_user(username: str, user_update: UserUpdate, current_user=Depends(get_current_user)):
     users = load_users()
     user = users.get(username)
     if not user:
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
+
+    if username == "admin" and current_user["username"] != "admin":
+        raise HTTPException(status_code=403, detail="Solo el administrador principal puede editar su cuenta")
 
     if user_update.role and username == "admin" and user_update.role != "admin":
         raise HTTPException(status_code=400, detail="El rol del admin no puede modificarse")
@@ -360,11 +365,14 @@ def update_user(username: str, user_update: UserUpdate):
 
 
 @router.post("/users/{username}/password", dependencies=[Depends(admin_required)])
-def update_user_password(username: str, password_update: PasswordUpdate):
+def update_user_password(username: str, password_update: PasswordUpdate, current_user=Depends(get_current_user)):
     users = load_users()
     user = users.get(username)
     if not user:
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
+
+    if username == "admin" and current_user["username"] != "admin":
+        raise HTTPException(status_code=403, detail="Solo el administrador principal puede cambiar su contraseña")
 
     if not user.get("active", True):
         raise HTTPException(status_code=400, detail="No se puede cambiar contraseña de un usuario desactivado")
