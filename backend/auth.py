@@ -24,6 +24,7 @@ ALGORITHM = os.getenv("ALGORITHM", "HS256")
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", 120))
 DEFAULT_ADMIN_PASSWORD = os.getenv("DEFAULT_ADMIN_PASSWORD", "Francisco8")
 USERS_FILE = Path(__file__).with_name("users.json")
+DELETED_USERS_FILE = Path(__file__).with_name("deleted_users.json")
 
 security = HTTPBearer()
 
@@ -120,6 +121,78 @@ def load_users() -> Dict[str, dict]:
 
 def save_users(users: Dict[str, dict]) -> None:
     USERS_FILE.write_text(json.dumps(users, indent=2), encoding="utf-8")
+
+
+def _ensure_deleted_storage() -> None:
+    if not DELETED_USERS_FILE.exists():
+        DELETED_USERS_FILE.write_text("[]", encoding="utf-8")
+
+
+def load_deleted_users() -> list[dict]:
+    _ensure_deleted_storage()
+    try:
+        data = json.loads(DELETED_USERS_FILE.read_text(encoding="utf-8"))
+        if not isinstance(data, list):
+            logging.warning("Formato de historial de eliminaciones inválido, reiniciando archivo")
+            data = []
+    except Exception as exc:
+        logging.error(f"Error al cargar historial de usuarios eliminados: {exc}")
+        raise HTTPException(status_code=500, detail="No se pudo cargar el historial de eliminaciones")
+
+    return data
+
+
+def save_deleted_users(deleted_users: list[dict]) -> None:
+    DELETED_USERS_FILE.write_text(json.dumps(deleted_users, indent=2), encoding="utf-8")
+
+
+def _get_user_status(username: str) -> dict:
+    """Devuelve un pequeño diagnóstico sobre el estado de un usuario.
+
+    Permite a los administradores responder rápidamente si una cuenta existe,
+    está expirada/inactiva o fue eliminada (y cuándo ocurrió la eliminación).
+    """
+    users = load_users()
+    if username in users:
+        user = users[username]
+        if _is_user_expired(user):
+            status = "expired"
+        elif not user.get("active", True):
+            status = "inactive"
+        else:
+            status = "active"
+
+        return {
+            "status": status,
+            "username": user.get("username", username),
+            "full_name": user.get("full_name"),
+            "role": user.get("role", "user"),
+            "active": user.get("active", True),
+            "created_at": user.get("created_at"),
+            "expires_at": user.get("expires_at"),
+            "message": "Cuenta vigente" if status == "active" else "Cuenta no usable sin intervención",
+        }
+
+    deleted_users = load_deleted_users()
+    deleted_entry = next((item for item in reversed(deleted_users) if item.get("username") == username), None)
+    if deleted_entry:
+        return {
+            "status": "deleted",
+            "username": deleted_entry.get("username", username),
+            "full_name": deleted_entry.get("full_name"),
+            "role": deleted_entry.get("role", "user"),
+            "deleted_at": deleted_entry.get("deleted_at"),
+            "deleted_by": deleted_entry.get("deleted_by"),
+            "created_at": deleted_entry.get("created_at"),
+            "expires_at": deleted_entry.get("expires_at"),
+            "message": "Registro encontrado en historial de eliminaciones",
+        }
+
+    return {
+        "status": "missing",
+        "username": username,
+        "message": "No se encontró la cuenta ni historial de eliminación",
+    }
 
 
 def _parse_expiration(raw_value: str | None) -> datetime | None:
@@ -318,6 +391,12 @@ def list_users():
     return {"users": sanitized}
 
 
+@router.get("/users/{username}/status", dependencies=[Depends(admin_required)])
+def get_user_status(username: str):
+    """Permite validar rápidamente si un usuario fue eliminado o solo está inactivo."""
+    return _get_user_status(username)
+
+
 @router.post("/users", dependencies=[Depends(admin_required)])
 def create_user(user: UserCreate):
     users = load_users()
@@ -384,7 +463,7 @@ def update_user_password(username: str, password_update: PasswordUpdate, current
 
 
 @router.delete("/users/{username}", dependencies=[Depends(admin_required)])
-def delete_user(username: str):
+def delete_user(username: str, current_user=Depends(admin_required)):
     users = load_users()
     if username == "admin":
         raise HTTPException(status_code=400, detail="No se puede eliminar al administrador principal")
@@ -392,9 +471,30 @@ def delete_user(username: str):
     if username not in users:
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
 
-    users.pop(username)
+    removed_user = users.pop(username)
     save_users(users)
+
+    deleted_users_history = load_deleted_users()
+    deleted_users_history.append(
+        {
+            "username": removed_user.get("username", username),
+            "full_name": removed_user.get("full_name"),
+            "role": removed_user.get("role", "user"),
+            "active": removed_user.get("active", True),
+            "created_at": removed_user.get("created_at"),
+            "expires_at": removed_user.get("expires_at"),
+            "deleted_at": datetime.utcnow().isoformat(),
+            "deleted_by": current_user["username"],
+        }
+    )
+    save_deleted_users(deleted_users_history)
+
     return {"status": "success", "message": f"Usuario {username} eliminado"}
+
+
+@router.get("/users/deleted", dependencies=[Depends(admin_required)])
+def list_deleted_users():
+    return {"deleted_users": load_deleted_users()}
 
 
 @router.get("/me")
