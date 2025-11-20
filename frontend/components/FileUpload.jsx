@@ -1,4 +1,16 @@
 import React, { useState } from "react";
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Legend,
+  Line,
+  LineChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 
 const FileUpload = ({ onDataReceived }) => {
   const [files, setFiles] = useState([]);
@@ -6,9 +18,63 @@ const FileUpload = ({ onDataReceived }) => {
   const [analysis, setAnalysis] = useState(null);
   const [activeTab, setActiveTab] = useState("resumen");
   const [downloading, setDownloading] = useState(false);
-  const [dateField, setDateField] = useState("");
-  const [metricField, setMetricField] = useState("");
-  const [segmentField, setSegmentField] = useState("");
+  const [aiCharts, setAiCharts] = useState([]);
+
+  const generateAiCharts = (sample = []) => {
+    if (!Array.isArray(sample) || sample.length === 0) return [];
+
+    const rows = sample.slice(0, 50);
+    const keys = Object.keys(rows[0] || {});
+    const numericKeys = keys.filter((key) =>
+      rows.some((row) => typeof row?.[key] === "number" && Number.isFinite(row[key]))
+    );
+    const stringKeys = keys.filter((key) => rows.some((row) => typeof row?.[key] === "string"));
+
+    const charts = [];
+
+    if (numericKeys.length && stringKeys.length) {
+      const [categoryKey] = stringKeys;
+      const [metricKey] = numericKeys;
+
+      const grouped = rows.reduce((acc, row) => {
+        const category = row?.[categoryKey] ?? "Sin dato";
+        const value = Number(row?.[metricKey]) || 0;
+        acc[category] = (acc[category] || 0) + value;
+        return acc;
+      }, {});
+
+      const data = Object.entries(grouped)
+        .map(([name, value]) => ({ name, value }))
+        .sort((a, b) => b.value - a.value)
+        .slice(0, 6);
+
+      charts.push({
+        type: "bar",
+        title: `Distribución de ${metricKey} por ${categoryKey}`,
+        data,
+        xKey: "name",
+        yKey: "value",
+      });
+    }
+
+    if (charts.length < 2 && numericKeys.length) {
+      const metricKey = numericKeys[0];
+      const data = rows.slice(0, 20).map((row, index) => ({
+        index: index + 1,
+        value: Number(row?.[metricKey]) || 0,
+      }));
+
+      charts.push({
+        type: "line",
+        title: `Tendencia inicial de ${metricKey}`,
+        data,
+        xKey: "index",
+        yKey: "value",
+      });
+    }
+
+    return charts.slice(0, 2);
+  };
 
   const handleFileChange = (e) => setFiles(Array.from(e.target.files || []));
 
@@ -20,9 +86,6 @@ const FileUpload = ({ onDataReceived }) => {
 
     const formData = new FormData();
     files.forEach((fileItem) => formData.append("files", fileItem));
-    formData.append("date_field", dateField || "");
-    formData.append("metric_field", metricField || "");
-    formData.append("segment_field", segmentField || "");
     setLoading(true);
 
     try {
@@ -47,6 +110,7 @@ const FileUpload = ({ onDataReceived }) => {
       const data = await res.json();
       console.log("📊 Datos del backend:", data);
       setAnalysis(data);
+      setAiCharts(generateAiCharts(data.sample));
       onDataReceived?.(data);
     } catch (err) {
       console.error("💥 Error al conectar con el backend:", err);
@@ -128,30 +192,6 @@ const FileUpload = ({ onDataReceived }) => {
           </p>
         )}
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 w-full">
-          <input
-            type="text"
-            value={dateField}
-            onChange={(e) => setDateField(e.target.value)}
-            placeholder="Columna de fecha (opcional)"
-            className="w-full border border-gray-300 dark:border-slate-700 p-2 rounded-lg bg-white dark:bg-slate-900 dark:text-slate-100"
-          />
-          <input
-            type="text"
-            value={metricField}
-            onChange={(e) => setMetricField(e.target.value)}
-            placeholder="Columna métrica (opcional)"
-            className="w-full border border-gray-300 dark:border-slate-700 p-2 rounded-lg bg-white dark:bg-slate-900 dark:text-slate-100"
-          />
-          <input
-            type="text"
-            value={segmentField}
-            onChange={(e) => setSegmentField(e.target.value)}
-            placeholder="Columna de segmento (opcional)"
-            className="w-full border border-gray-300 dark:border-slate-700 p-2 rounded-lg bg-white dark:bg-slate-900 dark:text-slate-100"
-          />
-        </div>
-
         <button
           onClick={handleUpload}
           disabled={loading}
@@ -229,11 +269,51 @@ const FileUpload = ({ onDataReceived }) => {
 
             {/* 🤖 INSIGHTS */}
             {activeTab === "insights" && (
-              <div className="bg-blue-50 dark:bg-slate-800 p-6 rounded-xl border-l-4 border-blue-500 dark:border-blue-400 shadow-sm">
-                <h4 className="font-semibold text-blue-700 dark:text-blue-200 mb-2">💬 Análisis de IA</h4>
-                <p className="text-blue-800 dark:text-blue-100 whitespace-pre-wrap leading-relaxed">
-                  {analysis.ai_summary || "No se recibieron insights de IA."}
-                </p>
+              <div className="space-y-6">
+                <div className="bg-blue-50 dark:bg-slate-800 p-6 rounded-xl border-l-4 border-blue-500 dark:border-blue-400 shadow-sm">
+                  <h4 className="font-semibold text-blue-700 dark:text-blue-200 mb-2">💬 Análisis de IA</h4>
+                  <p className="text-blue-800 dark:text-blue-100 whitespace-pre-wrap leading-relaxed">
+                    {analysis.ai_summary || "No se recibieron insights de IA."}
+                  </p>
+                </div>
+
+                {aiCharts.length > 0 && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {aiCharts.map((chart, index) => (
+                      <div
+                        key={`${chart.title}-${index}`}
+                        className="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-800 shadow p-4"
+                      >
+                        <h5 className="text-sm font-semibold text-gray-800 dark:text-slate-100 mb-3 text-center">
+                          {chart.title}
+                        </h5>
+                        <div className="h-64">
+                          <ResponsiveContainer width="100%" height="100%">
+                            {chart.type === "bar" ? (
+                              <BarChart data={chart.data} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                                <CartesianGrid strokeDasharray="3 3" strokeOpacity={0.2} />
+                                <XAxis dataKey={chart.xKey} tick={{ fontSize: 12 }} />
+                                <YAxis tick={{ fontSize: 12 }} />
+                                <Tooltip formatter={(value) => Number(value).toLocaleString()} />
+                                <Legend />
+                                <Bar dataKey={chart.yKey} name={chart.yKey} fill="#3b82f6" radius={[8, 8, 0, 0]} />
+                              </BarChart>
+                            ) : (
+                              <LineChart data={chart.data} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                                <CartesianGrid strokeDasharray="3 3" strokeOpacity={0.2} />
+                                <XAxis dataKey={chart.xKey} tick={{ fontSize: 12 }} />
+                                <YAxis tick={{ fontSize: 12 }} />
+                                <Tooltip formatter={(value) => Number(value).toLocaleString()} />
+                                <Legend />
+                                <Line type="monotone" dataKey={chart.yKey} name={chart.yKey} stroke="#10b981" strokeWidth={2} dot={{ r: 3 }} />
+                              </LineChart>
+                            )}
+                          </ResponsiveContainer>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
 
