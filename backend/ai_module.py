@@ -7,16 +7,21 @@ from dotenv import load_dotenv
 
 from utils.openai_monitor import record_openai_usage, get_usage_snapshot
 
-# Cargar variables del entorno
-load_dotenv()
+# Cargar variables del entorno desde el archivo local del backend
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DOTENV_PATH = os.path.join(BASE_DIR, ".env")
+load_dotenv(dotenv_path=DOTENV_PATH, override=False)
 
 # Configurar logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+logging.info("📄 Variables de entorno cargadas desde: %s", DOTENV_PATH)
 
 # Inicializar cliente OpenAI
 api_key = os.getenv("OPENAI_API_KEY")
 if not api_key:
-    raise ValueError("❌ No se encontró la variable OPENAI_API_KEY. Verifica tu archivo .env")
+    raise ValueError(
+        "❌ No se encontró la variable OPENAI_API_KEY. Verifica tu archivo .env en backend/"
+    )
 
 logging.info("🔐 OPENAI_API_KEY configurada: %s", "sí" if api_key else "no")
 
