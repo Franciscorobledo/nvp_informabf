@@ -62,8 +62,8 @@ const Login = ({ onLogin }) => {
   };
 
   return (
-    <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-slate-800 text-white">
-      <div className="bg-slate-800/70 backdrop-blur-xl p-8 rounded-2xl shadow-2xl w-full max-w-md border border-slate-700 animate-fade-in">
+    <div className="login-layout">
+      <div className="login-card">
         <div className="flex flex-col items-center mb-6">
           <img src="/logo.png" alt="Logo" className="w-24 mb-3 drop-shadow-lg" />
           <h2 className="text-2xl font-bold tracking-wide text-blue-400">
