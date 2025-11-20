@@ -16,7 +16,9 @@ from dotenv import load_dotenv
 
 from utils.file_utils import validate_file
 from analysis import analyze_file, detect_column_types
-from auth import get_current_user, router as auth_router
+from auth import admin_required, get_current_user, router as auth_router
+from ai_module import check_openai_status
+from utils.openai_monitor import get_usage_snapshot
 from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
 from reportlab.lib.utils import ImageReader
@@ -37,6 +39,10 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s"
 )
+
+if not OPENAI_API_KEY:
+    raise ValueError("❌ No se encontró la variable OPENAI_API_KEY. Verifica tu configuración de despliegue.")
+logging.info("🔐 OPENAI_API_KEY presente: %s", "sí" if OPENAI_API_KEY else "no")
 
 app = FastAPI(title="InformeBF - Intelligent Data Visualizer")
 
@@ -292,6 +298,21 @@ def root():
         "environment": ENV,
         "frontend_allowed": FRONTEND_URL,
         "origins": allowed_origins
+    }
+
+
+@app.get("/admin/openai/status", dependencies=[Depends(admin_required)])
+def openai_admin_status():
+    """Diagnóstico rápido para administradores sobre OpenAI y uso estimado."""
+    logging.info("🛡️ Diagnóstico solicitado para el estado de OpenAI")
+    status = check_openai_status()
+    usage = status.get("usage") or get_usage_snapshot()
+
+    return {
+        "status": status.get("status"),
+        "message": status.get("message"),
+        "openai_key_present": True,
+        "usage": usage,
     }
 
 # ==============================

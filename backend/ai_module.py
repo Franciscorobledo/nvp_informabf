@@ -5,6 +5,8 @@ import logging
 from openai import OpenAI
 from dotenv import load_dotenv
 
+from utils.openai_monitor import record_openai_usage, get_usage_snapshot
+
 # Cargar variables del entorno
 load_dotenv()
 
@@ -16,7 +18,28 @@ api_key = os.getenv("OPENAI_API_KEY")
 if not api_key:
     raise ValueError("❌ No se encontró la variable OPENAI_API_KEY. Verifica tu archivo .env")
 
+logging.info("🔐 OPENAI_API_KEY configurada: %s", "sí" if api_key else "no")
+
 client = OpenAI(api_key=api_key)
+
+
+def check_openai_status():
+    """Realiza una comprobación liviana del API de OpenAI para admins."""
+    try:
+        client.models.list()
+        logging.info("✅ Conexión con OpenAI verificada correctamente")
+        return {
+            "status": "ok",
+            "message": "API de OpenAI operativa",
+            "usage": get_usage_snapshot(),
+        }
+    except Exception as exc:
+        logging.error("⚠️ No fue posible validar OpenAI: %s", exc)
+        return {
+            "status": "error",
+            "message": str(exc),
+            "usage": get_usage_snapshot(),
+        }
 
 def generate_ai_insights(summary: dict, column_types: dict):
     """
@@ -50,6 +73,12 @@ No incluyas texto adicional ni introducción.
         )
 
         content = response.choices[0].message.content.strip()
+        usage = getattr(response, "usage", None)
+        record_openai_usage(
+            model="gpt-4o-mini",
+            prompt_tokens=getattr(usage, "prompt_tokens", None) if usage else None,
+            completion_tokens=getattr(usage, "completion_tokens", None) if usage else None,
+        )
         logging.info("✅ Análisis IA generado correctamente.")
         return f"🤖 Análisis generado por IA\n{content}"
 
