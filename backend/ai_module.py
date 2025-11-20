@@ -52,35 +52,44 @@ def check_openai_status():
             "billing": get_billing_usage(),
         }
 
-def generate_ai_insights(summary: dict, column_types: dict):
-    """
-    Genera un análisis corto y profesional usando OpenAI.
-    Limita tokens y controla errores por falta de tokens.
-    """
+def generate_ai_insights(summary: dict, column_types: dict, heuristics: str | None = None):
+    """Genera un análisis corto y accionable usando OpenAI."""
     prompt = f"""
-Eres un analista de datos experto.
-Aquí tienes un resumen estadístico (formato JSON):
+Actúa como analista de negocio senior y storyteller de datos. Redacta en español claro y conciso.
+
+Resumen estadístico (JSON):
 {json.dumps(summary, indent=2)}
 
-Y los tipos de columnas detectadas:
+Tipos de columna detectados:
 {json.dumps(column_types, indent=2)}
 
-Responde con un resumen breve y claro (máx. 5 líneas), en formato:
-📈 Tendencias principales:
-⚠️ Anomalías:
-💡 Recomendaciones:
-No incluyas texto adicional ni introducción.
+Insights heurísticos previos detectados automáticamente (pueden estar incompletos):
+{heuristics or "(sin heurísticas)"}
+
+Estructura la respuesta en viñetas, máximo 8 líneas en total:
+• Panorama general: volumen de datos y campos clave.
+• Hallazgos clave: patrones o correlaciones numéricas concretas.
+• Riesgos/Calidad: nulos, outliers o sesgos.
+• Recomendaciones accionables: 2-3 acciones priorizadas.
+• Ideas de visualización: 2 gráficos específicos que ayudarían a explicar la historia.
+Evita texto introductorio o conclusiones largas. Prioriza cifras concretas cuando existan en el resumen.
 """
 
     try:
         response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
-                {"role": "system", "content": "Eres un experto en análisis de datos financieros y estadísticos."},
+                {
+                    "role": "system",
+                    "content": (
+                        "Eres un experto en análisis de datos financieros y estadísticos. "
+                        "Entrega respuestas concisas, accionables y orientadas a negocio."
+                    ),
+                },
                 {"role": "user", "content": prompt},
             ],
-            temperature=0.3,
-            max_tokens=250,  # 🔹 límite bajo para evitar respuestas largas
+            temperature=0.35,
+            max_tokens=320,  # 🔹 Permite contexto adicional sin respuestas extensas
         )
 
         content = response.choices[0].message.content.strip()

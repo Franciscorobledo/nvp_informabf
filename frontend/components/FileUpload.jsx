@@ -6,6 +6,9 @@ const FileUpload = ({ onDataReceived }) => {
   const [analysis, setAnalysis] = useState(null);
   const [activeTab, setActiveTab] = useState("resumen");
   const [downloading, setDownloading] = useState(false);
+  const [dateField, setDateField] = useState("");
+  const [metricField, setMetricField] = useState("");
+  const [segmentField, setSegmentField] = useState("");
 
   const handleFileChange = (e) => setFiles(Array.from(e.target.files || []));
 
@@ -17,6 +20,9 @@ const FileUpload = ({ onDataReceived }) => {
 
     const formData = new FormData();
     files.forEach((fileItem) => formData.append("files", fileItem));
+    formData.append("date_field", dateField || "");
+    formData.append("metric_field", metricField || "");
+    formData.append("segment_field", segmentField || "");
     setLoading(true);
 
     try {
@@ -121,6 +127,31 @@ const FileUpload = ({ onDataReceived }) => {
               : `${files.length} archivos seleccionados`}
           </p>
         )}
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 w-full">
+          <input
+            type="text"
+            value={dateField}
+            onChange={(e) => setDateField(e.target.value)}
+            placeholder="Columna de fecha (opcional)"
+            className="w-full border border-gray-300 dark:border-slate-700 p-2 rounded-lg bg-white dark:bg-slate-900 dark:text-slate-100"
+          />
+          <input
+            type="text"
+            value={metricField}
+            onChange={(e) => setMetricField(e.target.value)}
+            placeholder="Columna métrica (opcional)"
+            className="w-full border border-gray-300 dark:border-slate-700 p-2 rounded-lg bg-white dark:bg-slate-900 dark:text-slate-100"
+          />
+          <input
+            type="text"
+            value={segmentField}
+            onChange={(e) => setSegmentField(e.target.value)}
+            placeholder="Columna de segmento (opcional)"
+            className="w-full border border-gray-300 dark:border-slate-700 p-2 rounded-lg bg-white dark:bg-slate-900 dark:text-slate-100"
+          />
+        </div>
+
         <button
           onClick={handleUpload}
           disabled={loading}

@@ -6,6 +6,8 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 from datetime import datetime
 
+from ai_module import generate_ai_insights
+
 # ---------------------------------------------------------------------
 # 🧩 CONFIGURACIÓN GLOBAL DE PLOTS (Render-safe)
 # ---------------------------------------------------------------------
@@ -253,15 +255,63 @@ def analyze_file(df, date_field=None, metric_field=None, segment_by=None):
         except Exception as e:
             print(f"⚠️ Error generando gráfico para {col}: {e}")
 
+    # Gráfico específico de tendencia de negocio cuando se proporcionan fecha y métrica
+    if date_field and metric_field:
+        try:
+            if date_field in df.columns and metric_field in df.columns:
+                temp_df = pd.DataFrame({
+                    "fecha": pd.to_datetime(df[date_field], errors="coerce"),
+                    "valor": pd.to_numeric(df[metric_field], errors="coerce"),
+                }).dropna()
+                if not temp_df.empty:
+                    monthly = temp_df.groupby(temp_df["fecha"].dt.to_period("M"))["valor"].sum()
+                    if not monthly.empty:
+                        fig, ax = plt.subplots(figsize=(6, 3))
+                        monthly.index = monthly.index.to_timestamp()
+                        ax.plot(monthly.index, monthly.values, marker="o", color="#0EA5E9")
+                        ax.set_title(
+                            f"{metric_field} mensual (agrupado por {date_field})",
+                            fontsize=11,
+                            weight="bold",
+                        )
+                        ax.tick_params(axis="x", rotation=35)
+                        graphs.append({"column": f"Tendencia {metric_field}", "image": fig_to_base64(fig)})
+        except Exception as exc:
+            print(f"⚠️ No se pudo generar la tendencia de negocio: {exc}")
+
+    # Gráfico de ranking por segmento si se especifica
+    if segment_by and metric_field and segment_by in df.columns and metric_field in df.columns:
+        try:
+            segment_df = pd.DataFrame({
+                "segmento": df[segment_by],
+                "valor": pd.to_numeric(df[metric_field], errors="coerce"),
+            }).dropna()
+            top_segments = (
+                segment_df.groupby("segmento")["valor"].mean().sort_values(ascending=False).head(8)
+            )
+            if not top_segments.empty:
+                fig, ax = plt.subplots(figsize=(6, 3.5))
+                sns.barplot(x=top_segments.values, y=top_segments.index, ax=ax, palette="crest")
+                ax.set_title(
+                    f"Top {len(top_segments)} segmentos por {metric_field}",
+                    fontsize=11,
+                    weight="bold",
+                )
+                ax.set_xlabel(metric_field)
+                graphs.append({"column": f"Ranking de {segment_by}", "image": fig_to_base64(fig)})
+        except Exception as exc:
+            print(f"⚠️ No se pudo generar el ranking por segmento: {exc}")
+
     # --------------------------------------------------------------
     # 3️⃣ MATRIZ DE CORRELACIÓN
     # --------------------------------------------------------------
     numeric_df = df.select_dtypes(include=[np.number])
     if not numeric_df.empty and numeric_df.shape[1] > 1:
         try:
+            corr_matrix = numeric_df.corr()
             fig, ax = plt.subplots(figsize=(5, 4))
             sns.heatmap(
-                numeric_df.corr(),
+                corr_matrix,
                 annot=True,
                 fmt=".2f",
                 cmap="crest",
@@ -271,17 +321,47 @@ def analyze_file(df, date_field=None, metric_field=None, segment_by=None):
             )
             ax.set_title("Matriz de correlación", fontsize=12, weight="bold")
             graphs.append({"column": "Matriz de correlación", "image": fig_to_base64(fig)})
+
+            # Scatter de la pareja más correlacionada para visualizar la relación
+            upper = corr_matrix.where(np.triu(np.ones(corr_matrix.shape), k=1).astype(bool))
+            strongest_pair = (
+                upper.unstack()
+                .dropna()
+                .reindex(upper.unstack().dropna().abs().sort_values(ascending=False).index)
+            )
+            if not strongest_pair.empty:
+                best_a, best_b = strongest_pair.index[0]
+                if abs(strongest_pair.iloc[0]) >= 0.4:
+                    fig, ax = plt.subplots(figsize=(5.5, 3.5))
+                    sns.scatterplot(x=numeric_df[best_a], y=numeric_df[best_b], ax=ax, color="#1E3A8A")
+                    ax.set_title(
+                        f"Relación {best_a} vs {best_b} (ρ={strongest_pair.iloc[0]:.2f})",
+                        fontsize=11,
+                        weight="bold",
+                    )
+                    graphs.append({"column": f"Relación {best_a} vs {best_b}", "image": fig_to_base64(fig)})
         except Exception as e:
             print(f"⚠️ Error generando matriz de correlación: {e}")
 
     # --------------------------------------------------------------
     # 4️⃣ INSIGHTS AUTOMÁTICOS BASADOS EN LOS DATOS
     # --------------------------------------------------------------
-    ai_summary = generate_ai_summary(
+    heuristic_summary = generate_ai_summary(
         df=df,
         column_types=column_types,
         date_field=date_field,
         metric_field=metric_field,
+    )
+
+    ai_summary = "\n\n".join(
+        [
+            heuristic_summary,
+            generate_ai_insights(
+                summary=summary,
+                column_types=column_types,
+                heuristics=heuristic_summary,
+            ),
+        ]
     )
 
     # --------------------------------------------------------------
