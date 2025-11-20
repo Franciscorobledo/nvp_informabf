@@ -44,10 +44,15 @@ const Login = ({ onLogin }) => {
         return;
       }
 
-      localStorage.setItem("token", token);
-      localStorage.setItem("user", data.username || username);
+      const normalizedUser = {
+        username: data.username || username,
+        role: data.role || "user",
+      };
 
-      onLogin({ username: data.username || username });
+      localStorage.setItem("token", token);
+      localStorage.setItem("user", JSON.stringify(normalizedUser));
+
+      onLogin(normalizedUser);
     } catch (err) {
       console.error("💥 Error conexión:", err);
       alert("Error de conexión.");
