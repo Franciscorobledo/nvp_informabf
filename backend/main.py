@@ -313,12 +313,14 @@ def openai_admin_status():
     logging.info("🛡️ Diagnóstico solicitado para el estado de OpenAI")
     status = check_openai_status()
     usage = status.get("usage") or get_usage_snapshot()
+    billing = status.get("billing")
 
     return {
         "status": status.get("status"),
         "message": status.get("message"),
         "openai_key_present": True,
         "usage": usage,
+        "billing": billing,
     }
 
 # ==============================

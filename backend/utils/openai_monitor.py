@@ -1,9 +1,11 @@
 import json
 import logging
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, Optional
+
+import requests
 
 # Archivo persistente para consolidar el uso de OpenAI
 USAGE_FILE = Path(__file__).resolve().parent.parent / "openai_usage.json"
@@ -14,6 +16,9 @@ DEFAULT_OUTPUT_COST = float(os.getenv("OPENAI_OUTPUT_COST_PER_1K", "0.000600"))
 
 # Presupuesto de referencia para alertar al administrador
 BUDGET_USD = float(os.getenv("OPENAI_BUDGET_USD", "20"))
+OPENAI_BILLING_BASE_URL = os.getenv(
+    "OPENAI_BILLING_BASE_URL", "https://api.openai.com/dashboard/billing"
+)
 
 
 def _base_usage_template() -> Dict[str, Any]:
@@ -48,6 +53,96 @@ def _save_usage(data: Dict[str, Any]) -> None:
             json.dump(data, f, indent=2, ensure_ascii=False)
     except Exception as exc:
         logging.error(f"No se pudo guardar el historial de uso de OpenAI: {exc}")
+
+
+def _get_api_key(api_key: Optional[str] = None) -> str:
+    key = api_key or os.getenv("OPENAI_API_KEY")
+    if not key:
+        raise ValueError(
+            "OPENAI_API_KEY no está configurada. Asegúrate de definirla para consultar el uso real."
+        )
+    return key
+
+
+def get_billing_usage(days: int = 30, api_key: Optional[str] = None) -> Dict[str, Any]:
+    """Obtiene el consumo real desde el endpoint de billing de OpenAI."""
+
+    try:
+        key = _get_api_key(api_key)
+    except ValueError as exc:
+        return {"status": "error", "message": str(exc)}
+
+    end_date = datetime.utcnow().date()
+    start_date = end_date - timedelta(days=days)
+
+    headers = {"Authorization": f"Bearer {key}"}
+    usage_url = f"{OPENAI_BILLING_BASE_URL}/usage"
+    grants_url = f"{OPENAI_BILLING_BASE_URL}/credit_grants"
+
+    try:
+        usage_response = requests.get(
+            usage_url,
+            headers=headers,
+            params={
+                "start_date": start_date.isoformat(),
+                "end_date": end_date.isoformat(),
+            },
+            timeout=10,
+        )
+        usage_response.raise_for_status()
+        usage_data = usage_response.json()
+
+        total_usage_cents = usage_data.get("total_usage") or 0
+        total_usage_usd = round(float(total_usage_cents) / 100, 6)
+
+        daily_costs = usage_data.get("daily_costs", [])
+        daily = []
+        for item in daily_costs or []:
+            cost = 0
+            line_items = item.get("line_items")
+            if isinstance(line_items, list) and line_items:
+                cost = round(float(line_items[0].get("cost", 0)) / 100, 6)
+
+            daily.append(
+                {
+                    "date": item.get("timestamp"),
+                    "cost_usd": cost,
+                }
+            )
+
+    except Exception as exc:
+        logging.warning("No se pudo obtener el uso real de OpenAI: %s", exc)
+        return {
+            "status": "error",
+            "message": f"No se pudo obtener el uso real: {exc}",
+        }
+
+    credits_data: Dict[str, Any] = {}
+    try:
+        grants_response = requests.get(grants_url, headers=headers, timeout=10)
+        grants_response.raise_for_status()
+        grants_json = grants_response.json()
+        credits_data = {
+            "granted_usd": grants_json.get("total_granted"),
+            "used_usd": grants_json.get("total_used"),
+            "available_usd": grants_json.get("total_available"),
+        }
+    except Exception as exc:
+        logging.warning("No se pudieron obtener los créditos de OpenAI: %s", exc)
+        credits_data = {
+            "status": "error",
+            "message": f"No se pudieron obtener los créditos: {exc}",
+        }
+
+    return {
+        "status": "ok",
+        "message": "Consumo real obtenido desde OpenAI",
+        "start_date": start_date.isoformat(),
+        "end_date": end_date.isoformat(),
+        "total_usage_usd": total_usage_usd,
+        "daily_costs": daily,
+        "credits": credits_data,
+    }
 
 
 def record_openai_usage(
