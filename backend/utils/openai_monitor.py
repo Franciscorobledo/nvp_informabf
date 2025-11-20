@@ -81,6 +81,10 @@ def get_billing_usage(days: int = 30, api_key: Optional[str] = None) -> Dict[str
     usage_url = f"{OPENAI_BILLING_BASE_URL}/usage"
     grants_url = f"{OPENAI_BILLING_BASE_URL}/credit_grants"
 
+    usage_payload: Dict[str, Any] = {
+        "status": "error",
+        "message": "Sin datos de consumo real disponibles",
+    }
     try:
         usage_response = requests.get(
             usage_url,
@@ -112,10 +116,18 @@ def get_billing_usage(days: int = 30, api_key: Optional[str] = None) -> Dict[str
                 }
             )
 
+        usage_payload = {
+            "status": "ok",
+            "message": "Consumo real obtenido desde OpenAI",
+            "start_date": start_date.isoformat(),
+            "end_date": end_date.isoformat(),
+            "total_usage_usd": total_usage_usd,
+            "daily_costs": daily,
+        }
     except Exception as exc:
         logging.warning("No se pudo obtener el uso real de OpenAI: %s", exc)
-        return {
-            "status": "error",
+        usage_payload = {
+            "status": "warning",
             "message": f"No se pudo obtener el uso real: {exc}",
         }
 
@@ -136,13 +148,21 @@ def get_billing_usage(days: int = 30, api_key: Optional[str] = None) -> Dict[str
             "message": f"No se pudieron obtener los créditos: {exc}",
         }
 
+    # Si los créditos se obtienen correctamente, priorizamos mostrar el saldo disponible
+    # aunque la consulta de uso falle, para permitir alertar cuando el saldo se acerque a 0.
+    merged_status = usage_payload.get("status")
+    merged_message = usage_payload.get("message")
+    if credits_data and credits_data.get("available_usd") is not None:
+        if merged_status != "ok":
+            merged_status = "warning"
+            merged_message = (
+                "Consumo parcial: saldo disponible obtenido, consumo real no disponible"
+            )
+
     return {
-        "status": "ok",
-        "message": "Consumo real obtenido desde OpenAI",
-        "start_date": start_date.isoformat(),
-        "end_date": end_date.isoformat(),
-        "total_usage_usd": total_usage_usd,
-        "daily_costs": daily,
+        **usage_payload,
+        "status": merged_status,
+        "message": merged_message,
         "credits": credits_data,
     }
 

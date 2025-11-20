@@ -188,18 +188,34 @@ const AdminOpenAIUsage = () => {
               {savingToken ? "Guardando..." : "Guardar token"}
             </button>
           </div>
-        </div>
+      </div>
 
         {snapshot && (
           <div className="p-4 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-sm">
             <p className="text-sm font-semibold text-gray-800 dark:text-slate-100 mb-1">Consumo real (últimos 30 días)</p>
-            {billing && billing.status === "ok" ? (
-              <div className="space-y-2 text-sm text-gray-700 dark:text-slate-200">
-                <div className="flex items-center justify-between">
-                  <span>Total facturado</span>
-                  <span className="font-semibold">${numberFormatter.format(billing.total_usage_usd ?? 0)}</span>
+            {billing ? (
+              <div className="space-y-3 text-sm text-gray-700 dark:text-slate-200">
+                <div
+                  className={`flex items-center gap-2 text-xs font-medium px-2 py-1 rounded-lg inline-flex w-fit ${
+                    billing.status === "ok"
+                      ? "bg-green-50 text-green-700 border border-green-200"
+                      : "bg-amber-50 text-amber-800 border border-amber-200"
+                  }`}
+                >
+                  <span>{billing.status === "ok" ? "Datos completos" : "Datos parciales"}</span>
+                  <span className="text-[11px] text-gray-500 dark:text-slate-400">
+                    {billing.message}
+                  </span>
                 </div>
-                {billing.credits && (
+
+                {billing.total_usage_usd !== undefined && (
+                  <div className="flex items-center justify-between">
+                    <span>Total facturado</span>
+                    <span className="font-semibold">${numberFormatter.format(billing.total_usage_usd ?? 0)}</span>
+                  </div>
+                )}
+
+                {billing.credits ? (
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
                     <div className="p-2 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
                       <span className="block text-slate-500">Créditos otorgados</span>
@@ -214,11 +230,15 @@ const AdminOpenAIUsage = () => {
                       <span className="font-semibold">${numberFormatter.format(billing.credits.available_usd ?? 0)}</span>
                     </div>
                   </div>
+                ) : (
+                  <p className="text-xs text-gray-500 dark:text-slate-400">
+                    No se pudieron obtener los créditos disponibles.
+                  </p>
                 )}
               </div>
             ) : (
               <p className="text-sm text-gray-500 dark:text-slate-400">
-                {billing?.message || "Sin datos de consumo real. Verifica que el token sea válido."}
+                Sin datos de consumo real. Verifica que el token sea válido.
               </p>
             )}
           </div>
