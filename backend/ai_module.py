@@ -5,7 +5,11 @@ import logging
 from openai import OpenAI
 from dotenv import load_dotenv
 
-from utils.openai_monitor import record_openai_usage, get_usage_snapshot
+from utils.openai_monitor import (
+    record_openai_usage,
+    get_usage_snapshot,
+    get_billing_usage,
+)
 
 # Cargar variables del entorno desde el archivo local del backend
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -37,6 +41,7 @@ def check_openai_status():
             "status": "ok",
             "message": "API de OpenAI operativa",
             "usage": get_usage_snapshot(),
+            "billing": get_billing_usage(),
         }
     except Exception as exc:
         logging.error("⚠️ No fue posible validar OpenAI: %s", exc)
@@ -44,6 +49,7 @@ def check_openai_status():
             "status": "error",
             "message": str(exc),
             "usage": get_usage_snapshot(),
+            "billing": get_billing_usage(),
         }
 
 def generate_ai_insights(summary: dict, column_types: dict):
