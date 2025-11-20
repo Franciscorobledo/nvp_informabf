@@ -5,6 +5,7 @@ import logging
 from openai import OpenAI
 from dotenv import load_dotenv
 
+from utils.openai_keys import get_openai_api_key
 from utils.openai_monitor import (
     record_openai_usage,
     get_usage_snapshot,
@@ -20,28 +21,29 @@ load_dotenv(dotenv_path=DOTENV_PATH, override=False)
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logging.info("📄 Variables de entorno cargadas desde: %s", DOTENV_PATH)
 
-# Inicializar cliente OpenAI
-api_key = os.getenv("OPENAI_API_KEY")
-if not api_key:
-    raise ValueError(
-        "❌ No se encontró la variable OPENAI_API_KEY. Verifica tu archivo .env en backend/"
-    )
 
-logging.info("🔐 OPENAI_API_KEY configurada: %s", "sí" if api_key else "no")
+def _get_openai_client() -> OpenAI:
+    api_key = get_openai_api_key()
+    if not api_key:
+        raise ValueError(
+            "❌ No se encontró el token de OpenAI. Configura uno válido para continuar."
+        )
 
-client = OpenAI(api_key=api_key)
+    logging.info("🔐 OPENAI_API_KEY configurada: %s", "sí" if api_key else "no")
+    return OpenAI(api_key=api_key)
 
 
 def check_openai_status():
     """Realiza una comprobación liviana del API de OpenAI para admins."""
     try:
+        client = _get_openai_client()
         client.models.list()
         logging.info("✅ Conexión con OpenAI verificada correctamente")
         return {
             "status": "ok",
             "message": "API de OpenAI operativa",
             "usage": get_usage_snapshot(),
-            "billing": get_billing_usage(),
+            "billing": get_billing_usage(api_key=client.api_key),
         }
     except Exception as exc:
         logging.error("⚠️ No fue posible validar OpenAI: %s", exc)
@@ -76,6 +78,7 @@ Evita texto introductorio o conclusiones largas. Prioriza cifras concretas cuand
 """
 
     try:
+        client = _get_openai_client()
         response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
