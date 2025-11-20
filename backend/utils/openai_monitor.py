@@ -19,8 +19,29 @@ DEFAULT_OUTPUT_COST = float(os.getenv("OPENAI_OUTPUT_COST_PER_1K", "0.000600"))
 # Presupuesto de referencia para alertar al administrador
 BUDGET_USD = float(os.getenv("OPENAI_BUDGET_USD", "20"))
 OPENAI_BILLING_BASE_URL = os.getenv(
-    "OPENAI_BILLING_BASE_URL", "https://api.openai.com/dashboard/billing"
+    "OPENAI_BILLING_BASE_URL", "https://api.openai.com/v1/dashboard/billing"
 )
+
+
+def _billing_base_urls() -> list[str]:
+    """Builds a list of billing base URLs trying the new and legacy endpoints."""
+
+    base_urls = []
+
+    if OPENAI_BILLING_BASE_URL:
+        base_urls.append(OPENAI_BILLING_BASE_URL.rstrip("/"))
+
+    legacy_base = "https://api.openai.com/dashboard/billing"
+    if legacy_base not in base_urls:
+        base_urls.append(legacy_base)
+
+    return base_urls
+
+
+def _safe_get(url: str, headers: Dict[str, str], params: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
+    response = requests.get(url, headers=headers, params=params, timeout=10)
+    response.raise_for_status()
+    return response.json()
 
 
 def _base_usage_template() -> Dict[str, Any]:
@@ -78,75 +99,86 @@ def get_billing_usage(days: int = 30, api_key: Optional[str] = None) -> Dict[str
     start_date = end_date - timedelta(days=days)
 
     headers = {"Authorization": f"Bearer {key}"}
-    usage_url = f"{OPENAI_BILLING_BASE_URL}/usage"
-    grants_url = f"{OPENAI_BILLING_BASE_URL}/credit_grants"
 
     usage_payload: Dict[str, Any] = {
         "status": "error",
         "message": "Sin datos de consumo real disponibles",
     }
-    try:
-        usage_response = requests.get(
-            usage_url,
-            headers=headers,
-            params={
-                "start_date": start_date.isoformat(),
-                "end_date": end_date.isoformat(),
-            },
-            timeout=10,
-        )
-        usage_response.raise_for_status()
-        usage_data = usage_response.json()
-
-        total_usage_cents = usage_data.get("total_usage") or 0
-        total_usage_usd = round(float(total_usage_cents) / 100, 6)
-
-        daily_costs = usage_data.get("daily_costs", [])
-        daily = []
-        for item in daily_costs or []:
-            cost = 0
-            line_items = item.get("line_items")
-            if isinstance(line_items, list) and line_items:
-                cost = round(float(line_items[0].get("cost", 0)) / 100, 6)
-
-            daily.append(
-                {
-                    "date": item.get("timestamp"),
-                    "cost_usd": cost,
-                }
+    last_usage_error: Exception | None = None
+    for base_url in _billing_base_urls():
+        usage_url = f"{base_url}/usage"
+        try:
+            usage_data = _safe_get(
+                usage_url,
+                headers=headers,
+                params={
+                    "start_date": start_date.isoformat(),
+                    "end_date": end_date.isoformat(),
+                },
             )
 
-        usage_payload = {
-            "status": "ok",
-            "message": "Consumo real obtenido desde OpenAI",
-            "start_date": start_date.isoformat(),
-            "end_date": end_date.isoformat(),
-            "total_usage_usd": total_usage_usd,
-            "daily_costs": daily,
-        }
-    except Exception as exc:
-        logging.warning("No se pudo obtener el uso real de OpenAI: %s", exc)
-        usage_payload = {
-            "status": "warning",
-            "message": f"No se pudo obtener el uso real: {exc}",
-        }
+            total_usage_cents = usage_data.get("total_usage") or 0
+            total_usage_usd = round(float(total_usage_cents) / 100, 6)
+
+            daily_costs = usage_data.get("daily_costs", [])
+            daily = []
+            for item in daily_costs or []:
+                cost = 0
+                line_items = item.get("line_items")
+                if isinstance(line_items, list) and line_items:
+                    cost = round(float(line_items[0].get("cost", 0)) / 100, 6)
+
+                daily.append(
+                    {
+                        "date": item.get("timestamp"),
+                        "cost_usd": cost,
+                    }
+                )
+
+            usage_payload = {
+                "status": "ok",
+                "message": "Consumo real obtenido desde OpenAI",
+                "start_date": start_date.isoformat(),
+                "end_date": end_date.isoformat(),
+                "total_usage_usd": total_usage_usd,
+                "daily_costs": daily,
+            }
+            break
+        except Exception as exc:
+            logging.warning(
+                "No se pudo obtener el uso real de OpenAI en %s: %s", usage_url, exc
+            )
+            last_usage_error = exc
+    else:
+        if last_usage_error:
+            usage_payload = {
+                "status": "warning",
+                "message": f"No se pudo obtener el uso real: {last_usage_error}",
+            }
 
     credits_data: Dict[str, Any] = {}
-    try:
-        grants_response = requests.get(grants_url, headers=headers, timeout=10)
-        grants_response.raise_for_status()
-        grants_json = grants_response.json()
-        credits_data = {
-            "granted_usd": grants_json.get("total_granted"),
-            "used_usd": grants_json.get("total_used"),
-            "available_usd": grants_json.get("total_available"),
-        }
-    except Exception as exc:
-        logging.warning("No se pudieron obtener los créditos de OpenAI: %s", exc)
-        credits_data = {
-            "status": "error",
-            "message": f"No se pudieron obtener los créditos: {exc}",
-        }
+    last_credit_error: Exception | None = None
+    for base_url in _billing_base_urls():
+        grants_url = f"{base_url}/credit_grants"
+        try:
+            grants_json = _safe_get(grants_url, headers=headers)
+            credits_data = {
+                "granted_usd": grants_json.get("total_granted"),
+                "used_usd": grants_json.get("total_used"),
+                "available_usd": grants_json.get("total_available"),
+            }
+            break
+        except Exception as exc:
+            logging.warning(
+                "No se pudieron obtener los créditos de OpenAI en %s: %s", grants_url, exc
+            )
+            last_credit_error = exc
+    else:
+        if last_credit_error:
+            credits_data = {
+                "status": "error",
+                "message": f"No se pudieron obtener los créditos: {last_credit_error}",
+            }
 
     # Si los créditos se obtienen correctamente, priorizamos mostrar el saldo disponible
     # aunque la consulta de uso falle, para permitir alertar cuando el saldo se acerque a 0.
