@@ -26,7 +26,9 @@ from reportlab.lib.utils import ImageReader
 # ==============================
 # CONFIGURACIÓN GLOBAL
 # ==============================
-load_dotenv()
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DOTENV_PATH = os.path.join(BASE_DIR, ".env")
+load_dotenv(dotenv_path=DOTENV_PATH, override=False)
 
 SECRET_KEY = os.getenv("SECRET_KEY", "DEV_SECRET_KEY")
 ALGORITHM = os.getenv("ALGORITHM", "HS256")
@@ -40,8 +42,12 @@ logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(message)s"
 )
 
+logging.info("📄 Variables de entorno cargadas desde: %s", DOTENV_PATH)
+
 if not OPENAI_API_KEY:
-    raise ValueError("❌ No se encontró la variable OPENAI_API_KEY. Verifica tu configuración de despliegue.")
+    raise ValueError(
+        "❌ No se encontró la variable OPENAI_API_KEY. Verifica tu configuración de despliegue o el archivo backend/.env."
+    )
 logging.info("🔐 OPENAI_API_KEY presente: %s", "sí" if OPENAI_API_KEY else "no")
 
 app = FastAPI(title="InformeBF - Intelligent Data Visualizer")
