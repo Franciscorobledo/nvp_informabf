@@ -156,7 +156,8 @@ def read_dataframes(upload: UploadFile, content: bytes) -> list[pd.DataFrame]:
             return pd.read_csv(buffer, engine="pyarrow", **read_kwargs)
         except Exception:
             # Fallback seguro cuando pyarrow no está disponible en Render
-            return pd.read_csv(buffer, engine="python", **read_kwargs)
+            fallback_kwargs = {k: v for k, v in read_kwargs.items() if k != "low_memory"}
+            return pd.read_csv(buffer, engine="python", **fallback_kwargs)
 
     def _read_excel(buffer):
         return pd.read_excel(buffer, engine="openpyxl")
