@@ -3,11 +3,11 @@ from collections import defaultdict
 from datetime import date, datetime
 from typing import Any, Dict, Iterable, List
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from auth import admin_required
 from utils.openai_keys import get_openai_api_key
-from utils.openai_monitor import get_usage_history
+from utils.openai_monitor import get_billing_usage, get_usage_history
 
 router = APIRouter(
     prefix="/usage", tags=["Consumo OpenAI"], dependencies=[Depends(admin_required)]
@@ -164,6 +164,27 @@ async def get_global_usage():
         "total_tokens": totals["total_tokens"],
         "total_cost_usd": usage.get("total_cost_usd", totals["cost_usd"]),
         "events_count": totals["count"],
+    }
+
+
+@router.get("/facturacion")
+async def get_billing_summary(days: int = Query(30, ge=1, le=90)):
+    """Obtiene el consumo real desde la API de facturación de OpenAI."""
+
+    billing = get_billing_usage(days=days)
+    status = billing.get("status")
+
+    if status == "error":
+        raise HTTPException(status_code=400, detail=billing.get("message"))
+
+    return {
+        "status": status,
+        "message": billing.get("message"),
+        "start_date": billing.get("start_date"),
+        "end_date": billing.get("end_date"),
+        "total_usage_usd": billing.get("total_usage_usd"),
+        "daily_costs": billing.get("daily_costs", []),
+        "credits": billing.get("credits", {}),
     }
 
 
