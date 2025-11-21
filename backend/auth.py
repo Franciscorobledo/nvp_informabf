@@ -140,7 +140,17 @@ def load_users() -> Dict[str, dict]:
 
 
 def save_users(users: Dict[str, dict]) -> None:
-    USERS_FILE.write_text(json.dumps(users, indent=2), encoding="utf-8")
+    # Guardamos en la ubicación persistente principal.
+    STORAGE_DIR.mkdir(parents=True, exist_ok=True)
+    payload = json.dumps(users, indent=2)
+    USERS_FILE.write_text(payload, encoding="utf-8")
+
+    # Para evitar que una reinstalación o despliegue limpie las cuentas
+    # creadas, mantenemos sincronizado el archivo legado (ubicado junto
+    # al código). Así, si la carpeta ``backend/data`` se elimina entre
+    # arranques, la migración automática tomará el snapshot más reciente
+    # en lugar del estado inicial con solo los usuarios por defecto.
+    LEGACY_USERS_FILE.write_text(payload, encoding="utf-8")
 
 
 def _ensure_deleted_storage() -> None:
@@ -170,7 +180,10 @@ def load_deleted_users() -> list[dict]:
 
 
 def save_deleted_users(deleted_users: list[dict]) -> None:
-    DELETED_USERS_FILE.write_text(json.dumps(deleted_users, indent=2), encoding="utf-8")
+    STORAGE_DIR.mkdir(parents=True, exist_ok=True)
+    payload = json.dumps(deleted_users, indent=2)
+    DELETED_USERS_FILE.write_text(payload, encoding="utf-8")
+    LEGACY_DELETED_USERS_FILE.write_text(payload, encoding="utf-8")
 
 
 def _get_user_status(username: str) -> dict:
