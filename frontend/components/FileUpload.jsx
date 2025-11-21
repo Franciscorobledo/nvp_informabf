@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   Bar,
   BarChart,
@@ -21,10 +21,76 @@ const FileUpload = ({ onDataReceived }) => {
   const [aiCharts, setAiCharts] = useState([]);
   const [categoryFilter, setCategoryFilter] = useState("todos");
   const [uploadMode, setUploadMode] = useState("local");
-  const [driveFileUrl, setDriveFileUrl] = useState("");
-  const [driveFileName, setDriveFileName] = useState("archivo-drive.xlsx");
-  const [driveAccessToken, setDriveAccessToken] = useState("");
+  const [drivePickerReady, setDrivePickerReady] = useState(false);
+  const [selectedDriveFileName, setSelectedDriveFileName] = useState("");
   const [driveLoading, setDriveLoading] = useState(false);
+
+  const tokenClientRef = useRef(null);
+  const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+  const googleApiKey = import.meta.env.VITE_GOOGLE_API_KEY;
+
+  const loadScript = (src) =>
+    new Promise((resolve, reject) => {
+      const existingScript = document.querySelector(`script[src="${src}"]`);
+      if (existingScript) {
+        existingScript.addEventListener("load", resolve);
+        existingScript.addEventListener("error", reject);
+        if (
+          existingScript.dataset.loaded ||
+          existingScript.readyState === "complete"
+        )
+          return resolve();
+      }
+
+      const script = document.createElement("script");
+      script.src = src;
+      script.async = true;
+      script.onload = () => {
+        script.dataset.loaded = "true";
+        resolve();
+      };
+      script.onerror = reject;
+      document.body.appendChild(script);
+    });
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const initGoogleApis = async () => {
+      try {
+        await loadScript("https://accounts.google.com/gsi/client");
+        await loadScript("https://apis.google.com/js/api.js");
+
+        await new Promise((resolve, reject) => {
+          window?.gapi?.load("client:picker", {
+            callback: resolve,
+            onerror: () => reject(new Error("No se pudo cargar Google API")),
+          });
+        });
+
+        if (!cancelled) setDrivePickerReady(true);
+      } catch (error) {
+        console.error("Error al inicializar Google Drive Picker:", error);
+      }
+    };
+
+    initGoogleApis();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!drivePickerReady || !googleClientId || !window.google?.accounts?.oauth2)
+      return;
+
+    tokenClientRef.current = window.google.accounts.oauth2.initTokenClient({
+      client_id: googleClientId,
+      scope: "https://www.googleapis.com/auth/drive.readonly",
+      callback: () => {},
+    });
+  }, [drivePickerReady, googleClientId]);
 
   const categoryKeywords = {
     ventas: [
@@ -148,59 +214,93 @@ const FileUpload = ({ onDataReceived }) => {
 
   const handleFileChange = (e) => setFiles(Array.from(e.target.files || []));
 
-  const extractDriveFileId = (input = "") => {
-    const trimmed = input.trim();
-    if (!trimmed) return "";
-
-    try {
-      const url = new URL(trimmed);
-      const pathMatch = url.pathname.match(/\/d\/([^/]+)/);
-      if (pathMatch?.[1]) return pathMatch[1];
-      const queryId = url.searchParams.get("id");
-      if (queryId) return queryId;
-      return trimmed;
-    } catch (error) {
-      return trimmed;
-    }
-  };
-
-  const handleImportFromDrive = async () => {
-    const fileId = extractDriveFileId(driveFileUrl);
-    if (!fileId)
-      return alert("Ingresa el ID o enlace del archivo en Google Drive.");
-    const token = driveAccessToken.trim();
-
+  const downloadDriveFile = async (fileId, accessToken, suggestedName) => {
     try {
       setDriveLoading(true);
-      const res = await fetch(
+      const response = await fetch(
         `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`,
         {
-          headers: token ? { Authorization: `Bearer ${token}` } : {},
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+          },
         }
       );
 
-      if (!res.ok) {
-        const message = await res.text();
+      if (!response.ok) {
+        const message = await response.text();
         throw new Error(
-          message ||
-            "No se pudo descargar el archivo. Verifica el ID, permisos o token."
+          message || "No se pudo descargar el archivo desde Google Drive."
         );
       }
 
-      const blob = await res.blob();
-      const filename = driveFileName?.trim() || `drive-file-${fileId}.xlsx`;
+      const blob = await response.blob();
+      const extension = blob.type?.split("/")?.[1] || "dat";
+      const filename =
+        suggestedName?.trim() || `drive-file-${fileId}.${extension}`;
       const driveFile = new File([blob], filename, { type: blob.type });
       setFiles([driveFile]);
       setUploadMode("local");
+      setSelectedDriveFileName(driveFile.name);
       alert(
-        `Archivo importado desde Drive y listo para analizar: ${driveFile.name}`
+        `Archivo importado desde Google Drive y listo para analizar: ${driveFile.name}`
       );
     } catch (error) {
-      console.error("Error al importar desde Drive:", error);
+      console.error("Error al descargar archivo de Drive:", error);
       alert(error.message);
     } finally {
       setDriveLoading(false);
     }
+  };
+
+  const openDrivePicker = () => {
+    if (!googleApiKey || !googleClientId)
+      return alert(
+        "Faltan las claves de Google (VITE_GOOGLE_CLIENT_ID y VITE_GOOGLE_API_KEY)."
+      );
+
+    if (!drivePickerReady || !tokenClientRef.current)
+      return alert("Google Drive Picker aún no está listo. Intenta de nuevo en unos segundos.");
+
+    setDriveLoading(true);
+
+    tokenClientRef.current.callback = (response) => {
+      if (response.error) {
+        console.error("Error de autenticación con Google:", response);
+        setDriveLoading(false);
+        return;
+      }
+
+      const accessToken = response.access_token;
+
+      const view = new window.google.picker.DocsView()
+        .setIncludeFolders(true)
+        .setSelectFolderEnabled(true);
+
+      const picker = new window.google.picker.PickerBuilder()
+        .enableFeature(window.google.picker.Feature.NAV_HIDDEN)
+        .enableFeature(window.google.picker.Feature.MULTISELECT_DISABLED)
+        .setDeveloperKey(googleApiKey)
+        .setOAuthToken(accessToken)
+        .setLocale("es")
+        .addView(view)
+        .setCallback((data) => {
+          if (data.action === window.google.picker.Action.PICKED) {
+            const file = data.docs?.[0];
+            if (file?.id) {
+              downloadDriveFile(file.id, accessToken, file.name);
+            }
+          }
+
+          if (data.action === window.google.picker.Action.CANCEL) {
+            setDriveLoading(false);
+          }
+        })
+        .build();
+
+      picker.setVisible(true);
+    };
+
+    tokenClientRef.current.requestAccessToken({ prompt: "consent" });
   };
 
   const handleUpload = async () => {
@@ -371,41 +471,27 @@ const FileUpload = ({ onDataReceived }) => {
             <p className="text-sm text-gray-700 dark:text-slate-200 font-medium">
               Importa un archivo de Google Drive
             </p>
-            <input
-              type="text"
-              placeholder="Enlace o ID del archivo en Google Drive"
-              value={driveFileUrl}
-              onChange={(e) => setDriveFileUrl(e.target.value)}
-              className="w-full border border-gray-300 dark:border-slate-700 p-2 rounded-lg bg-white dark:bg-slate-800 text-sm"
-            />
-            <input
-              type="text"
-              placeholder="Nombre para el archivo (ej: datos.xlsx)"
-              value={driveFileName}
-              onChange={(e) => setDriveFileName(e.target.value)}
-              className="w-full border border-gray-300 dark:border-slate-700 p-2 rounded-lg bg-white dark:bg-slate-800 text-sm"
-            />
-            <input
-              type="password"
-              placeholder="Token de acceso (si el archivo no es público)"
-              value={driveAccessToken}
-              onChange={(e) => setDriveAccessToken(e.target.value)}
-              className="w-full border border-gray-300 dark:border-slate-700 p-2 rounded-lg bg-white dark:bg-slate-800 text-sm"
-            />
             <button
-              onClick={handleImportFromDrive}
-              disabled={driveLoading}
+              onClick={openDrivePicker}
+              disabled={driveLoading || !drivePickerReady}
               className={`w-full sm:w-auto px-6 py-3 rounded-lg font-semibold transition-all duration-300 ${
-                driveLoading
+                driveLoading || !drivePickerReady
                   ? "bg-gray-400 text-white cursor-not-allowed"
                   : "bg-emerald-600 hover:bg-emerald-700 text-white shadow"
               }`}
             >
-              {driveLoading ? "Importando..." : "Traer archivo de Drive"}
+              {driveLoading
+                ? "Conectando con Google..."
+                : "Elegir archivo en Google Drive"}
             </button>
             <p className="text-xs text-gray-500 dark:text-slate-400">
-              El archivo se descargará desde Drive y se enviará al backend con tu token actual.
+              Se abrirá una ventana de Google para autorizar y elegir el archivo sin escribir tokens.
             </p>
+            {selectedDriveFileName && (
+              <p className="text-xs text-emerald-700 dark:text-emerald-300 font-semibold">
+                Archivo seleccionado: {selectedDriveFileName}
+              </p>
+            )}
           </div>
         )}
 
