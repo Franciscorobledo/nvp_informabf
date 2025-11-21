@@ -44,6 +44,19 @@ def _safe_get(url: str, headers: Dict[str, str], params: Optional[Dict[str, str]
     return response.json()
 
 
+def _friendly_billing_error(exc: Exception) -> str:
+    """Traduce errores comunes de billing a mensajes claros."""
+
+    if isinstance(exc, requests.HTTPError) and exc.response is not None:
+        status = exc.response.status_code
+        if status in (401, 403, 404):
+            return (
+                "La API de facturación no está disponible con cuentas personales. "
+                "Usa una organización con permisos de facturación o una API key empresarial."
+            )
+    return str(exc)
+
+
 def _base_usage_template() -> Dict[str, Any]:
     return {
         "total_prompt_tokens": 0,
@@ -153,7 +166,7 @@ def get_billing_usage(days: int = 30, api_key: Optional[str] = None) -> Dict[str
         if last_usage_error:
             usage_payload = {
                 "status": "warning",
-                "message": f"No se pudo obtener el uso real: {last_usage_error}",
+                "message": f"No se pudo obtener el uso real: {_friendly_billing_error(last_usage_error)}",
             }
 
     credits_data: Dict[str, Any] = {}
@@ -177,7 +190,7 @@ def get_billing_usage(days: int = 30, api_key: Optional[str] = None) -> Dict[str
         if last_credit_error:
             credits_data = {
                 "status": "error",
-                "message": f"No se pudieron obtener los créditos: {last_credit_error}",
+                "message": f"No se pudieron obtener los créditos: {_friendly_billing_error(last_credit_error)}",
             }
 
     # Si los créditos se obtienen correctamente, priorizamos mostrar el saldo disponible
