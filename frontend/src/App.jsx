@@ -113,6 +113,15 @@ const App = () => {
             </div>
 
             <div className="flex items-center justify-between sm:justify-end gap-3 w-full sm:w-auto">
+              <div className="text-right flex-1 sm:flex-none leading-tight">
+                <p className="text-sm font-semibold text-gray-700 dark:text-slate-100">
+                  Hola, {user.username} 👋
+                </p>
+                <p className="text-xs text-gray-500 dark:text-slate-300">
+                  Sesión personalizada activa
+                </p>
+              </div>
+
               <div className="hidden sm:flex flex-wrap items-center justify-end gap-3">
                 <button
                   onClick={toggleTheme}
