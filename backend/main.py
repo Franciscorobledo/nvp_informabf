@@ -24,6 +24,7 @@ from utils.dataframe_loader import read_dataframes
 from utils.openai_keys import get_openai_api_key, persist_openai_api_key
 from utils.openai_monitor import get_usage_snapshot
 from usage_api import router as usage_router
+from reportlab.lib import colors
 from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
 from reportlab.lib.utils import ImageReader
@@ -160,6 +161,14 @@ def add_wrapped_text(canvas_obj, text, x, y, width, line_height=12, font_name="H
 
 def build_executive_report(analysis_data: dict) -> io.BytesIO:
     """Genera un PDF ejecutivo a partir del análisis enviado desde el frontend."""
+    palette = {
+        "accent": colors.HexColor("#059669"),
+        "accent_dark": colors.HexColor("#0f766e"),
+        "muted": colors.HexColor("#6b7280"),
+        "border": colors.HexColor("#e5e7eb"),
+        "background": colors.HexColor("#f8fafc"),
+    }
+
     buffer = io.BytesIO()
     c = canvas.Canvas(buffer, pagesize=letter)
     width, height = letter
@@ -172,63 +181,131 @@ def build_executive_report(analysis_data: dict) -> io.BytesIO:
             c.showPage()
             y = height - margin
 
+    def draw_section_header(title, subtitle=None):
+        nonlocal y
+        ensure_space(50)
+        c.setFillColor(palette["accent_dark"])
+        c.rect(margin, y - 6, width - (margin * 2), 4, fill=True, stroke=False)
+        y -= 16
+        c.setFillColor(colors.black)
+        c.setFont("Helvetica-Bold", 14)
+        c.drawString(margin, y, title)
+        y -= 16
+        if subtitle:
+            c.setFont("Helvetica", 10)
+            c.setFillColor(palette["muted"])
+            y = add_wrapped_text(c, subtitle, margin, y, width=90, font_size=10)
+        c.setFillColor(colors.black)
+        y -= 8
+
+    def draw_badge(label, x, y_pos, color):
+        padding_x = 6
+        padding_y = 3
+        text_width = c.stringWidth(label, "Helvetica-Bold", 9)
+        rect_width = text_width + padding_x * 2
+        rect_height = 14 + padding_y
+        c.setFillColor(color)
+        c.roundRect(x, y_pos - rect_height + 4, rect_width, rect_height, 4, fill=True, stroke=False)
+        c.setFillColor(colors.white)
+        c.setFont("Helvetica-Bold", 9)
+        c.drawString(x + padding_x, y_pos, label)
+        c.setFillColor(colors.black)
+
+    def draw_card(x, y_pos, card_width, title, content_lines):
+        card_height = 60 + (len(content_lines) * 12)
+        ensure_space(card_height + 20)
+        c.setFillColor(palette["background"])
+        c.roundRect(x, y_pos - card_height, card_width, card_height, 8, fill=True, stroke=False)
+        c.setStrokeColor(palette["border"])
+        c.roundRect(x, y_pos - card_height, card_width, card_height, 8, fill=False, stroke=True)
+        c.setFillColor(colors.black)
+        c.setFont("Helvetica-Bold", 11)
+        c.drawString(x + 14, y_pos - 18, title)
+        c.setFont("Helvetica", 10)
+        y_cursor = y_pos - 32
+        for line in content_lines:
+            c.drawString(x + 14, y_cursor, f"• {line}")
+            y_cursor -= 12
+        return y_pos - card_height - 12
+
     c.setTitle("InformeBF - Reporte ejecutivo")
-    c.setFont("Helvetica-Bold", 18)
-    c.drawString(margin, y, "InformeBF - Reporte ejecutivo")
-    y -= 24
-    c.setFont("Helvetica", 11)
-    c.drawString(margin, y, f"Generado: {datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}")
-    y -= 30
+
+    # Portada
+    c.setFillColor(palette["background"])
+    c.rect(0, 0, width, height, fill=True, stroke=False)
+    c.setFillColor(palette["accent"])
+    c.rect(0, height - 120, width, 120, fill=True, stroke=False)
+    c.setFillColor(colors.white)
+    c.setFont("Helvetica-Bold", 22)
+    c.drawString(margin, height - 70, "InformeBF · Reporte ejecutivo")
+    c.setFont("Helvetica", 12)
+    c.drawString(margin, height - 95, "Insights, métricas y visualizaciones en un solo vistazo")
+    c.setFillColor(colors.black)
+    c.setFont("Helvetica", 10)
+    c.drawString(margin, height - 140, f"Generado automáticamente el {datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}")
+    draw_badge("Dataset analizado", margin, height - 160, palette["accent_dark"])
+    c.showPage()
+    y = height - margin
 
     # Resumen
-    c.setFont("Helvetica-Bold", 14)
-    c.drawString(margin, y, "Resumen estadístico")
-    y -= 20
+    draw_section_header(
+        "Resumen estadístico",
+        "Vista rápida de las columnas más relevantes y sus principales indicadores.",
+    )
     summary = analysis_data.get("summary", {})
     if not summary:
         c.setFont("Helvetica", 11)
         c.drawString(margin, y, "No se recibieron estadísticas para este dataset.")
         y -= 20
     else:
-        for column, stats in summary.items():
-            ensure_space(30)
-            c.setFont("Helvetica-Bold", 11)
-            c.drawString(margin, y, f"• {column}")
-            y -= 14
-            c.setFont("Helvetica", 10)
+        card_width = (width - margin * 2 - 20) / 2
+        x_positions = [margin, margin + card_width + 20]
+        column_items = list(summary.items())
+        for idx, (column, stats) in enumerate(column_items):
+            x = x_positions[idx % 2]
+            content = []
             if isinstance(stats, dict):
-                for key, value in stats.items():
-                    line = f"{key}: {value}"
-                    y = add_wrapped_text(c, line, margin + 14, y, width=85)
+                for key, value in list(stats.items())[:5]:
+                    content.append(f"{key}: {value}")
             else:
-                y = add_wrapped_text(c, stats, margin + 14, y, width=85)
-            y -= 8
+                content.append(str(stats))
+            y = draw_card(x, y, card_width, column, content)
+            if idx % 2 == 1:
+                y -= 6
 
     # Insights
-    ensure_space(60)
-    c.setFont("Helvetica-Bold", 14)
-    c.drawString(margin, y, "Insights automáticos")
-    y -= 18
+    draw_section_header(
+        "Insights automáticos",
+        "Principales hallazgos generados por IA para orientar tus decisiones.",
+    )
     ai_summary = analysis_data.get("ai_summary") or "No se recibieron insights de IA."
-    y = add_wrapped_text(c, ai_summary, margin, y, width=90)
-    y -= 10
+    c.setFillColor(palette["background"])
+    block_height = 120
+    ensure_space(block_height + 30)
+    c.roundRect(margin, y - block_height, width - (margin * 2), block_height, 10, fill=True, stroke=False)
+    c.setStrokeColor(palette["border"])
+    c.roundRect(margin, y - block_height, width - (margin * 2), block_height, 10, fill=False, stroke=True)
+    c.setFillColor(colors.black)
+    c.setFont("Helvetica", 11)
+    y = add_wrapped_text(c, ai_summary, margin + 16, y - 18, width=86, font_size=10)
+    y -= 12
 
     # Gráficos
     graphs = analysis_data.get("graphs", [])
     if graphs:
-        ensure_space(40)
-        c.setFont("Helvetica-Bold", 14)
-        c.drawString(margin, y, "Visualizaciones destacadas")
-        y -= 20
+        draw_section_header(
+            "Visualizaciones destacadas",
+            "Capturas clave de tus datos con escala optimizada para lectura ejecutiva.",
+        )
         for graph in graphs:
             image_bytes = clean_base64_image(graph.get("image"))
             if not image_bytes:
                 continue
             title = graph.get("column") or "Gráfico"
-            ensure_space(60)
+            ensure_space(140)
             c.setFont("Helvetica-Bold", 11)
             c.drawString(margin, y, title)
-            y -= 16
+            y -= 14
             try:
                 img = ImageReader(io.BytesIO(image_bytes))
                 img_width, img_height = img.getSize()
@@ -238,10 +315,11 @@ def build_executive_report(analysis_data: dict) -> io.BytesIO:
                 render_height = img_height * scale
                 if y - render_height < margin:
                     c.showPage()
-                    c.setFont("Helvetica-Bold", 11)
                     y = height - margin
+                    c.setFont("Helvetica-Bold", 11)
                     c.drawString(margin, y, title)
-                    y -= 16
+                    y -= 14
+                c.roundRect(margin - 6, y - render_height - 8, render_width + 12, render_height + 16, 10, fill=False, stroke=True)
                 c.drawImage(
                     img,
                     margin,
@@ -250,9 +328,10 @@ def build_executive_report(analysis_data: dict) -> io.BytesIO:
                     height=render_height,
                     preserveAspectRatio=True,
                 )
-                y -= render_height + 20
+                y -= render_height + 24
             except Exception as err:
                 logging.error(f"No se pudo añadir un gráfico al PDF: {err}")
+
 
     c.showPage()
     c.save()
