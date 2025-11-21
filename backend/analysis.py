@@ -1,5 +1,6 @@
 import io
 import base64
+import unicodedata
 import pandas as pd
 import numpy as np
 import seaborn as sns
@@ -81,10 +82,179 @@ def json_safe(value):
     return value
 
 
+def _get_numeric_series(df, *candidates):
+    for name in candidates:
+        if name and name in df.columns:
+            return pd.to_numeric(df[name], errors="coerce")
+    return None
+
+
+def _normalize(text: str) -> str:
+    normalized = unicodedata.normalize("NFD", text)
+    without_accents = "".join(ch for ch in normalized if unicodedata.category(ch) != "Mn")
+    return without_accents.lower()
+
+
+def _find_best_column(df, keyword_groups):
+    """Encuentra la columna que mejor coincide con grupos de palabras clave.
+
+    En lugar de depender de un único nombre, se otorga un puntaje a cada
+    columna según cuántos términos del grupo estén presentes. Esto permite
+    soportar formatos variados (p. ej. "Gross Sales Amount", "Ventas brutas",
+    "Monto de venta total").
+    """
+
+    best_col = None
+    best_score = 0
+
+    normalized_cols = {col: _normalize(col) for col in df.columns}
+    for col, normalized in normalized_cols.items():
+        for keywords in keyword_groups:
+            if all(k in normalized for k in keywords):
+                score = len(keywords)
+                if score > best_score:
+                    best_score = score
+                    best_col = col
+
+    return best_col
+
+
+def generate_sales_insights(df):
+    """Detecta métricas de ventas habituales para entregar hallazgos accionables."""
+
+    product_col = _find_best_column(
+        df,
+        [
+            ["producto"],
+            ["articul"],
+            ["item"],
+            ["sku"],
+            ["titulo"],
+            ["nombre", "producto"],
+            ["descripcion"],
+        ],
+    )
+
+    units_col = _find_best_column(
+        df,
+        [
+            ["cantidad"],
+            ["unid"],
+            ["uds"],
+            ["qty"],
+            ["articul", "vend"],
+            ["units", "sold"],
+            ["cantidad", "net"],
+        ],
+    )
+
+    gross_col = _find_best_column(
+        df,
+        [
+            ["venta", "bruta"],
+            ["ventas", "brutas"],
+            ["gross", "sales"],
+            ["ventas", "totales"],
+            ["total", "venta"],
+            ["monto", "venta"],
+            ["importe", "total"],
+            ["subtotal"],
+        ],
+    )
+
+    net_col = _find_best_column(
+        df,
+        [
+            ["venta", "neta"],
+            ["ventas", "netas"],
+            ["net", "sales"],
+            ["ingreso"],
+            ["revenue"],
+            ["total", "neto"],
+        ],
+    )
+
+    discount_col = _find_best_column(
+        df,
+        [
+            ["descuento"],
+            ["descuent"],
+            ["promo"],
+            ["rebaj"],
+            ["discount"],
+            ["cupon"],
+        ],
+    )
+
+    return_col = _find_best_column(
+        df,
+        [
+            ["devolu"],
+            ["refund"],
+            ["retorno"],
+            ["return"],
+        ],
+    )
+
+    net_series = _get_numeric_series(df, net_col, gross_col)
+    gross_series = _get_numeric_series(df, gross_col)
+    discount_series = _get_numeric_series(df, discount_col)
+    return_series = _get_numeric_series(df, return_col)
+    units_series = _get_numeric_series(df, units_col)
+
+    # Permite deducir ventas netas cuando solo hay ventas brutas y descuentos o devoluciones
+    if net_series is None and gross_series is not None:
+        net_series = gross_series
+        if discount_series is not None:
+            net_series = net_series - discount_series.fillna(0)
+        if return_series is not None:
+            net_series = net_series - return_series.fillna(0)
+
+    insights = []
+    if net_series is not None and not net_series.dropna().empty:
+        total_net = net_series.sum()
+        insights.append(f"Ventas netas totales: {total_net:,.0f}")
+
+    if gross_series is not None and not gross_series.dropna().empty and net_series is not None:
+        margin = (net_series.sum() / gross_series.sum()) if gross_series.sum() else None
+        if margin:
+            insights.append(f"Margen sobre ventas brutas: {margin:.1%}")
+
+    if discount_series is not None and not discount_series.dropna().empty and gross_series is not None:
+        disc_rate = discount_series.sum() / gross_series.sum() if gross_series.sum() else None
+        if disc_rate is not None:
+            insights.append(f"Descuentos vs ventas brutas: {disc_rate:.1%}")
+
+    if return_series is not None and not return_series.dropna().empty and net_series is not None:
+        returns_rate = return_series.sum() / net_series.sum() if net_series.sum() else None
+        if returns_rate is not None:
+            insights.append(f"Impacto de devoluciones: {returns_rate:.1%} del neto")
+
+    if units_series is not None and not units_series.dropna().empty and net_series is not None:
+        total_units = units_series.sum()
+        if total_units:
+            avg_ticket = net_series.sum() / total_units
+            insights.append(f"Ticket promedio por unidad: {avg_ticket:,.0f}")
+
+    if product_col and net_series is not None:
+        candidate = pd.DataFrame({"producto": df[product_col], "neto": net_series}).dropna()
+        top_products = (
+            candidate.groupby("producto")["neto"].sum().sort_values(ascending=False).head(3)
+        )
+        if not top_products.empty:
+            formatted = ", ".join([f"{name} ({value:,.0f})" for name, value in top_products.items()])
+            insights.append(f"Top productos por ventas netas: {formatted}")
+
+    return insights
+
+
 def generate_ai_summary(df, column_types, date_field=None, metric_field=None):
     """Genera un resumen textual basado en las métricas reales del dataset."""
     insights = []
     total_rows = len(df)
+
+    sales_insights = generate_sales_insights(df)
+    insights.extend(sales_insights)
 
     # Calidad de datos
     null_ratio = (df.isna().sum() / total_rows).sort_values(ascending=False)
