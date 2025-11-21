@@ -5,6 +5,7 @@ import numpy as np
 import seaborn as sns
 import matplotlib.pyplot as plt
 from datetime import datetime
+from pandas.api.types import is_datetime64_any_dtype, is_numeric_dtype
 
 from ai_module import generate_ai_insights
 
@@ -14,6 +15,11 @@ from ai_module import generate_ai_insights
 plt.switch_backend("Agg")  # Evita errores en entornos sin display
 sns.set_palette("crest")
 plt.style.use("seaborn-v0_8-whitegrid")
+
+# Limita el tamaño de los samples usados en gráficas pesadas para
+# controlar consumo de memoria/CPU en Render sin perder tendencias globales.
+MAX_PLOT_ROWS = 5000
+MAX_CORR_COLUMNS = 12
 
 
 # ---------------------------------------------------------------------
@@ -29,19 +35,34 @@ def fig_to_base64(fig):
 
 
 def detect_column_types(df):
-    """Clasifica columnas por tipo (numérico, categórico, fecha, texto)."""
+    """Clasifica columnas por tipo (numérico, categórico, fecha, texto).
+
+    Se trabaja sobre un sample pequeño para evitar conversiones costosas en
+    datasets grandes y se usan heurísticas rápidas del dtype de pandas.
+    """
+
     column_types = {}
+    sample = df.head(500)
     for col in df.columns:
-        try:
-            pd.to_datetime(df[col])
+        series = sample[col]
+
+        if is_datetime64_any_dtype(series):
             column_types[col] = "date"
-        except Exception:
-            if np.issubdtype(df[col].dtype, np.number):
-                column_types[col] = "numeric"
-            elif df[col].nunique() < (len(df) * 0.3):
-                column_types[col] = "categorical"
-            else:
-                column_types[col] = "text"
+            continue
+
+        if is_numeric_dtype(series):
+            column_types[col] = "numeric"
+            continue
+
+        parsed_dates = pd.to_datetime(series, errors="coerce", infer_datetime_format=True)
+        date_ratio = parsed_dates.notna().mean()
+        if date_ratio > 0.8:
+            column_types[col] = "date"
+        elif series.nunique(dropna=True) < (len(series) * 0.3):
+            column_types[col] = "categorical"
+        else:
+            column_types[col] = "text"
+
     return column_types
 
 
@@ -206,42 +227,48 @@ def analyze_file(df, date_field=None, metric_field=None, segment_by=None, file_t
     # --------------------------------------------------------------
     for col, t in column_types.items():
         try:
+            column_data = df[col]
             if t == "numeric":
-                desc = df[col].describe().to_dict()
+                desc = column_data.describe().to_dict()
                 summary[col] = {k: json_safe(v) for k, v in desc.items()}
             elif t == "categorical":
-                summary[col] = df[col].value_counts().head(5).to_dict()
+                # value_counts puede ser costoso; limitar a top 5 evita pasadas adicionales
+                summary[col] = column_data.value_counts().head(5).to_dict()
             elif t == "date":
                 summary[col] = {
-                    "min": json_safe(df[col].min()),
-                    "max": json_safe(df[col].max()),
-                    "count": int(df[col].count()),
+                    "min": json_safe(column_data.min()),
+                    "max": json_safe(column_data.max()),
+                    "count": int(column_data.count()),
                 }
             else:
-                summary[col] = {"unique_values": int(df[col].nunique())}
+                summary[col] = {"unique_values": int(column_data.nunique())}
         except Exception as e:
             summary[col] = {"error": f"No se pudo analizar: {e}"}
 
     # --------------------------------------------------------------
     # 2️⃣ GRÁFICOS AUTOMÁTICOS SEGÚN TIPO
     # --------------------------------------------------------------
+    plot_df = df
+    if len(df) > MAX_PLOT_ROWS:
+        plot_df = df.sample(n=MAX_PLOT_ROWS, random_state=42)
+
     for col, t in column_types.items():
         try:
             if t == "numeric":
                 # Histograma
                 fig, ax = plt.subplots(figsize=(5, 3))
-                sns.histplot(df[col], kde=True, color="#3B82F6", ax=ax)
+                sns.histplot(plot_df[col], kde=True, color="#3B82F6", ax=ax)
                 ax.set_title(f"Distribución de {col}", fontsize=11, weight="bold")
                 graphs.append({"column": col, "image": fig_to_base64(fig)})
 
                 # Boxplot
                 fig, ax = plt.subplots(figsize=(5, 3))
-                sns.boxplot(x=df[col], color="#60A5FA", ax=ax, fliersize=3, linewidth=1)
+                sns.boxplot(x=plot_df[col], color="#60A5FA", ax=ax, fliersize=3, linewidth=1)
                 ax.set_title(f"Boxplot de {col}", fontsize=11, weight="bold")
                 graphs.append({"column": f"Boxplot {col}", "image": fig_to_base64(fig)})
 
             elif t == "categorical":
-                counts = df[col].value_counts().head(6)
+                counts = plot_df[col].value_counts().head(6)
                 fig, ax = plt.subplots(figsize=(5, 3))
                 if len(counts) <= 5:
                     ax.pie(
@@ -260,7 +287,7 @@ def analyze_file(df, date_field=None, metric_field=None, segment_by=None, file_t
 
             elif t == "date":
                 df[col] = pd.to_datetime(df[col], errors="coerce")
-                counts = df.groupby(df[col].dt.to_period("M")).size()
+                counts = plot_df.groupby(plot_df[col].dt.to_period("M")).size()
                 if not counts.empty:
                     fig, ax = plt.subplots(figsize=(6, 3))
                     counts.plot(ax=ax, color="#2563EB", linewidth=2)
@@ -320,9 +347,14 @@ def analyze_file(df, date_field=None, metric_field=None, segment_by=None, file_t
     # --------------------------------------------------------------
     # 3️⃣ MATRIZ DE CORRELACIÓN
     # --------------------------------------------------------------
-    numeric_df = df.select_dtypes(include=[np.number])
+    numeric_df = plot_df.select_dtypes(include=[np.number])
     if not numeric_df.empty and numeric_df.shape[1] > 1:
         try:
+            if numeric_df.shape[1] > MAX_CORR_COLUMNS:
+                # Selecciona columnas con mayor varianza para acelerar la correlación
+                top_variance_cols = numeric_df.var().sort_values(ascending=False).head(MAX_CORR_COLUMNS).index
+                numeric_df = numeric_df[top_variance_cols]
+
             corr_matrix = numeric_df.corr()
             fig, ax = plt.subplots(figsize=(5, 4))
             sns.heatmap(

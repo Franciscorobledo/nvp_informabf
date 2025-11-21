@@ -120,11 +120,28 @@ def json_safe_deep(data):
 
 
 def read_dataframes(upload: UploadFile, content: bytes) -> list[pd.DataFrame]:
-    """Lee un archivo subido (csv, xlsx o zip) y devuelve una lista de DataFrames."""
+    """Lee un archivo subido (csv, xlsx o zip) y devuelve una lista de DataFrames.
+
+    Se prioriza un parsing rápido y con bajo consumo de memoria:
+    - Para CSV se intenta primero el motor "pyarrow" (si está disponible) y se
+      desactiva la inferencia agresiva de tipos para evitar múltiples pasadas.
+    - Para Excel se usa openpyxl, manteniendo compatibilidad.
+    """
+
     ext = os.path.splitext(upload.filename)[1].lower()
 
     def _read_csv(buffer):
-        return pd.read_csv(buffer)
+        read_kwargs = {
+            "dtype_backend": "numpy_nullable",
+            "on_bad_lines": "skip",
+            "low_memory": False,
+        }
+
+        try:
+            return pd.read_csv(buffer, engine="pyarrow", **read_kwargs)
+        except Exception:
+            # Fallback seguro cuando pyarrow no está disponible en Render
+            return pd.read_csv(buffer, engine="python", **read_kwargs)
 
     def _read_excel(buffer):
         return pd.read_excel(buffer, engine="openpyxl")
