@@ -11,6 +11,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import DatasetSummaryPanel from "./DatasetSummaryPanel";
 
 const FileUpload = ({ onDataReceived, onUnauthorized }) => {
   const [files, setFiles] = useState([]);
@@ -653,9 +654,7 @@ const FileUpload = ({ onDataReceived, onUnauthorized }) => {
                 <h3 className="text-lg font-semibold mb-2 text-gray-800 dark:text-slate-100">
                   📄 Resumen del dataset
                 </h3>
-                <pre className="bg-gray-50 dark:bg-slate-800 p-4 rounded-lg border border-gray-200 dark:border-slate-700 text-sm overflow-x-auto">
-                  {JSON.stringify(filterSummaryByCategory(analysis.summary), null, 2)}
-                </pre>
+                <DatasetSummaryPanel summary={filterSummaryByCategory(analysis.summary)} />
               </div>
             )}
 
