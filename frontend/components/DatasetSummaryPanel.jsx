@@ -100,6 +100,88 @@ const DatasetSummaryPanel = ({ summary }) => {
 
   const anomalies = analyzed.filter(({ stats, type }) => stats?.error || type === "error");
 
+  const smartNarratives = analyzed
+    .map((item) => {
+      const { stats, type, column, icon } = item;
+
+      if (type === "numeric") {
+        const mean = Number(stats.mean ?? stats.prom ?? 0);
+        const max = Number(stats.max ?? 0);
+        const min = Number(stats.min ?? 0);
+        const std = Number(stats.std ?? 0);
+        const variability = mean !== 0 ? Math.abs(std / mean) : 0;
+
+        const mood = variability > 0.6 ? "Alta variabilidad" : "Tendencia estable";
+        const detail = variability > 0.6
+          ? "Revisa outliers y crea alertas para variaciones fuertes."
+          : "Úsalo como KPI central y define umbrales de control.";
+
+        return {
+          column,
+          icon,
+          badge: "Métrica",
+          score: (stats.count ?? 0) + variability * 100,
+          headline: `${mood} en ${column}`,
+          body: `Promedio ${formatNumber(mean)}, rango ${formatNumber(min)} - ${formatNumber(max)}. ${detail}`,
+        };
+      }
+
+      if (type === "categorical") {
+        const sorted = Object.entries(stats)
+          .sort(([, a], [, b]) => Number(b) - Number(a));
+        const [topName, topValue] = sorted[0] || [];
+        const total = sorted.reduce((acc, [, value]) => acc + Number(value || 0), 0) || 1;
+        const topShare = ((Number(topValue || 0) / total) * 100).toFixed(1);
+
+        return {
+          column,
+          icon,
+          badge: "Comportamiento",
+          score: Number(topValue || 0),
+          headline: `${topName || "Categoría"} domina ${column}`,
+          body: `${formatNumber(topValue)} registros (${topShare}% del total). Ideal para segmentar reportes y detectar nichos.`,
+        };
+      }
+
+      if (type === "date") {
+        return {
+          column,
+          icon,
+          badge: "Tiempo",
+          score: Number(stats.count || 0),
+          headline: `Ventana temporal en ${column}`,
+          body: `Cobertura desde ${stats.min || "-"} hasta ${stats.max || "-"}. Aprovecha para medir tendencias y estacionalidad.`,
+        };
+      }
+
+      if (type === "unique") {
+        return {
+          column,
+          icon,
+          badge: "Identidad",
+          score: Number(stats.unique_values || 0),
+          headline: `${formatNumber(stats.unique_values)} valores únicos en ${column}`,
+          body: "Úsalo para llaves, deduplicación o segmentaciones personalizadas.",
+        };
+      }
+
+      if (type === "error") {
+        return {
+          column,
+          icon,
+          badge: "Atención",
+          score: 999,
+          headline: `Revisa ${column}`,
+          body: stats.error || "Dato fuera de rango o corrupto. Prioriza limpieza.",
+        };
+      }
+
+      return null;
+    })
+    .filter(Boolean)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 6);
+
   const typeCount = analyzed.reduce(
     (acc, item) => {
       acc[item.type] = (acc[item.type] || 0) + 1;
@@ -179,6 +261,32 @@ const DatasetSummaryPanel = ({ summary }) => {
 
   return (
     <div className="space-y-4">
+      {smartNarratives.length > 0 && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+          {smartNarratives.map((insight) => (
+            <BaseCard key={insight.column}>
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <span className="text-lg" aria-hidden="true">{insight.icon}</span>
+                  <div>
+                    <p className="text-xs uppercase tracking-wide text-blue-600 dark:text-blue-300 font-semibold">
+                      Reporte inteligente
+                    </p>
+                    <h4 className="text-sm font-bold text-gray-900 dark:text-white leading-tight">
+                      {insight.headline}
+                    </h4>
+                  </div>
+                </div>
+                <span className="text-[11px] px-2 py-1 rounded-full bg-blue-50 dark:bg-slate-800 text-blue-700 dark:text-blue-200 border border-blue-100 dark:border-slate-700">
+                  {insight.badge}
+                </span>
+              </div>
+              <p className="text-sm text-gray-700 dark:text-slate-200 mt-2 leading-relaxed">{insight.body}</p>
+            </BaseCard>
+          ))}
+        </div>
+      )}
+
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         <BaseCard>
           <p className="text-xs text-gray-500 dark:text-slate-400">Columnas analizadas</p>
