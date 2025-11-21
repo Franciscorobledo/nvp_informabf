@@ -12,7 +12,7 @@ import {
   YAxis,
 } from "recharts";
 
-const FileUpload = ({ onDataReceived }) => {
+const FileUpload = ({ onDataReceived, onUnauthorized }) => {
   const [files, setFiles] = useState([]);
   const [loading, setLoading] = useState(false);
   const [analysis, setAnalysis] = useState(null);
@@ -379,7 +379,10 @@ const FileUpload = ({ onDataReceived }) => {
     if (!files.length)
       return alert("Selecciona al menos un archivo .csv, .xlsx o .zip primero.");
     const token = localStorage.getItem("token");
-    if (!token) return alert("⚠️ No se encontró token. Inicia sesión nuevamente.");
+    if (!token) {
+      onUnauthorized?.("Tu sesión expiró. Inicia sesión nuevamente.");
+      return;
+    }
 
     const formData = new FormData();
     files.forEach((fileItem) => formData.append("files", fileItem));
@@ -399,6 +402,12 @@ const FileUpload = ({ onDataReceived }) => {
 
       if (!res.ok) {
         const msg = await res.text();
+
+        if ([401, 403].includes(res.status)) {
+          onUnauthorized?.("Tu sesión expiró. Por favor, vuelve a iniciar sesión.");
+          return;
+        }
+
         console.error("❌ Error del servidor:", msg);
         alert(`Error del servidor: ${msg}`);
         return;
@@ -420,7 +429,10 @@ const FileUpload = ({ onDataReceived }) => {
   const handleDownloadReport = async () => {
     if (!analysis) return;
     const token = localStorage.getItem("token");
-    if (!token) return alert("⚠️ No se encontró token. Inicia sesión nuevamente.");
+    if (!token) {
+      onUnauthorized?.("Tu sesión expiró. Inicia sesión nuevamente.");
+      return;
+    }
 
     try {
       setDownloading(true);
@@ -435,6 +447,11 @@ const FileUpload = ({ onDataReceived }) => {
       });
 
       if (!res.ok) {
+        if ([401, 403].includes(res.status)) {
+          onUnauthorized?.("Tu sesión expiró. Vuelve a iniciar sesión para descargar el reporte.");
+          return;
+        }
+
         const message = await res.text();
         throw new Error(message || "No se pudo generar el reporte.");
       }

@@ -10,7 +10,7 @@ const defaultFormState = {
   expiresAt: "",
 };
 
-const UserManagement = () => {
+const UserManagement = ({ onUnauthorized }) => {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -31,6 +31,7 @@ const UserManagement = () => {
 
   const fetchUsers = async () => {
     if (!token) {
+      onUnauthorized?.("Tu sesión expiró. Inicia sesión nuevamente.");
       setError("No se encontró un token válido. Inicia sesión nuevamente.");
       setLoading(false);
       return;
@@ -45,6 +46,11 @@ const UserManagement = () => {
       });
 
       if (!response.ok) {
+        if ([401, 403].includes(response.status)) {
+          onUnauthorized?.("La sesión expiró. Vuelve a iniciar sesión.");
+          return;
+        }
+
         const backendMessage = await response.text();
         throw new Error(
           backendMessage || "No se pudo obtener la lista de usuarios"
@@ -123,6 +129,11 @@ const UserManagement = () => {
       });
 
       if (!response.ok) {
+        if ([401, 403].includes(response.status)) {
+          onUnauthorized?.("La sesión expiró. Vuelve a iniciar sesión.");
+          return;
+        }
+
         const backendMessage = await response.text();
         throw new Error(
           backendMessage ||
@@ -165,6 +176,11 @@ const UserManagement = () => {
       });
 
       if (!response.ok) {
+        if ([401, 403].includes(response.status)) {
+          onUnauthorized?.("La sesión expiró. Vuelve a iniciar sesión.");
+          return;
+        }
+
         const backendMessage = await response.text();
         throw new Error(backendMessage || "No se pudo actualizar el usuario");
       }
@@ -198,6 +214,11 @@ const UserManagement = () => {
       });
 
       if (!response.ok) {
+        if ([401, 403].includes(response.status)) {
+          onUnauthorized?.("La sesión expiró. Vuelve a iniciar sesión.");
+          return;
+        }
+
         const backendMessage = await response.text();
         throw new Error(backendMessage || "No se pudo eliminar el usuario");
       }
@@ -271,6 +292,11 @@ const UserManagement = () => {
       });
 
       if (!response.ok) {
+        if ([401, 403].includes(response.status)) {
+          onUnauthorized?.("La sesión expiró. Vuelve a iniciar sesión.");
+          return;
+        }
+
         const backendMessage = await response.text();
         throw new Error(backendMessage || "No se pudo actualizar la contraseña");
       }
