@@ -10,8 +10,6 @@ import numpy as np
 from datetime import datetime
 import base64
 import textwrap
-import zipfile
-import csv
 from typing import List
 from dotenv import load_dotenv
 from pydantic import BaseModel, EmailStr
@@ -22,6 +20,7 @@ from utils.file_utils import validate_file
 from analysis import analyze_file, detect_column_types
 from auth import admin_required, get_current_user, router as auth_router
 from ai_module import check_openai_status
+from utils.dataframe_loader import read_dataframes
 from utils.openai_keys import get_openai_api_key, persist_openai_api_key
 from utils.openai_monitor import get_usage_snapshot
 from usage_api import router as usage_router
@@ -133,89 +132,6 @@ def json_safe_deep(data):
     if isinstance(data, (list, tuple, set)):
         return [json_safe_deep(v) for v in data]
     return json_safe(data)
-
-
-def read_dataframes(upload: UploadFile, content: bytes) -> list[pd.DataFrame]:
-    """Lee un archivo subido (csv, xlsx o zip) y devuelve una lista de DataFrames.
-
-    Se prioriza un parsing rápido y con bajo consumo de memoria:
-    - Para CSV se intenta primero el motor "pyarrow" (si está disponible) y se
-      desactiva la inferencia agresiva de tipos para evitar múltiples pasadas.
-    - Para Excel se usa openpyxl, manteniendo compatibilidad.
-    """
-
-    ext = os.path.splitext(upload.filename)[1].lower()
-
-    def _sniff_delimiter(sample: bytes):
-        """Detecta el delimitador más probable para CSV a partir de una muestra."""
-        try:
-            decoded = sample.decode("utf-8", errors="ignore")
-            dialect = csv.Sniffer().sniff(decoded)
-            return dialect.delimiter
-        except Exception:
-            return None
-
-    def _read_csv(buffer):
-        # Lee una pequeña muestra para detectar delimitador y luego reinicia el buffer
-        sample = buffer.read(2048)
-        buffer.seek(0)
-        delimiter = _sniff_delimiter(sample)
-
-        read_kwargs = {
-            "dtype_backend": "numpy_nullable",
-            "on_bad_lines": "skip",
-            "low_memory": False,
-        }
-        if delimiter:
-            read_kwargs["sep"] = delimiter
-
-        try:
-            return pd.read_csv(buffer, engine="pyarrow", **read_kwargs)
-        except Exception:
-            # Fallback seguro cuando pyarrow no está disponible en Render
-            fallback_kwargs = {k: v for k, v in read_kwargs.items() if k != "low_memory"}
-            return pd.read_csv(buffer, engine="python", **fallback_kwargs)
-
-    def _read_excel(buffer):
-        return pd.read_excel(buffer, engine="openpyxl")
-
-    if ext in {".csv", ".xlsx"}:
-        buffer = io.BytesIO(content)
-        reader = _read_excel if ext == ".xlsx" else _read_csv
-        return [reader(buffer)]
-
-    if ext == ".zip":
-        try:
-            dataframes = []
-            with zipfile.ZipFile(io.BytesIO(content)) as archive:
-                for name in archive.namelist():
-                    lower_name = name.lower()
-                    if lower_name.endswith("/"):
-                        continue
-                    if lower_name.endswith(".csv"):
-                        with archive.open(name) as f:
-                            dataframes.append(_read_csv(f))
-                    elif lower_name.endswith(".xlsx"):
-                        with archive.open(name) as f:
-                            dataframes.append(_read_excel(f))
-
-            if not dataframes:
-                raise HTTPException(
-                    status_code=400,
-                    detail="El ZIP no contiene archivos .csv o .xlsx válidos.",
-                )
-            return dataframes
-        except HTTPException:
-            raise
-        except Exception as exc:
-            raise HTTPException(
-                status_code=400,
-                detail=f"No se pudo leer el archivo comprimido: {exc}",
-            )
-
-    raise HTTPException(
-        status_code=400, detail="Formato no soportado (.csv, .xlsx o .zip)"
-    )
 
 
 def clean_base64_image(image_data: str):
@@ -458,6 +374,9 @@ async def upload_preview(files: List[UploadFile] = File(...)):
         content = await upload.read()
         dataframes.extend(read_dataframes(upload, content))
 
+    if not dataframes:
+        raise HTTPException(status_code=400, detail="No se pudo leer información de los archivos adjuntos.")
+
     try:
         df = pd.concat(dataframes, ignore_index=True)
     except Exception as exc:
@@ -500,6 +419,9 @@ async def upload_file(
         file_types.add(ext)
         file_names.append(upload.filename)
         dataframes.extend(read_dataframes(upload, content))
+
+    if not dataframes:
+        raise HTTPException(status_code=400, detail="No se pudo leer información de los archivos adjuntos.")
 
     try:
         df = pd.concat(dataframes, ignore_index=True)
