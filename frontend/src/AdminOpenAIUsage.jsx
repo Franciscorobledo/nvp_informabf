@@ -6,7 +6,7 @@ const numberFormatter = new Intl.NumberFormat("es-ES", {
   maximumFractionDigits: 2,
 });
 
-const AdminOpenAIUsage = () => {
+const AdminOpenAIUsage = ({ onUnauthorized }) => {
   const [snapshot, setSnapshot] = useState(null);
   const [billing, setBilling] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -19,7 +19,7 @@ const AdminOpenAIUsage = () => {
   const fetchStatus = useCallback(async () => {
     const token = localStorage.getItem("token");
     if (!token) {
-      setError("No se encontró token. Inicia sesión nuevamente.");
+      onUnauthorized?.("Tu sesión expiró. Inicia sesión nuevamente.");
       setLoading(false);
       return;
     }
@@ -36,6 +36,11 @@ const AdminOpenAIUsage = () => {
       });
 
       if (!response.ok) {
+        if ([401, 403].includes(response.status)) {
+          onUnauthorized?.("La sesión expiró. Vuelve a iniciar sesión.");
+          return;
+        }
+
         const msg = await response.text();
         throw new Error(msg || "No se pudo obtener el estado de OpenAI");
       }
@@ -65,7 +70,7 @@ const AdminOpenAIUsage = () => {
   const handleTokenSave = async () => {
     const token = localStorage.getItem("token");
     if (!token) {
-      setError("No se encontró token. Inicia sesión nuevamente.");
+      onUnauthorized?.("Tu sesión expiró. Inicia sesión nuevamente.");
       return;
     }
 
@@ -89,6 +94,11 @@ const AdminOpenAIUsage = () => {
       });
 
       if (!response.ok) {
+        if ([401, 403].includes(response.status)) {
+          onUnauthorized?.("La sesión expiró. Vuelve a iniciar sesión.");
+          return;
+        }
+
         const body = await response.json().catch(() => null);
         const msg = body?.detail || body?.message || "No se pudo guardar el token";
         throw new Error(msg);

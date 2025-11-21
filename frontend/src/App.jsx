@@ -71,6 +71,12 @@ const App = () => {
     setUser(null);
   };
 
+  const handleUnauthorized = (message) => {
+    console.warn("🚫 Sesión inválida o expirada.");
+    if (message) alert(message);
+    handleLogout();
+  };
+
   const toggleTheme = () => {
     setTheme((prev) => (prev === "dark" ? "light" : "dark"));
     setMenuOpen(false);
@@ -182,6 +188,7 @@ const App = () => {
 
             <FileUpload
               key={user.username}
+              onUnauthorized={handleUnauthorized}
               onDataReceived={(data) =>
                 console.log("📈 Resultado del análisis:", data)
               }
@@ -192,8 +199,8 @@ const App = () => {
                 <h3 className="text-lg font-semibold text-gray-700 dark:text-slate-100 text-center">
                   👤 Administración de usuarios
                 </h3>
-                <UserManagement />
-                <AdminOpenAIUsage />
+                <UserManagement onUnauthorized={handleUnauthorized} />
+                <AdminOpenAIUsage onUnauthorized={handleUnauthorized} />
               </div>
             )}
 
