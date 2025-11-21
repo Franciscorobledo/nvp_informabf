@@ -177,7 +177,14 @@ def generate_ai_summary(df, column_types, date_field=None, metric_field=None):
 # ---------------------------------------------------------------------
 # 🧠 FUNCIÓN PRINCIPAL DE ANÁLISIS
 # ---------------------------------------------------------------------
-def analyze_file(df, date_field=None, metric_field=None, segment_by=None, file_types=None):
+def analyze_file(
+    df,
+    date_field=None,
+    metric_field=None,
+    segment_by=None,
+    file_types=None,
+    usage_context: dict | None = None,
+):
     """Analiza el dataset y genera estadísticas, gráficos e insights."""
     df = df.copy()
     df = df.replace(["", "NA", "NaN", "None"], np.nan).dropna(how="all")
@@ -376,6 +383,7 @@ def analyze_file(df, date_field=None, metric_field=None, segment_by=None, file_t
                 column_types=column_types,
                 heuristics=heuristic_summary,
                 dataset_profile=dataset_profile,
+                usage_context=usage_context,
             ),
         ]
     )

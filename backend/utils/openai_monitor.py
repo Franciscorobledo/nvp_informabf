@@ -205,6 +205,9 @@ def record_openai_usage(
     completion_tokens: int | None,
     input_cost_per_1k: float | None = None,
     output_cost_per_1k: float | None = None,
+    user: str | None = None,
+    source: str | None = None,
+    files: list[str] | None = None,
 ) -> Dict[str, Any]:
     """Actualiza el historial de uso de OpenAI y devuelve un snapshot."""
     usage = _load_usage()
@@ -217,6 +220,7 @@ def record_openai_usage(
     prompt_cost = (prompt_tokens / 1000) * input_cost
     completion_cost = (completion_tokens / 1000) * output_cost
     total_cost = round(prompt_cost + completion_cost, 6)
+    total_tokens = prompt_tokens + completion_tokens
 
     usage["total_prompt_tokens"] = usage.get("total_prompt_tokens", 0) + prompt_tokens
     usage["total_completion_tokens"] = usage.get("total_completion_tokens", 0) + completion_tokens
@@ -230,8 +234,12 @@ def record_openai_usage(
         "model": model,
         "prompt_tokens": prompt_tokens,
         "completion_tokens": completion_tokens,
+        "total_tokens": total_tokens,
         "cost_usd": total_cost,
         "cumulative_cost_usd": usage["total_cost_usd"],
+        "user": user or "desconocido",
+        "source": source or "desconocido",
+        "files": files or [],
     }
 
     # Mantiene un historial corto para mostrar en el panel de administración
@@ -248,6 +256,20 @@ def record_openai_usage(
     )
 
     return get_usage_snapshot()
+
+
+def get_usage_history() -> Dict[str, Any]:
+    """Devuelve el historial completo de uso en disco."""
+
+    usage = _load_usage()
+    usage.setdefault("events", [])
+
+    return {
+        "total_prompt_tokens": usage.get("total_prompt_tokens", 0),
+        "total_completion_tokens": usage.get("total_completion_tokens", 0),
+        "total_cost_usd": usage.get("total_cost_usd", 0.0),
+        "events": usage.get("events", []),
+    }
 
 
 def get_usage_snapshot() -> Dict[str, Any]:
