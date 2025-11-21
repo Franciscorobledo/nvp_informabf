@@ -6,9 +6,10 @@ const numberFormatter = new Intl.NumberFormat("es-ES", {
   maximumFractionDigits: 2,
 });
 
+const integerFormatter = new Intl.NumberFormat("es-ES");
+
 const AdminOpenAIUsage = ({ onUnauthorized }) => {
   const [snapshot, setSnapshot] = useState(null);
-  const [billing, setBilling] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -51,12 +52,10 @@ const AdminOpenAIUsage = ({ onUnauthorized }) => {
         message: data.message,
         ...data.usage,
       });
-      setBilling(data.billing || null);
       setHasKey(Boolean(data.openai_key_present));
     } catch (err) {
       console.error("Error al consultar diagnóstico de OpenAI", err);
       setError(err.message || "Error desconocido al consultar el estado");
-      setBilling(null);
       setHasKey(false);
     } finally {
       setLoading(false);
@@ -115,13 +114,52 @@ const AdminOpenAIUsage = ({ onUnauthorized }) => {
     }
   };
 
-  const renderCard = (label, value, helper) => (
-    <div className="flex flex-col gap-1 p-4 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-sm">
-      <span className="text-sm text-gray-500 dark:text-slate-400">{label}</span>
-      <span className="text-xl font-semibold text-gray-800 dark:text-slate-100">{value}</span>
-      {helper && <span className="text-xs text-gray-400 dark:text-slate-500">{helper}</span>}
-    </div>
-  );
+  const renderEventsTable = () => {
+    const events = snapshot?.events || [];
+
+    if (!events.length) {
+      return (
+        <p className="text-sm text-gray-500 dark:text-slate-400">
+          Aún no hay solicitudes registradas para calcular el costo por llamada.
+        </p>
+      );
+    }
+
+    return (
+      <div className="overflow-x-auto">
+        <table className="min-w-full text-left text-sm">
+          <thead className="bg-slate-50 dark:bg-slate-800/50 text-gray-600 dark:text-slate-300">
+            <tr>
+              <th className="px-3 py-2 font-semibold">Fecha</th>
+              <th className="px-3 py-2 font-semibold">Usuario</th>
+              <th className="px-3 py-2 font-semibold">Fuente</th>
+              <th className="px-3 py-2 font-semibold">Modelo</th>
+              <th className="px-3 py-2 font-semibold">Tokens</th>
+              <th className="px-3 py-2 font-semibold text-right">Costo por solicitud</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-100 dark:divide-slate-700">
+            {events.map((event) => (
+              <tr key={event.timestamp} className="text-gray-700 dark:text-slate-200">
+                <td className="px-3 py-2 whitespace-nowrap">{event.timestamp ? new Date(event.timestamp).toLocaleString() : "—"}</td>
+                <td className="px-3 py-2 whitespace-nowrap text-xs sm:text-sm">{event.user || "desconocido"}</td>
+                <td className="px-3 py-2 whitespace-nowrap text-xs sm:text-sm">{event.source || (event.files?.join(", ") || "desconocido")}</td>
+                <td className="px-3 py-2 whitespace-nowrap text-xs sm:text-sm">{event.model || "—"}</td>
+                <td className="px-3 py-2 text-xs sm:text-sm">
+                  <div className="flex flex-col">
+                    <span>Prompt: {integerFormatter.format(event.prompt_tokens ?? 0)}</span>
+                    <span>Respuesta: {integerFormatter.format(event.completion_tokens ?? 0)}</span>
+                    <span className="text-gray-500 dark:text-slate-400">Total: {integerFormatter.format(event.total_tokens ?? 0)}</span>
+                  </div>
+                </td>
+                <td className="px-3 py-2 text-right font-semibold">${numberFormatter.format(event.cost_usd ?? 0)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
+  };
 
   return (
     <section className="w-full mt-8">
@@ -198,61 +236,7 @@ const AdminOpenAIUsage = ({ onUnauthorized }) => {
               {savingToken ? "Guardando..." : "Guardar token"}
             </button>
           </div>
-      </div>
-
-        {snapshot && (
-          <div className="p-4 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-sm">
-            <p className="text-sm font-semibold text-gray-800 dark:text-slate-100 mb-1">Consumo real (últimos 30 días)</p>
-            {billing ? (
-              <div className="space-y-3 text-sm text-gray-700 dark:text-slate-200">
-                <div
-                  className={`flex items-center gap-2 text-xs font-medium px-2 py-1 rounded-lg inline-flex w-fit ${
-                    billing.status === "ok"
-                      ? "bg-green-50 text-green-700 border border-green-200"
-                      : "bg-amber-50 text-amber-800 border border-amber-200"
-                  }`}
-                >
-                  <span>{billing.status === "ok" ? "Datos completos" : "Datos parciales"}</span>
-                  <span className="text-[11px] text-gray-500 dark:text-slate-400">
-                    {billing.message}
-                  </span>
-                </div>
-
-                {billing.total_usage_usd !== undefined && (
-                  <div className="flex items-center justify-between">
-                    <span>Total facturado</span>
-                    <span className="font-semibold">${numberFormatter.format(billing.total_usage_usd ?? 0)}</span>
-                  </div>
-                )}
-
-                {billing.credits ? (
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
-                    <div className="p-2 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
-                      <span className="block text-slate-500">Créditos otorgados</span>
-                      <span className="font-semibold">${numberFormatter.format(billing.credits.granted_usd ?? 0)}</span>
-                    </div>
-                    <div className="p-2 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
-                      <span className="block text-slate-500">Usado</span>
-                      <span className="font-semibold">${numberFormatter.format(billing.credits.used_usd ?? 0)}</span>
-                    </div>
-                    <div className="p-2 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
-                      <span className="block text-slate-500">Disponible</span>
-                      <span className="font-semibold">${numberFormatter.format(billing.credits.available_usd ?? 0)}</span>
-                    </div>
-                  </div>
-                ) : (
-                  <p className="text-xs text-gray-500 dark:text-slate-400">
-                    No se pudieron obtener los créditos disponibles.
-                  </p>
-                )}
-              </div>
-            ) : (
-              <p className="text-sm text-gray-500 dark:text-slate-400">
-                Sin datos de consumo real. Verifica que el token sea válido.
-              </p>
-            )}
-          </div>
-        )}
+        </div>
       </div>
 
       {!snapshot && !loading && !error && (
@@ -281,29 +265,22 @@ const AdminOpenAIUsage = ({ onUnauthorized }) => {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {renderCard(
-              "Presupuesto total",
-              `$${numberFormatter.format(snapshot.budget_usd ?? 0)}`,
-              "Configurado en OPENAI_BUDGET_USD"
-            )}
-            {renderCard(
-              "Presupuesto restante",
-              `$${numberFormatter.format(snapshot.remaining_budget_usd ?? 0)}`,
-              snapshot.budget_usd
-                ? `${((snapshot.remaining_budget_usd / snapshot.budget_usd) * 100).toFixed(1)}% disponible`
-                : undefined
-            )}
-            {renderCard(
-              "Costo acumulado",
-              `$${numberFormatter.format(snapshot.total_cost_usd ?? 0)}`,
-              snapshot.last_model ? `Modelo más reciente: ${snapshot.last_model}` : undefined
-            )}
-            {renderCard(
-              "Costo promedio por 1K (estimado)",
-              `$${numberFormatter.format((snapshot.total_cost_usd / Math.max((snapshot.total_prompt_tokens + snapshot.total_completion_tokens) / 1000 || 1, 1)))}`,
-              "Basado en los costos registrados"
-            )}
+          <div className="p-4 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-sm space-y-3">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex flex-col">
+                <span className="text-sm font-semibold text-gray-800 dark:text-slate-100">
+                  Últimas solicitudes registradas
+                </span>
+                <span className="text-xs text-gray-500 dark:text-slate-400">
+                  Costos calculados para cada llamada registrada en el historial reciente (máx. 25).
+                </span>
+              </div>
+              <span className="text-xs px-2 py-1 rounded-md bg-slate-100 dark:bg-slate-800 text-gray-600 dark:text-slate-300">
+                {snapshot?.events?.length || 0} registro(s)
+              </span>
+            </div>
+
+            {renderEventsTable()}
           </div>
         </div>
       )}
