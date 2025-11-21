@@ -392,11 +392,14 @@ async def upload_file(
     logging.info(f"📊 Analizando {len(files)} archivo(s) enviados")
 
     dataframes = []
+    file_types = set()
     for upload in files:
         if not validate_file(upload.filename):
             raise HTTPException(status_code=400, detail="Formato no soportado (.csv, .xlsx o .zip)")
 
         content = await upload.read()
+        ext = os.path.splitext(upload.filename)[1].lower()
+        file_types.add(ext)
         dataframes.extend(read_dataframes(upload, content))
 
     try:
@@ -409,7 +412,8 @@ async def upload_file(
             df,
             date_field=date_field,
             metric_field=metric_field,
-            segment_by=segment_field
+            segment_by=segment_field,
+            file_types=file_types,
         )
 
         # 🔹 Normalizar todo para JSON seguro
