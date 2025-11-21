@@ -25,6 +25,9 @@ const FileUpload = ({ onDataReceived, onUnauthorized }) => {
   const [drivePickerReady, setDrivePickerReady] = useState(false);
   const [selectedDriveFileName, setSelectedDriveFileName] = useState("");
   const [driveLoading, setDriveLoading] = useState(false);
+  const [reportEmail, setReportEmail] = useState("");
+  const [sendingReport, setSendingReport] = useState(false);
+  const [emailFeedback, setEmailFeedback] = useState("");
 
   const tokenClientRef = useRef(null);
   const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
@@ -474,6 +477,51 @@ const FileUpload = ({ onDataReceived, onUnauthorized }) => {
     }
   };
 
+  const handleSendReportEmail = async () => {
+    if (!analysis) return;
+    if (!reportEmail.trim()) {
+      setEmailFeedback("Ingresa un correo válido para enviar el reporte.");
+      return;
+    }
+
+    const token = localStorage.getItem("token");
+    if (!token) {
+      onUnauthorized?.("Tu sesión expiró. Inicia sesión nuevamente.");
+      return;
+    }
+
+    try {
+      setSendingReport(true);
+      setEmailFeedback("");
+      const API_URL = import.meta.env.VITE_API_URL || "http://localhost:1000";
+      const res = await fetch(`${API_URL}/report/email`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ analysis, email: reportEmail.trim() }),
+      });
+
+      if (!res.ok) {
+        if ([401, 403].includes(res.status)) {
+          onUnauthorized?.("Tu sesión expiró. Vuelve a iniciar sesión para enviar el reporte.");
+          return;
+        }
+
+        const message = await res.text();
+        throw new Error(message || "No se pudo enviar el reporte por correo.");
+      }
+
+      setEmailFeedback("📨 Reporte enviado correctamente al correo indicado.");
+    } catch (error) {
+      console.error("Error al enviar el reporte:", error);
+      setEmailFeedback(`⚠️ ${error.message}`);
+    } finally {
+      setSendingReport(false);
+    }
+  };
+
   const tabs = [
     { id: "resumen", label: "📄 Resumen" },
     { id: "graficos", label: "📊 Visualizaciones" },
@@ -775,17 +823,61 @@ const FileUpload = ({ onDataReceived, onUnauthorized }) => {
 
             {/* 📑 REPORTE EJECUTIVO */}
             {activeTab === "reporte" && (
-              <div className="flex flex-col items-center text-center space-y-4">
+              <div className="flex flex-col items-center text-center space-y-6 w-full">
                 <p className="text-gray-700 dark:text-slate-200 max-w-2xl">
                   Genera un reporte ejecutivo en PDF con los principales insights,
                   estadísticas y visualizaciones detectadas automáticamente en tu
                   dataset.
                 </p>
+
+                <div className="w-full max-w-2xl space-y-3 text-left">
+                  <label className="block text-sm font-semibold text-gray-700 dark:text-slate-100">
+                    Enviar por correo electrónico
+                  </label>
+                  <p className="text-xs text-gray-600 dark:text-slate-300">
+                    Ingresa un correo para enviar el PDF generado directamente a tu bandeja de entrada.
+                  </p>
+                  <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center">
+                    <input
+                      type="email"
+                      value={reportEmail}
+                      onChange={(e) => setReportEmail(e.target.value)}
+                      placeholder="ejemplo@correo.com"
+                      className="flex-1 rounded-lg border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-emerald-400"
+                    />
+                    <button
+                      onClick={handleSendReportEmail}
+                      disabled={sendingReport || downloading || !analysis}
+                      className={`w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-3 rounded-lg font-semibold transition shadow-md focus:outline-none focus:ring-4 focus:ring-emerald-200 ${
+                        sendingReport || downloading || !analysis
+                          ? "bg-gray-300 text-gray-500 cursor-not-allowed"
+                          : "bg-emerald-500 text-white hover:bg-emerald-600"
+                      }`}
+                    >
+                      <span className="text-lg">✉️</span>
+                      <span className="text-sm sm:text-base font-semibold">
+                        {sendingReport ? "Enviando..." : "Enviar PDF"}
+                      </span>
+                    </button>
+                  </div>
+                  {emailFeedback && (
+                    <p
+                      className={`text-sm text-left ${
+                        emailFeedback.startsWith("⚠️")
+                          ? "text-amber-700 dark:text-amber-300"
+                          : "text-emerald-700 dark:text-emerald-300"
+                      }`}
+                    >
+                      {emailFeedback}
+                    </p>
+                  )}
+                </div>
+
                 <button
                   onClick={handleDownloadReport}
-                  disabled={downloading}
+                  disabled={downloading || !analysis}
                   className={`group relative inline-flex items-center justify-center gap-2 px-8 py-3 rounded-full font-semibold tracking-wide transition-all duration-300 shadow-lg focus:outline-none focus:ring-4 focus:ring-emerald-200 ${
-                    downloading
+                    downloading || !analysis
                       ? "bg-gray-300 text-gray-500 cursor-not-allowed"
                       : "bg-gradient-to-r from-emerald-400 via-emerald-500 to-emerald-600 text-white hover:scale-[1.02] hover:shadow-xl"
                   }`}
@@ -794,7 +886,7 @@ const FileUpload = ({ onDataReceived, onUnauthorized }) => {
                   <span className="text-sm sm:text-base font-semibold">
                     {downloading ? "Generando reporte..." : "Descargar reporte"}
                   </span>
-                  {!downloading && (
+                  {!downloading && analysis && (
                     <span className="pointer-events-none absolute inset-0 rounded-full border border-white/30 blur-sm opacity-0 group-hover:opacity-100 transition" />
                   )}
                 </button>

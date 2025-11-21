@@ -13,7 +13,9 @@ import textwrap
 import zipfile
 from typing import List
 from dotenv import load_dotenv
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr
+import smtplib
+from email.message import EmailMessage
 
 from utils.file_utils import validate_file
 from analysis import analyze_file, detect_column_types
@@ -38,6 +40,12 @@ ALGORITHM = os.getenv("ALGORITHM", "HS256")
 ENV = os.getenv("ENV", "development")
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
 ALLOW_ONRENDER_WILDCARD = os.getenv("ALLOW_ONRENDER_WILDCARD", "true").lower() in {"1", "true", "yes"}
+SMTP_HOST = os.getenv("SMTP_HOST")
+SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
+SMTP_USERNAME = os.getenv("SMTP_USERNAME")
+SMTP_PASSWORD = os.getenv("SMTP_PASSWORD")
+SMTP_FROM = os.getenv("SMTP_FROM", SMTP_USERNAME)
+SMTP_USE_TLS = os.getenv("SMTP_USE_TLS", "true").lower() in {"1", "true", "yes"}
 
 logging.basicConfig(
     level=logging.INFO,
@@ -52,6 +60,11 @@ app = FastAPI(title="InformeBF - Intelligent Data Visualizer")
 
 class OpenAITokenPayload(BaseModel):
     api_key: str
+
+
+class EmailReportPayload(BaseModel):
+    analysis: dict
+    email: EmailStr
 
 # ==============================
 # CONFIGURACIÓN DE CORS
@@ -312,6 +325,52 @@ def build_executive_report(analysis_data: dict) -> io.BytesIO:
     buffer.seek(0)
     return buffer
 
+
+def send_report_email(recipient_email: str, pdf_buffer: io.BytesIO):
+    if not SMTP_HOST:
+        raise HTTPException(
+            status_code=500,
+            detail="No hay configuración SMTP disponible para enviar correos.",
+        )
+
+    sender = SMTP_FROM or SMTP_USERNAME
+    if not sender:
+        raise HTTPException(
+            status_code=500,
+            detail="No se encontró un remitente válido para el envío de correos.",
+        )
+
+    pdf_buffer.seek(0)
+    message = EmailMessage()
+    message["Subject"] = "Reporte Ejecutivo - InformeBF"
+    message["From"] = sender
+    message["To"] = recipient_email
+    message.set_content(
+        "Hola,\n\nAdjuntamos tu reporte ejecutivo generado desde InformeBF en formato PDF."
+    )
+    message.add_attachment(
+        pdf_buffer.getvalue(),
+        maintype="application",
+        subtype="pdf",
+        filename="Reporte_InformeBF.pdf",
+    )
+
+    try:
+        with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as server:
+            if SMTP_USE_TLS:
+                server.starttls()
+            if SMTP_USERNAME and SMTP_PASSWORD:
+                server.login(SMTP_USERNAME, SMTP_PASSWORD)
+            server.send_message(message)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logging.error(f"❌ Error enviando el reporte por correo: {exc}")
+        raise HTTPException(
+            status_code=500,
+            detail="No se pudo enviar el reporte por correo electrónico.",
+        )
+
 # ==============================
 # ENDPOINTS
 # ==============================
@@ -481,3 +540,23 @@ async def generate_report(request: Request):
         "Content-Disposition": "attachment; filename=Reporte_InformeBF.pdf"
     }
     return StreamingResponse(pdf_buffer, media_type="application/pdf", headers=headers)
+
+
+@app.post("/report/email", dependencies=[Depends(get_current_user)])
+async def email_report(payload: EmailReportPayload):
+    if not payload.analysis:
+        raise HTTPException(status_code=400, detail="No se recibió información de análisis para generar el reporte.")
+
+    if not payload.email:
+        raise HTTPException(status_code=400, detail="Debes indicar un correo de destino.")
+
+    try:
+        pdf_buffer = build_executive_report(payload.analysis)
+        send_report_email(payload.email, pdf_buffer)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logging.error(f"❌ Error al enviar el reporte por correo: {exc}")
+        raise HTTPException(status_code=500, detail="No se pudo enviar el reporte por correo.")
+
+    return {"detail": "Reporte enviado correctamente por correo."}
