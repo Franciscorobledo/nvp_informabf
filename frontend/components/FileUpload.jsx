@@ -19,6 +19,71 @@ const FileUpload = ({ onDataReceived }) => {
   const [activeTab, setActiveTab] = useState("resumen");
   const [downloading, setDownloading] = useState(false);
   const [aiCharts, setAiCharts] = useState([]);
+  const [categoryFilter, setCategoryFilter] = useState("todos");
+
+  const categoryKeywords = {
+    ventas: [
+      "venta",
+      "ventas",
+      "sale",
+      "sales",
+      "ingreso",
+      "ingresos",
+      "revenue",
+      "facturacion",
+    ],
+    stock: ["stock", "inventario", "existencia", "bodega", "almacen"],
+    producto: ["producto", "sku", "item", "referencia", "catalogo"],
+    reportes: ["reporte", "report", "analisis", "analysis"],
+  };
+
+  const matchesCategory = (text, category) => {
+    if (category === "todos") return true;
+    const normalized = String(text || "").toLowerCase();
+    const keywords = categoryKeywords[category] || [];
+    return keywords.some((keyword) => normalized.includes(keyword));
+  };
+
+  const filterGraphsByCategory = (graphs = []) => {
+    if (categoryFilter === "todos") return graphs;
+    const filtered = graphs.filter((chart) =>
+      matchesCategory(chart?.column || chart?.title || chart?.type, categoryFilter)
+    );
+    return filtered.length ? filtered : graphs;
+  };
+
+  const filterSummaryByCategory = (summary) => {
+    if (categoryFilter === "todos" || !summary) return summary;
+
+    if (typeof summary === "string") {
+      return matchesCategory(summary, categoryFilter) ? summary : summary;
+    }
+
+    if (Array.isArray(summary)) {
+      const filtered = summary.filter((item) =>
+        matchesCategory(JSON.stringify(item), categoryFilter)
+      );
+      return filtered.length ? filtered : summary;
+    }
+
+    if (typeof summary === "object") {
+      const filteredEntries = Object.entries(summary).filter(([key, value]) =>
+        matchesCategory(`${key} ${value}`, categoryFilter)
+      );
+      return filteredEntries.length ? Object.fromEntries(filteredEntries) : summary;
+    }
+
+    return summary;
+  };
+
+  const filterInsights = (text) => {
+    if (categoryFilter === "todos" || !text) return text;
+    const sentences = text.split(/(?<=[.!?])\s+/);
+    const filtered = sentences.filter((sentence) =>
+      matchesCategory(sentence, categoryFilter)
+    );
+    return filtered.length ? filtered.join(" ") : text;
+  };
 
   const generateAiCharts = (sample = []) => {
     if (!Array.isArray(sample) || sample.length === 0) return [];
@@ -168,6 +233,37 @@ const FileUpload = ({ onDataReceived }) => {
 
   return (
     <div className="flex flex-col items-center space-y-6 w-full max-w-5xl mx-auto text-gray-800 dark:text-slate-100">
+      <div className="w-full px-2">
+        <label
+          htmlFor="category-filter"
+          className="block text-sm font-semibold text-gray-700 dark:text-slate-100"
+        >
+          🎯 Foco del informe
+        </label>
+        <p className="text-xs text-gray-600 dark:text-slate-300 mb-2">
+          Elige un contexto (ventas, stock, producto o reportes) para priorizar
+          los KPIs y visualizaciones más relevantes. "Todo" mantiene el
+          comportamiento actual.
+        </p>
+        <div className="relative w-full sm:w-80">
+          <select
+            id="category-filter"
+            value={categoryFilter}
+            onChange={(e) => setCategoryFilter(e.target.value)}
+            className="w-full appearance-none bg-white dark:bg-slate-900 border border-gray-300 dark:border-slate-700 rounded-lg px-4 py-3 pr-10 shadow-sm text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 dark:text-slate-100"
+          >
+            <option value="todos">🔎 Todo / sin filtro</option>
+            <option value="ventas">🛒 Venta</option>
+            <option value="stock">📦 Stock</option>
+            <option value="producto">📌 Producto</option>
+            <option value="reportes">📈 Reportes de análisis</option>
+          </select>
+          <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-gray-400 dark:text-slate-500">
+            ▼
+          </span>
+        </div>
+      </div>
+
       {/* Subida de archivo */}
       <div className="flex flex-col items-stretch sm:items-center gap-3 w-full px-2">
         <label
@@ -208,6 +304,17 @@ const FileUpload = ({ onDataReceived }) => {
       {/* Resultados del análisis */}
       {analysis && (
         <div className="mt-10 w-full bg-white dark:bg-slate-900 rounded-2xl p-8 shadow-xl border border-gray-200 dark:border-slate-800">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+            <h3 className="text-base font-semibold text-gray-800 dark:text-slate-100">
+              Vista: {categoryFilter === "todos" ? "Todo" : `Enfoque en ${categoryFilter}`}
+            </h3>
+            {categoryFilter !== "todos" && (
+              <p className="text-xs text-gray-500 dark:text-slate-400 italic">
+                Si no hay coincidencias, verás los datos completos para mantener el contexto.
+              </p>
+            )}
+          </div>
+
           {/* Tabs */}
           <div className="flex flex-wrap justify-center gap-2 mb-6 border-b border-gray-200 dark:border-slate-800 pb-2">
             {tabs.map((tab) => (
@@ -234,7 +341,7 @@ const FileUpload = ({ onDataReceived }) => {
                   📄 Resumen del dataset
                 </h3>
                 <pre className="bg-gray-50 dark:bg-slate-800 p-4 rounded-lg border border-gray-200 dark:border-slate-700 text-sm overflow-x-auto">
-                  {JSON.stringify(analysis.summary, null, 2)}
+                  {JSON.stringify(filterSummaryByCategory(analysis.summary), null, 2)}
                 </pre>
               </div>
             )}
@@ -242,8 +349,8 @@ const FileUpload = ({ onDataReceived }) => {
             {/* 📊 GRÁFICOS */}
             {activeTab === "graficos" && (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                {analysis.graphs?.length > 0 ? (
-                  analysis.graphs.map((chart, i) => (
+                {filterGraphsByCategory(analysis.graphs)?.length > 0 ? (
+                  filterGraphsByCategory(analysis.graphs).map((chart, i) => (
                     <div
                       key={i}
                       className="bg-gradient-to-br from-white to-gray-50 dark:from-slate-900 dark:to-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl shadow-md hover:shadow-lg transition-all duration-300 p-4"
@@ -273,13 +380,13 @@ const FileUpload = ({ onDataReceived }) => {
                 <div className="bg-blue-50 dark:bg-slate-800 p-6 rounded-xl border-l-4 border-blue-500 dark:border-blue-400 shadow-sm">
                   <h4 className="font-semibold text-blue-700 dark:text-blue-200 mb-2">💬 Análisis de IA</h4>
                   <p className="text-blue-800 dark:text-blue-100 whitespace-pre-wrap leading-relaxed">
-                    {analysis.ai_summary || "No se recibieron insights de IA."}
+                    {filterInsights(analysis.ai_summary) || "No se recibieron insights de IA."}
                   </p>
                 </div>
 
-                {aiCharts.length > 0 && (
+                {filterGraphsByCategory(aiCharts).length > 0 && (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {aiCharts.map((chart, index) => (
+                    {filterGraphsByCategory(aiCharts).map((chart, index) => (
                       <div
                         key={`${chart.title}-${index}`}
                         className="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-800 shadow p-4"
