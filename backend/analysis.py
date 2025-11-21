@@ -177,7 +177,7 @@ def generate_ai_summary(df, column_types, date_field=None, metric_field=None):
 # ---------------------------------------------------------------------
 # 🧠 FUNCIÓN PRINCIPAL DE ANÁLISIS
 # ---------------------------------------------------------------------
-def analyze_file(df, date_field=None, metric_field=None, segment_by=None):
+def analyze_file(df, date_field=None, metric_field=None, segment_by=None, file_types=None):
     """Analiza el dataset y genera estadísticas, gráficos e insights."""
     df = df.copy()
     df = df.replace(["", "NA", "NaN", "None"], np.nan).dropna(how="all")
@@ -185,6 +185,21 @@ def analyze_file(df, date_field=None, metric_field=None, segment_by=None):
     graphs = []
     summary = {}
     column_types = detect_column_types(df)
+
+    type_counts = {}
+    for detected_type in column_types.values():
+        type_counts[detected_type] = type_counts.get(detected_type, 0) + 1
+
+    dataset_profile = {
+        "row_count": len(df),
+        "column_count": len(df.columns),
+        "type_counts": type_counts,
+        "file_types": sorted(file_types) if file_types else None,
+        "column_examples": {
+            t: [c for c, detected in column_types.items() if detected == t][:3]
+            for t in set(column_types.values())
+        },
+    }
 
     # --------------------------------------------------------------
     # 1️⃣ ESTADÍSTICAS DESCRIPTIVAS
@@ -360,6 +375,7 @@ def analyze_file(df, date_field=None, metric_field=None, segment_by=None):
                 summary=summary,
                 column_types=column_types,
                 heuristics=heuristic_summary,
+                dataset_profile=dataset_profile,
             ),
         ]
     )

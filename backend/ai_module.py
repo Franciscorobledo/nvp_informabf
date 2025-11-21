@@ -54,10 +54,32 @@ def check_openai_status():
             "billing": get_billing_usage(),
         }
 
-def generate_ai_insights(summary: dict, column_types: dict, heuristics: str | None = None):
+def generate_ai_insights(
+    summary: dict,
+    column_types: dict,
+    heuristics: str | None = None,
+    dataset_profile: dict | None = None,
+):
     """Genera un análisis corto y accionable usando OpenAI."""
+    profile = dataset_profile or {}
+    file_types = profile.get("file_types") or ["desconocido"]
+    type_counts = profile.get("type_counts") or {}
+    column_examples = profile.get("column_examples") or {}
+    row_count = profile.get("row_count")
+    column_count = profile.get("column_count")
+
+    dataset_context = f"""
+Contexto del dataset:
+• Tipos de archivo detectados: {", ".join(sorted(file_types))}
+• Tamaño: {row_count} filas x {column_count} columnas
+• Mezcla de columnas: {json.dumps(type_counts, ensure_ascii=False)}
+• Columnas representativas por tipo: {json.dumps(column_examples, ensure_ascii=False)}
+"""
+
     prompt = f"""
 Actúa como analista de negocio senior y storyteller de datos. Redacta en español claro y conciso.
+
+{dataset_context}
 
 Resumen estadístico (JSON):
 {json.dumps(summary, indent=2)}
@@ -68,13 +90,11 @@ Tipos de columna detectados:
 Insights heurísticos previos detectados automáticamente (pueden estar incompletos):
 {heuristics or "(sin heurísticas)"}
 
-Estructura la respuesta en viñetas, máximo 8 líneas en total:
-• Panorama general: volumen de datos y campos clave.
-• Hallazgos clave: patrones o correlaciones numéricas concretas.
-• Riesgos/Calidad: nulos, outliers o sesgos.
-• Recomendaciones accionables: 2-3 acciones priorizadas.
-• Ideas de visualización: 2 gráficos específicos que ayudarían a explicar la historia.
-Evita texto introductorio o conclusiones largas. Prioriza cifras concretas cuando existan en el resumen.
+Estructura la respuesta en viñetas, máximo 8 líneas en total, diferenciando entre información útil y genérica:
+• Accionables priorizados (3 viñetas): acciones específicas basadas en los datos. Si hay fechas, habla de estacionalidad o tendencia; si hay métricas numéricas, menciona cómo optimizarlas; si predominan categorías, sugiere segmentación o ranking. Evita lugares comunes.
+• Señales rápidas (3 viñetas): hallazgos directos del dataset (calidad, correlaciones fuertes, cobertura temporal) que ayuden a decidir próximos análisis.
+• Visualizaciones recomendadas (2 viñetas): gráficos concretos que expliquen los hallazgos para negocio.
+No repitas texto del resumen heurístico; complementa con decisiones accionables y priorizadas. Evita relleno o frases vagas.
 """
 
     try:
