@@ -11,6 +11,7 @@ from datetime import datetime
 import base64
 import textwrap
 import zipfile
+import csv
 from typing import List
 from dotenv import load_dotenv
 from pydantic import BaseModel, EmailStr
@@ -145,12 +146,28 @@ def read_dataframes(upload: UploadFile, content: bytes) -> list[pd.DataFrame]:
 
     ext = os.path.splitext(upload.filename)[1].lower()
 
+    def _sniff_delimiter(sample: bytes):
+        """Detecta el delimitador más probable para CSV a partir de una muestra."""
+        try:
+            decoded = sample.decode("utf-8", errors="ignore")
+            dialect = csv.Sniffer().sniff(decoded)
+            return dialect.delimiter
+        except Exception:
+            return None
+
     def _read_csv(buffer):
+        # Lee una pequeña muestra para detectar delimitador y luego reinicia el buffer
+        sample = buffer.read(2048)
+        buffer.seek(0)
+        delimiter = _sniff_delimiter(sample)
+
         read_kwargs = {
             "dtype_backend": "numpy_nullable",
             "on_bad_lines": "skip",
             "low_memory": False,
         }
+        if delimiter:
+            read_kwargs["sep"] = delimiter
 
         try:
             return pd.read_csv(buffer, engine="pyarrow", **read_kwargs)
