@@ -20,6 +20,11 @@ const FileUpload = ({ onDataReceived }) => {
   const [downloading, setDownloading] = useState(false);
   const [aiCharts, setAiCharts] = useState([]);
   const [categoryFilter, setCategoryFilter] = useState("todos");
+  const [uploadMode, setUploadMode] = useState("local");
+  const [driveFileUrl, setDriveFileUrl] = useState("");
+  const [driveFileName, setDriveFileName] = useState("archivo-drive.xlsx");
+  const [driveAccessToken, setDriveAccessToken] = useState("");
+  const [driveLoading, setDriveLoading] = useState(false);
 
   const categoryKeywords = {
     ventas: [
@@ -142,6 +147,61 @@ const FileUpload = ({ onDataReceived }) => {
   };
 
   const handleFileChange = (e) => setFiles(Array.from(e.target.files || []));
+
+  const extractDriveFileId = (input = "") => {
+    const trimmed = input.trim();
+    if (!trimmed) return "";
+
+    try {
+      const url = new URL(trimmed);
+      const pathMatch = url.pathname.match(/\/d\/([^/]+)/);
+      if (pathMatch?.[1]) return pathMatch[1];
+      const queryId = url.searchParams.get("id");
+      if (queryId) return queryId;
+      return trimmed;
+    } catch (error) {
+      return trimmed;
+    }
+  };
+
+  const handleImportFromDrive = async () => {
+    const fileId = extractDriveFileId(driveFileUrl);
+    if (!fileId)
+      return alert("Ingresa el ID o enlace del archivo en Google Drive.");
+    const token = driveAccessToken.trim();
+
+    try {
+      setDriveLoading(true);
+      const res = await fetch(
+        `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`,
+        {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        }
+      );
+
+      if (!res.ok) {
+        const message = await res.text();
+        throw new Error(
+          message ||
+            "No se pudo descargar el archivo. Verifica el ID, permisos o token."
+        );
+      }
+
+      const blob = await res.blob();
+      const filename = driveFileName?.trim() || `drive-file-${fileId}.xlsx`;
+      const driveFile = new File([blob], filename, { type: blob.type });
+      setFiles([driveFile]);
+      setUploadMode("local");
+      alert(
+        `Archivo importado desde Drive y listo para analizar: ${driveFile.name}`
+      );
+    } catch (error) {
+      console.error("Error al importar desde Drive:", error);
+      alert(error.message);
+    } finally {
+      setDriveLoading(false);
+    }
+  };
 
   const handleUpload = async () => {
     if (!files.length)
@@ -266,33 +326,102 @@ const FileUpload = ({ onDataReceived }) => {
 
       {/* Subida de archivo */}
       <div className="flex flex-col items-stretch sm:items-center gap-3 w-full px-2">
-        <label
-          htmlFor="fileInput"
-          className="w-full sm:w-auto text-sm font-medium text-gray-700 dark:text-slate-200 text-center"
-        >
-          Selecciona uno o varios archivos (.csv, .xlsx o .zip)
-        </label>
-        <input
-          id="fileInput"
-          type="file"
-          onChange={handleFileChange}
-          accept=".csv, .xlsx, .zip"
-          multiple
-          className="w-full sm:w-auto border border-gray-300 dark:border-slate-700 p-3 rounded-lg shadow-sm focus:ring focus:ring-blue-300 bg-white dark:bg-slate-900 dark:text-slate-100 dark:placeholder-slate-400"
-        />
+        <div className="flex flex-wrap gap-2 justify-center">
+          <button
+            onClick={() => setUploadMode("local")}
+            className={`px-4 py-2 rounded-lg text-sm font-semibold border transition ${
+              uploadMode === "local"
+                ? "bg-blue-50 dark:bg-slate-800 border-blue-300 text-blue-700 dark:text-blue-200"
+                : "bg-white dark:bg-slate-900 border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-200"
+            }`}
+          >
+            📁 Subir desde tu equipo
+          </button>
+          <button
+            onClick={() => setUploadMode("drive")}
+            className={`px-4 py-2 rounded-lg text-sm font-semibold border transition ${
+              uploadMode === "drive"
+                ? "bg-blue-50 dark:bg-slate-800 border-blue-300 text-blue-700 dark:text-blue-200"
+                : "bg-white dark:bg-slate-900 border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-200"
+            }`}
+          >
+            ☁️ Importar desde Google Drive
+          </button>
+        </div>
+
+        {uploadMode === "local" ? (
+          <>
+            <label
+              htmlFor="fileInput"
+              className="w-full sm:w-auto text-sm font-medium text-gray-700 dark:text-slate-200 text-center"
+            >
+              Selecciona uno o varios archivos (.csv, .xlsx o .zip)
+            </label>
+            <input
+              id="fileInput"
+              type="file"
+              onChange={handleFileChange}
+              accept=".csv, .xlsx, .zip"
+              multiple
+              className="w-full sm:w-auto border border-gray-300 dark:border-slate-700 p-3 rounded-lg shadow-sm focus:ring focus:ring-blue-300 bg-white dark:bg-slate-900 dark:text-slate-100 dark:placeholder-slate-400"
+            />
+          </>
+        ) : (
+          <div className="w-full space-y-2 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-xl p-4 shadow-sm">
+            <p className="text-sm text-gray-700 dark:text-slate-200 font-medium">
+              Importa un archivo de Google Drive
+            </p>
+            <input
+              type="text"
+              placeholder="Enlace o ID del archivo en Google Drive"
+              value={driveFileUrl}
+              onChange={(e) => setDriveFileUrl(e.target.value)}
+              className="w-full border border-gray-300 dark:border-slate-700 p-2 rounded-lg bg-white dark:bg-slate-800 text-sm"
+            />
+            <input
+              type="text"
+              placeholder="Nombre para el archivo (ej: datos.xlsx)"
+              value={driveFileName}
+              onChange={(e) => setDriveFileName(e.target.value)}
+              className="w-full border border-gray-300 dark:border-slate-700 p-2 rounded-lg bg-white dark:bg-slate-800 text-sm"
+            />
+            <input
+              type="password"
+              placeholder="Token de acceso (si el archivo no es público)"
+              value={driveAccessToken}
+              onChange={(e) => setDriveAccessToken(e.target.value)}
+              className="w-full border border-gray-300 dark:border-slate-700 p-2 rounded-lg bg-white dark:bg-slate-800 text-sm"
+            />
+            <button
+              onClick={handleImportFromDrive}
+              disabled={driveLoading}
+              className={`w-full sm:w-auto px-6 py-3 rounded-lg font-semibold transition-all duration-300 ${
+                driveLoading
+                  ? "bg-gray-400 text-white cursor-not-allowed"
+                  : "bg-emerald-600 hover:bg-emerald-700 text-white shadow"
+              }`}
+            >
+              {driveLoading ? "Importando..." : "Traer archivo de Drive"}
+            </button>
+            <p className="text-xs text-gray-500 dark:text-slate-400">
+              El archivo se descargará desde Drive y se enviará al backend con tu token actual.
+            </p>
+          </div>
+        )}
+
         {files.length > 0 && (
           <p className="text-xs text-gray-500 dark:text-slate-400 text-center sm:text-left">
             {files.length === 1
-              ? `Archivo seleccionado: ${files[0].name}`
-              : `${files.length} archivos seleccionados`}
+              ? `Archivo listo: ${files[0].name}`
+              : `${files.length} archivos listos para analizar`}
           </p>
         )}
 
         <button
           onClick={handleUpload}
-          disabled={loading}
+          disabled={loading || files.length === 0}
           className={`w-full sm:w-auto px-6 py-3 rounded-lg font-semibold transition-all duration-300 ${
-            loading
+            loading || files.length === 0
               ? "bg-gray-400 text-white cursor-not-allowed"
               : "bg-blue-600 hover:bg-blue-700 text-white shadow"
           }`}
