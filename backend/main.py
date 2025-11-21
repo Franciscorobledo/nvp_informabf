@@ -21,6 +21,7 @@ from auth import admin_required, get_current_user, router as auth_router
 from ai_module import check_openai_status
 from utils.openai_keys import get_openai_api_key, persist_openai_api_key
 from utils.openai_monitor import get_usage_snapshot
+from usage_api import router as usage_router
 from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
 from reportlab.lib.utils import ImageReader
@@ -95,6 +96,7 @@ if allow_origin_regex:
 # AUTENTICACIÓN
 # ==============================
 app.include_router(auth_router, prefix="/auth", tags=["Autenticación"])
+app.include_router(usage_router)
 
 # ==============================
 # FUNCIONES AUXILIARES
@@ -396,12 +398,13 @@ async def upload_preview(files: List[UploadFile] = File(...)):
 # ==============================
 # ENDPOINT DE ANÁLISIS COMPLETO
 # ==============================
-@app.post("/upload", dependencies=[Depends(get_current_user)])
+@app.post("/upload")
 async def upload_file(
     files: List[UploadFile] = File(...),
     date_field: str = Form(None),
     metric_field: str = Form(None),
-    segment_field: str = Form(None)
+    segment_field: str = Form(None),
+    current_user=Depends(get_current_user)
 ):
     if not files:
         raise HTTPException(status_code=400, detail="No se recibió ningún archivo para analizar.")
@@ -410,6 +413,7 @@ async def upload_file(
 
     dataframes = []
     file_types = set()
+    file_names: list[str] = []
     for upload in files:
         if not validate_file(upload.filename):
             raise HTTPException(status_code=400, detail="Formato no soportado (.csv, .xlsx o .zip)")
@@ -417,6 +421,7 @@ async def upload_file(
         content = await upload.read()
         ext = os.path.splitext(upload.filename)[1].lower()
         file_types.add(ext)
+        file_names.append(upload.filename)
         dataframes.extend(read_dataframes(upload, content))
 
     try:
@@ -425,12 +430,19 @@ async def upload_file(
         raise HTTPException(status_code=400, detail=f"No se pudo combinar la información: {e}")
 
     try:
+        usage_context = {
+            "user": current_user.get("username"),
+            "source": "upload_analysis",
+            "files": file_names,
+        }
+
         result = analyze_file(
             df,
             date_field=date_field,
             metric_field=metric_field,
             segment_by=segment_field,
             file_types=file_types,
+            usage_context=usage_context,
         )
 
         # 🔹 Normalizar todo para JSON seguro

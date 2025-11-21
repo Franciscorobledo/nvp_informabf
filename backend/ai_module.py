@@ -59,6 +59,7 @@ def generate_ai_insights(
     column_types: dict,
     heuristics: str | None = None,
     dataset_profile: dict | None = None,
+    usage_context: dict | None = None,
 ):
     """Genera un análisis corto y accionable usando OpenAI."""
     profile = dataset_profile or {}
@@ -121,6 +122,9 @@ No repitas texto del resumen heurístico; complementa con decisiones accionables
             model="gpt-4o-mini",
             prompt_tokens=getattr(usage, "prompt_tokens", None) if usage else None,
             completion_tokens=getattr(usage, "completion_tokens", None) if usage else None,
+            user=(usage_context or {}).get("user"),
+            source=(usage_context or {}).get("source"),
+            files=(usage_context or {}).get("files"),
         )
         logging.info("✅ Análisis IA generado correctamente.")
         return f"🤖 Análisis generado por IA\n{content}"
