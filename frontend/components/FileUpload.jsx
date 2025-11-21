@@ -156,6 +156,78 @@ const FileUpload = ({ onDataReceived }) => {
     return filtered.length ? filtered.join(" ") : text;
   };
 
+  const buildSuggestedActions = () => {
+    if (!analysis) return [];
+
+    const pushUnique = (list, value) => {
+      if (value && !list.includes(value)) list.push(value);
+    };
+
+    const focusKey = categoryFilter === "todos" ? "general" : categoryFilter;
+
+    const focusActions = {
+      ventas: [
+        "Planifica una campaña específica para los segmentos con mayor crecimiento y mide el uplift semanal.",
+        "Revisa precios y disponibilidad de los productos top para evitar quiebres durante promociones.",
+        "Activa alertas cuando las ventas caigan frente a la semana anterior y define un responsable por línea.",
+      ],
+      stock: [
+        "Prioriza reposiciones para los SKU con mayor rotación y define stock de seguridad por tienda o canal.",
+        "Identifica excesos de inventario y prepara un plan de liquidación o bundles para liberar bodegas.",
+        "Automatiza alertas de stock mínimo en los productos críticos y confirma con logística su cumplimiento.",
+      ],
+      producto: [
+        "Revisa la conversión y satisfacción de las referencias con peor desempeño y define mejoras rápidas.",
+        "Impulsa bundles o cross-selling usando los productos que aparecen con mayor frecuencia en las ventas.",
+        "Valida consistencia de atributos (precio, categoría, código) antes del siguiente corte de datos.",
+      ],
+      reportes: [
+        "Prepara un resumen ejecutivo con los hallazgos clave y compártelo con los stakeholders esta semana.",
+        "Crea un tablero recurrente con los KPIs destacados y agenda revisión quincenal con los responsables.",
+        "Documenta supuestos y limitaciones del dataset para que el equipo los tenga presentes en decisiones.",
+      ],
+      general: [
+        "Comparte los hallazgos principales con el equipo y acuerda responsables y fechas de seguimiento.",
+        "Crea un tablero semanal con los KPIs críticos y revisa variaciones frente al período anterior.",
+        "Define un ciclo de retroalimentación: mide impacto de las acciones y ajusta en la siguiente iteración.",
+      ],
+    };
+
+    const actions = [];
+
+    const filteredCharts = filterGraphsByCategory(analysis.graphs || []);
+    const [firstChart, secondChart] = filteredCharts;
+
+    if (firstChart?.column || firstChart?.title) {
+      pushUnique(
+        actions,
+        `Monitorea el indicador "${firstChart.column || firstChart.title}" en un tablero semanal y asigna un responsable.`,
+      );
+    }
+
+    if (secondChart?.column || secondChart?.title) {
+      pushUnique(
+        actions,
+        `Profundiza en el gráfico "${secondChart.column || secondChart.title}" para explicar variaciones y documenta el plan de acción.`,
+      );
+    }
+
+    const insightSentences = (filterInsights(analysis.ai_summary) || "")
+      .split(/(?<=[.!?])\s+/)
+      .map((sentence) => sentence.replace(/^[-•\d\s]+/, "").trim())
+      .filter(Boolean);
+
+    insightSentences.slice(0, 2).forEach((sentence) => {
+      pushUnique(actions, `Convierte este hallazgo en tarea concreta: ${sentence}`);
+    });
+
+    (focusActions[focusKey] || focusActions.general).forEach((action) =>
+      pushUnique(actions, action)
+    );
+
+    return actions.slice(0, 4);
+  };
+
   const generateAiCharts = (sample = []) => {
     if (!Array.isArray(sample) || sample.length === 0) return [];
 
@@ -391,6 +463,8 @@ const FileUpload = ({ onDataReceived }) => {
     { id: "reporte", label: "📑 Reporte ejecutivo" },
   ];
 
+  const suggestedActions = buildSuggestedActions();
+
   return (
     <div className="flex flex-col items-center space-y-6 w-full max-w-5xl mx-auto text-gray-800 dark:text-slate-100">
       <div className="w-full px-2">
@@ -599,11 +673,48 @@ const FileUpload = ({ onDataReceived }) => {
             {/* 🤖 INSIGHTS */}
             {activeTab === "insights" && (
               <div className="space-y-6">
-                <div className="bg-blue-50 dark:bg-slate-800 p-6 rounded-xl border-l-4 border-blue-500 dark:border-blue-400 shadow-sm">
-                  <h4 className="font-semibold text-blue-700 dark:text-blue-200 mb-2">💬 Análisis de IA</h4>
-                  <p className="text-blue-800 dark:text-blue-100 whitespace-pre-wrap leading-relaxed">
-                    {filterInsights(analysis.ai_summary) || "No se recibieron insights de IA."}
-                  </p>
+                <div className="grid gap-4 lg:grid-cols-2">
+                  <div className="bg-blue-50 dark:bg-slate-800 p-6 rounded-xl border-l-4 border-blue-500 dark:border-blue-400 shadow-sm">
+                    <h4 className="font-semibold text-blue-700 dark:text-blue-200 mb-2">💬 Análisis de IA</h4>
+                    <p className="text-blue-800 dark:text-blue-100 whitespace-pre-wrap leading-relaxed">
+                      {filterInsights(analysis.ai_summary) || "No se recibieron insights de IA."}
+                    </p>
+                  </div>
+
+                  <div className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-gray-200 dark:border-slate-800 shadow-sm">
+                    <div className="flex items-start justify-between gap-3 mb-3">
+                      <div>
+                        <p className="text-sm font-semibold text-emerald-700 dark:text-emerald-300">
+                          ⚡ Acciones sugeridas
+                        </p>
+                        <p className="text-xs text-gray-500 dark:text-slate-400">
+                          Generadas dinámicamente según tus insights y el enfoque seleccionado.
+                        </p>
+                      </div>
+                      <span className="text-lg" role="img" aria-hidden="true">
+                        ✅
+                      </span>
+                    </div>
+                    {suggestedActions.length > 0 ? (
+                      <ul className="space-y-3">
+                        {suggestedActions.map((action, index) => (
+                          <li
+                            key={`${action}-${index}`}
+                            className="flex items-start gap-3 bg-emerald-50 dark:bg-slate-800/60 rounded-lg p-3 border border-emerald-100 dark:border-slate-700"
+                          >
+                            <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-emerald-600 text-white text-sm font-bold">
+                              {index + 1}
+                            </span>
+                            <p className="text-sm text-gray-800 dark:text-slate-100 leading-relaxed">{action}</p>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="text-sm text-gray-500 dark:text-slate-400">
+                        Carga un archivo y obtén recomendaciones listas para ejecutar.
+                      </p>
+                    )}
+                  </div>
                 </div>
 
                 {filterGraphsByCategory(aiCharts).length > 0 && (
