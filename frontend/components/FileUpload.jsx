@@ -437,16 +437,23 @@ const FileUpload = ({ onDataReceived }) => {
           >
             📁 Subir desde tu equipo
           </button>
-          <button
-            onClick={() => setUploadMode("drive")}
-            className={`px-4 py-2 rounded-lg text-sm font-semibold border transition ${
-              uploadMode === "drive"
-                ? "bg-blue-50 dark:bg-slate-800 border-blue-300 text-blue-700 dark:text-blue-200"
-                : "bg-white dark:bg-slate-900 border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-200"
-            }`}
-          >
-            ☁️ Importar desde Google Drive
-          </button>
+          {/**
+           * Botón deshabilitado temporalmente hasta completar el proceso de
+           * verificación de Google Drive. Se mantiene comentado para
+           * reactivarlo en el futuro sin perder la configuración original.
+           */}
+          {false && (
+            <button
+              onClick={() => setUploadMode("drive")}
+              className={`px-4 py-2 rounded-lg text-sm font-semibold border transition ${
+                uploadMode === "drive"
+                  ? "bg-blue-50 dark:bg-slate-800 border-blue-300 text-blue-700 dark:text-blue-200"
+                  : "bg-white dark:bg-slate-900 border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-200"
+              }`}
+            >
+              ☁️ Importar desde Google Drive
+            </button>
+          )}
         </div>
 
         {uploadMode === "local" ? (
