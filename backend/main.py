@@ -4,6 +4,8 @@ from fastapi.responses import JSONResponse, StreamingResponse
 import pandas as pd
 import io
 import logging
+import uuid
+import threading
 import jwt
 import os
 import numpy as np
@@ -19,11 +21,12 @@ from email.message import EmailMessage
 from utils.file_utils import validate_file
 from analysis import analyze_file, detect_column_types
 from auth import admin_required, get_current_user, router as auth_router
-from ai_module import check_openai_status
+from ai_module import check_openai_status, infer_dataset_schema_with_ai
 from utils.dataframe_loader import read_dataframes
 from utils.openai_keys import get_openai_api_key, persist_openai_api_key
 from utils.openai_monitor import get_usage_snapshot
 from usage_api import router as usage_router
+from utils.job_store import JobStore
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
@@ -57,6 +60,7 @@ logging.info("📄 Variables de entorno cargadas desde: %s", DOTENV_PATH)
 logging.info("🔐 OPENAI_API_KEY presente: %s", "sí" if get_openai_api_key() else "no")
 
 app = FastAPI(title="InformeBF - Intelligent Data Visualizer")
+job_store = JobStore()
 
 
 class OpenAITokenPayload(BaseModel):
@@ -133,6 +137,24 @@ def json_safe_deep(data):
     if isinstance(data, (list, tuple, set)):
         return [json_safe_deep(v) for v in data]
     return json_safe(data)
+
+
+def quick_date_detection(df: pd.DataFrame) -> list[str]:
+    """Intenta detectar columnas de fecha de manera heurística en una muestra."""
+
+    date_columns: list[str] = []
+    sample = df.head(5000)
+    for col in sample.columns:
+        series = sample[col]
+        if pd.api.types.is_datetime64_any_dtype(series):
+            date_columns.append(col)
+            continue
+
+        parsed = pd.to_datetime(series, errors="coerce", infer_datetime_format=True)
+        if parsed.notna().mean() > 0.65:
+            date_columns.append(col)
+
+    return date_columns
 
 
 def clean_base64_image(image_data: str):
@@ -471,7 +493,182 @@ async def upload_preview(files: List[UploadFile] = File(...)):
     }
 
 # ==============================
-# ENDPOINT DE ANÁLISIS COMPLETO
+# GESTIÓN DE TRABAJOS DE ANÁLISIS
+# ==============================
+
+
+def _run_full_analysis_job(
+    job_id: str,
+    df: pd.DataFrame,
+    file_types: set[str],
+    file_names: list[str],
+    date_field: str | None,
+    metric_field: str | None,
+    segment_field: str | None,
+    focus: str | None,
+    current_user,
+):
+    """Ejecuta el análisis completo y actualiza progreso en JobStore."""
+
+    job_store.update_job(job_id, step="analisis_completo", progress=40)
+    try:
+        usage_context = {
+            "user": current_user.get("username") if isinstance(current_user, dict) else None,
+            "source": "upload_analysis",
+            "files": file_names,
+            "focus": focus,
+        }
+
+        result = analyze_file(
+            df,
+            date_field=date_field,
+            metric_field=metric_field,
+            segment_by=segment_field,
+            file_types=file_types,
+            usage_context=usage_context,
+            user_id=current_user.get("username") if isinstance(current_user, dict) else None,
+        )
+
+        job_store.update_job(job_id, step="ia", progress=80)
+
+        safe_sample = df.head(10).applymap(json_safe).to_dict(orient="records")
+        response = json_safe_deep({
+            "summary": result.get("summary", {}),
+            "sample": safe_sample,
+            "graphs": result.get("graphs", []),
+            "ai_summary": result.get("ai_summary", "No se generó resumen automático."),
+            "data_health": result.get("data_health", {}),
+            "refined_insights": result.get("refined_insights", []),
+            "historical_deviation": result.get("historical_deviation"),
+            "learning_updated": result.get("learning_updated", False),
+        })
+
+        job_store.update_job(job_id, step="reporte", progress=100, done=True, result=response)
+        logging.info("✅ Análisis de job %s completado", job_id)
+    except Exception as exc:
+        logging.error("❌ Error en job %s: %s", job_id, exc)
+        job_store.update_job(job_id, step="error", progress=100, done=True, error=str(exc))
+
+
+def _prepare_pre_analysis(df: pd.DataFrame, focus: str | None):
+    sample_df = df.head(10_000)
+    columns = list(sample_df.columns)
+    null_counts = sample_df.isna().sum().to_dict()
+    date_candidates = quick_date_detection(sample_df)
+    numeric_columns = [col for col in sample_df.columns if pd.api.types.is_numeric_dtype(sample_df[col])]
+
+    ai_schema = infer_dataset_schema_with_ai(sample_df, focus=focus)
+
+    return {
+        "rows": int(len(sample_df)),
+        "columns": int(sample_df.shape[1]),
+        "column_names": columns,
+        "null_counts": null_counts,
+        "date_candidates": date_candidates,
+        "numeric_column_count": len(numeric_columns),
+        "ai_schema": ai_schema,
+    }
+
+
+# ==============================
+# ENDPOINTS DE ANÁLISIS CON PROGRESO
+# ==============================
+@app.post("/analyze/start")
+async def start_analysis(
+    files: List[UploadFile] = File(...),
+    focus: str = Form(None),
+    date_field: str = Form(None),
+    metric_field: str = Form(None),
+    segment_field: str = Form(None),
+    current_user=Depends(get_current_user),
+):
+    if not files:
+        raise HTTPException(status_code=400, detail="No se recibió ningún archivo para analizar.")
+
+    logging.info("⚡️ Iniciando análisis con pre-análisis rápido (%s archivos)", len(files))
+
+    dataframes = []
+    file_types = set()
+    file_names: list[str] = []
+    for upload in files:
+        if not validate_file(upload.filename):
+            raise HTTPException(status_code=400, detail="Formato no soportado (.csv, .xlsx o .zip)")
+
+        content = await upload.read()
+        ext = os.path.splitext(upload.filename)[1].lower()
+        file_types.add(ext)
+        file_names.append(upload.filename)
+        dataframes.extend(read_dataframes(upload, content))
+
+    if not dataframes:
+        raise HTTPException(status_code=400, detail="No se pudo leer información de los archivos adjuntos.")
+
+    try:
+        df = pd.concat(dataframes, ignore_index=True)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"No se pudo combinar la información: {exc}")
+
+    df = df.dropna(how="all")
+    pre_analysis = _prepare_pre_analysis(df, focus)
+
+    job_id = str(uuid.uuid4())
+    job_store.create_job(
+        job_id,
+        {
+            "progress": 20,
+            "step": "pre_analisis",
+            "done": False,
+            "result": None,
+        },
+    )
+
+    thread = threading.Thread(
+        target=_run_full_analysis_job,
+        kwargs={
+            "job_id": job_id,
+            "df": df,
+            "file_types": file_types,
+            "file_names": file_names,
+            "date_field": date_field,
+            "metric_field": metric_field,
+            "segment_field": segment_field,
+            "focus": focus,
+            "current_user": current_user,
+        },
+        daemon=True,
+    )
+    thread.start()
+
+    return {
+        "job_id": job_id,
+        "pre_analysis": json_safe_deep(pre_analysis),
+        "progress": 20,
+        "step": "pre_analisis",
+    }
+
+
+@app.get("/analyze/status/{job_id}")
+async def get_analysis_status(job_id: str):
+    job = job_store.get_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job no encontrado")
+
+    response = {
+        "job_id": job_id,
+        "progress": job.get("progress", 0),
+        "step": job.get("step", "cargando"),
+        "done": job.get("done", False),
+    }
+
+    if job.get("done"):
+        response["result"] = job.get("result")
+        response["error"] = job.get("error")
+
+    return response
+
+
+# ==============================
+# ENDPOINT DE ANÁLISIS COMPLETO (sin progreso, compatibilidad)
 # ==============================
 @app.post("/upload")
 async def upload_file(
@@ -484,7 +681,7 @@ async def upload_file(
     if not files:
         raise HTTPException(status_code=400, detail="No se recibió ningún archivo para analizar.")
 
-    logging.info(f"📊 Analizando {len(files)} archivo(s) enviados")
+    logging.info(f"📊 Analizando {len(files)} archivo(s) enviados (sin job)")
 
     dataframes = []
     file_types = set()
@@ -524,7 +721,6 @@ async def upload_file(
             user_id=current_user.get("username") if isinstance(current_user, dict) else None,
         )
 
-        # 🔹 Normalizar todo para JSON seguro
         safe_sample = df.head(10).applymap(json_safe).to_dict(orient="records")
         response = json_safe_deep({
             "summary": result.get("summary", {}),

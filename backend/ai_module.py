@@ -136,3 +136,71 @@ No repitas texto del resumen heurístico; complementa con decisiones accionables
             return "⚠️ El modelo alcanzó el límite de tokens. Prueba con un dataset más pequeño o menor detalle."
         logging.error(f"⚠️ Error al generar resumen con IA: {error_msg}")
         return f"⚠️ Error al generar resumen con IA: {error_msg}"
+
+
+def infer_dataset_schema_with_ai(sample_df, focus: str | None = None):
+    """Infieren campos clave del dataset usando un sample liviano."""
+
+    try:
+        import pandas as pd
+    except Exception:
+        pd = None
+
+    if sample_df is None or getattr(sample_df, "empty", True):
+        return "No se pudo generar el pre-análisis porque la muestra está vacía."
+
+    preview_rows = sample_df.head(10).to_dict(orient="records")
+    column_hints = {}
+
+    if pd is not None:
+        for col in sample_df.columns:
+            series = sample_df[col]
+            column_hints[col] = {
+                "dtype": str(series.dtype),
+                "null_ratio": float(series.isna().mean()),
+                "unique_values": int(series.nunique(dropna=True)),
+            }
+
+    prompt = f"""
+Actúa como arquitecto de datos. Con una muestra pequeña, identifica esquema y columnas útiles.
+
+Contexto de negocio: {focus or 'sin foco declarado'}.
+Muestra de registros (JSON):
+{json.dumps(preview_rows, ensure_ascii=False, indent=2)}
+
+Perfil de columnas:
+{json.dumps(column_hints, ensure_ascii=False, indent=2)}
+
+Entrega en español:
+- Columnas clave sugeridas para fechas, métricas y dimensiones.
+- Problemas rápidos de calidad (nulos, formatos inconsistentes, diccionario).
+- Suposiciones sobre la semántica del dataset.
+Responde en máximo 8 viñetas.
+"""
+
+    try:
+        client = _get_openai_client()
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {
+                    "role": "system",
+                    "content": "Eres experto en arquitectura de datos y detección de esquemas.",
+                },
+                {"role": "user", "content": prompt},
+            ],
+            temperature=0.2,
+            max_tokens=280,
+        )
+        content = response.choices[0].message.content.strip()
+        usage = getattr(response, "usage", None)
+        record_openai_usage(
+            model="gpt-4o-mini",
+            prompt_tokens=getattr(usage, "prompt_tokens", None) if usage else None,
+            completion_tokens=getattr(usage, "completion_tokens", None) if usage else None,
+            source="schema_inference",
+        )
+        return content
+    except Exception as exc:
+        logging.error("⚠️ Error en inferencia de esquema IA: %s", exc)
+        return "⚠️ No se pudo generar el esquema con IA (revisa la clave de OpenAI o intenta más tarde)."
