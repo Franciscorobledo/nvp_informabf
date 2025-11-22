@@ -24,7 +24,12 @@ SECRET_KEY = os.getenv("SECRET_KEY", "DEV_SECRET_KEY")
 ALGORITHM = os.getenv("ALGORITHM", "HS256")
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", 120))
 DEFAULT_ADMIN_PASSWORD = os.getenv("DEFAULT_ADMIN_PASSWORD", "Francisco8")
-STORAGE_DIR = Path(os.getenv("AUTH_STORAGE_DIR", Path(__file__).parent / "data"))
+
+# Se usa una carpeta fuera del árbol del proyecto para evitar que despliegues
+# o actualizaciones del código sobreescriban las cuentas creadas. Se puede
+# personalizar con AUTH_STORAGE_DIR.
+DEFAULT_STORAGE_DIR = Path.home() / ".informabf" / "auth_storage"
+STORAGE_DIR = Path(os.getenv("AUTH_STORAGE_DIR", DEFAULT_STORAGE_DIR))
 
 # Archivos de compatibilidad con la ruta anterior. Si existen, se usarán como
 # base para inicializar el nuevo almacenamiento persistente en STORAGE_DIR.
