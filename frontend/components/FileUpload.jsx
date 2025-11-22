@@ -12,6 +12,7 @@ import {
   YAxis,
 } from "recharts";
 import DatasetSummaryPanel from "./DatasetSummaryPanel";
+import DataMoviePlayer from "./DataMoviePlayer";
 
 const FileUpload = ({ onDataReceived, onUnauthorized }) => {
   const [files, setFiles] = useState([]);
@@ -1210,6 +1211,18 @@ const FileUpload = ({ onDataReceived, onUnauthorized }) => {
                 </div>
               )}
             </div>
+          </div>
+          <div className="mt-10 space-y-3">
+            <div className="space-y-1">
+              <h3 className="text-xl font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                <span role="img" aria-hidden="true">🎬</span>
+                Película de datos
+              </h3>
+              <p className="text-sm text-gray-600 dark:text-slate-300">
+                Recorre los momentos clave del análisis en formato de video interactivo.
+              </p>
+            </div>
+            <DataMoviePlayer dataMovie={analysis?.data_movie ?? null} />
           </div>
         </div>
       )}

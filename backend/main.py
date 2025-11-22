@@ -535,6 +535,8 @@ async def upload_file(
             "refined_insights": result.get("refined_insights", []),
             "historical_deviation": result.get("historical_deviation"),
             "learning_updated": result.get("learning_updated", False),
+            "ai_schema": result.get("ai_schema"),
+            "data_movie": result.get("data_movie"),
         })
 
         logging.info("✅ Análisis completado correctamente.")

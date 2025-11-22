@@ -187,6 +187,272 @@ def json_safe(value):
     return value
 
 
+def _infer_dataset_purpose(df: pd.DataFrame) -> str:
+    """Determina un propósito aproximado del dataset según sus columnas."""
+
+    purpose_keywords = {
+        "ventas": ["venta", "sales", "revenue", "facturacion", "ticket"],
+        "stock": ["stock", "inventario", "existencia", "almacen", "bodega"],
+        "reservas": ["reserva", "booking", "agenda", "turno"],
+        "marketing": ["campana", "campaign", "utm", "clic", "ctr"],
+        "financiero": ["gasto", "costo", "ingreso", "presupuesto", "margen"],
+    }
+
+    lower_columns = " ".join(df.columns.str.lower())
+    for purpose, keywords in purpose_keywords.items():
+        if any(keyword in lower_columns for keyword in keywords):
+            return purpose
+    return "generico"
+
+
+def _infer_ai_schema(df: pd.DataFrame, column_types: dict, date_field: str | None = None) -> dict:
+    """Genera un esquema ligero usando heurísticas cuando no proviene de la IA."""
+
+    date_candidates = [
+        date_field,
+        *_find_best_column(
+            df,
+            [["fecha"], ["date"], ["created"], ["dia"], ["mes"], ["semana"]],
+            return_all=True,
+        ),
+    ]
+    date_candidates = [col for col in date_candidates if col and col in df.columns and column_types.get(col) == "date"]
+
+    numeric_columns = [c for c, t in column_types.items() if t == "numeric"]
+    categorical_columns = [c for c, t in column_types.items() if t == "categorical"]
+
+    detected_date = date_candidates[0] if date_candidates else None
+
+    timeline_granularity = None
+    if detected_date:
+        timeline_granularity = "month"
+        try:
+            parsed = pd.to_datetime(df[detected_date], errors="coerce")
+            duration_days = (parsed.max() - parsed.min()).days if parsed.notna().any() else 0
+            if duration_days <= 40:
+                timeline_granularity = "day"
+            elif duration_days <= 150:
+                timeline_granularity = "week"
+        except Exception:
+            timeline_granularity = "month"
+
+    suggested_kpis: list[str] = []
+    purpose = _infer_dataset_purpose(df)
+    if purpose == "ventas":
+        suggested_kpis = ["ingresos_totales", "ticket_promedio", "ventas_por_periodo"]
+    elif purpose == "stock":
+        suggested_kpis = ["rotacion_stock", "dias_inventory", "quiebres"]
+    elif purpose == "marketing":
+        suggested_kpis = ["clics", "conversiones", "costo_por_lead"]
+    else:
+        suggested_kpis = ["tendencia_principal", "valor_promedio", "variacion"]
+
+    return {
+        "dataset_purpose": purpose,
+        "date_column": detected_date,
+        "main_numeric_metrics": numeric_columns[:3],
+        "main_entity_columns": categorical_columns[:3],
+        "suggested_kpis": suggested_kpis,
+        "timeline_granularity": timeline_granularity,
+    }
+
+
+def _format_time_label(timestamp, granularity: str | None) -> str:
+    if pd.isna(timestamp):
+        return "Bloque"
+
+    if granularity == "week":
+        iso = timestamp.isocalendar()
+        return f"Semana {iso.week} {iso.year}"
+    if granularity == "month":
+        return timestamp.strftime("%Y-%m")
+    if granularity == "day":
+        return timestamp.strftime("%Y-%m-%d")
+    return str(timestamp)
+
+
+def _select_frame_indices(values: list[float], min_frames: int = 6, max_frames: int = 12) -> list[int]:
+    total = len(values)
+    if total == 0:
+        return []
+
+    indices: set[int] = {0, total - 1}
+
+    if total > 2:
+        peak = int(np.nanargmax(values))
+        trough = int(np.nanargmin(values))
+        indices.update({peak, trough})
+
+    if total > 3:
+        indices.add(total // 2)
+    if total > 4:
+        indices.update({total // 3, (2 * total) // 3})
+
+    sorted_indices = sorted(indices)
+    all_indices = list(range(total))
+
+    if len(sorted_indices) < min_frames:
+        remaining = [idx for idx in all_indices if idx not in sorted_indices]
+        needed = min(min_frames, total) - len(sorted_indices)
+        if remaining and needed > 0:
+            picks = np.linspace(0, len(remaining) - 1, num=needed, dtype=int)
+            sorted_indices.extend(remaining[pos] for pos in picks)
+
+    if len(sorted_indices) > max_frames:
+        picks = np.linspace(0, len(sorted_indices) - 1, num=max_frames, dtype=int)
+        sorted_indices = sorted({sorted_indices[pos] for pos in picks})
+
+    return sorted(set(sorted_indices))
+
+
+def _build_frame_title(idx: int, total: int, primary_label: str, is_peak: bool, is_trough: bool) -> str:
+    if idx == 0:
+        return "Inicio del periodo analizado"
+    if idx == total - 1:
+        return "Fin del periodo analizado"
+    if is_peak:
+        return f"Pico máximo de {primary_label}"
+    if is_trough:
+        return f"Momento de menor {primary_label}"
+    return "Evolución intermedia"
+
+
+def build_data_movie(df: pd.DataFrame, ai_schema: dict | None) -> dict | None:
+    """Construye la estructura de película de datos a partir del esquema AI.
+
+    Retorna ``None`` cuando no hay suficientes datos para generar frames.
+    """
+
+    if ai_schema is None or df is None or df.empty:
+        return None
+
+    schema = ai_schema or {}
+    date_col = schema.get("date_column")
+    granularity = schema.get("timeline_granularity") or "none"
+    dataset_purpose = schema.get("dataset_purpose") or "generico"
+
+    column_types = detect_column_types(df)
+    numeric_candidates = [
+        col for col in (schema.get("main_numeric_metrics") or []) if col in df.columns
+    ]
+    if not numeric_candidates:
+        numeric_candidates = [c for c, t in column_types.items() if t == "numeric"]
+
+    has_timeline = False
+    frames_data: list[dict] = []
+
+    if date_col and date_col in df.columns:
+        working = df.copy()
+        working[date_col] = pd.to_datetime(working[date_col], errors="coerce")
+        working = working.dropna(subset=[date_col])
+        if working.empty:
+            return None
+
+        freq_map = {"day": "D", "week": "W", "month": "M"}
+        freq = freq_map.get(granularity or "", "M")
+
+        grouped = working.groupby(pd.Grouper(key=date_col, freq=freq))
+        for ts, group in grouped:
+            if pd.isna(ts) or group.empty:
+                continue
+            metrics: dict[str, float] = {}
+            for metric in numeric_candidates:
+                if metric not in group.columns:
+                    continue
+                numeric_series = pd.to_numeric(group[metric], errors="coerce")
+                if numeric_series.notna().any():
+                    metrics[metric] = float(numeric_series.sum())
+            metrics["count_registros"] = int(len(group))
+
+            frames_data.append(
+                {
+                    "time_label": _format_time_label(ts, granularity or "month"),
+                    "metrics": metrics,
+                }
+            )
+        has_timeline = True
+    else:
+        total_rows = len(df)
+        chunk_count = min(12, max(6, int(np.sqrt(total_rows)) or 1))
+        chunk_size = max(1, int(np.ceil(total_rows / chunk_count)))
+
+        for idx in range(0, total_rows, chunk_size):
+            block = df.iloc[idx : idx + chunk_size]
+            metrics: dict[str, float] = {}
+            for metric in numeric_candidates:
+                if metric not in block.columns:
+                    continue
+                numeric_series = pd.to_numeric(block[metric], errors="coerce")
+                if numeric_series.notna().any():
+                    metrics[metric] = float(numeric_series.mean())
+            metrics["count_registros"] = int(len(block))
+            frames_data.append(
+                {
+                    "time_label": f"Bloque {len(frames_data) + 1}",
+                    "metrics": metrics,
+                }
+            )
+
+    if len(frames_data) < 2:
+        return None
+
+    primary_metric = (numeric_candidates or ["count_registros"])[0]
+    primary_label = primary_metric.replace("_", " ")
+
+    primary_values = [frame["metrics"].get(primary_metric, 0) for frame in frames_data]
+    selected_indices = _select_frame_indices(primary_values)
+    if not selected_indices:
+        return None
+
+    peak_idx = int(np.nanargmax(primary_values)) if primary_values else 0
+    trough_idx = int(np.nanargmin(primary_values)) if primary_values else 0
+
+    frames: list[dict] = []
+    for order, idx in enumerate(selected_indices):
+        frame_data = frames_data[idx]
+        time_label = frame_data["time_label"]
+        metrics = {k: json_safe(v) for k, v in frame_data["metrics"].items()}
+
+        is_peak = idx == peak_idx
+        is_trough = idx == trough_idx
+
+        frame_title = _build_frame_title(idx, len(frames_data), primary_label, is_peak, is_trough)
+        subtitle_value = metrics.get(primary_metric, metrics.get("count_registros"))
+        subtitle = (
+            f"{primary_label.title()}: {subtitle_value:,.2f}" if isinstance(subtitle_value, (int, float)) else "Momento destacado"
+        )
+
+        frames.append(
+            {
+                "id": f"frame_{order + 1}",
+                "order": order,
+                "time_label": time_label,
+                "title": frame_title,
+                "subtitle": subtitle,
+                "metrics": metrics,
+                "context": {
+                    "dataset_purpose": dataset_purpose,
+                    "granularity": granularity or "none",
+                },
+            }
+        )
+
+    friendly_purpose = {
+        "ventas": "ventas",
+        "stock": "inventarios",
+        "reservas": "reservas",
+        "marketing": "campañas",
+        "financiero": "finanzas",
+    }.get(dataset_purpose, "tus datos")
+
+    return {
+        "frames": frames,
+        "has_timeline": has_timeline,
+        "movie_title": f"Película de datos: {friendly_purpose}",
+        "movie_subtitle": "Resumen visual de la evolución de tus datos",
+    }
+
+
 def _get_numeric_series(df, *candidates):
     for name in candidates:
         if name and name in df.columns:
@@ -200,28 +466,28 @@ def _normalize(text: str) -> str:
     return without_accents.lower()
 
 
-def _find_best_column(df, keyword_groups):
-    """Encuentra la columna que mejor coincide con grupos de palabras clave.
+def _find_best_column(df, keyword_groups, return_all: bool = False):
+    """Encuentra columnas que coinciden con grupos de palabras clave.
 
-    En lugar de depender de un único nombre, se otorga un puntaje a cada
-    columna según cuántos términos del grupo estén presentes. Esto permite
-    soportar formatos variados (p. ej. "Gross Sales Amount", "Ventas brutas",
-    "Monto de venta total").
+    Cuando ``return_all`` es ``True`` devuelve todas las columnas ordenadas
+    por puntaje; de lo contrario devuelve solo la mejor coincidencia.
     """
 
-    best_col = None
-    best_score = 0
-
+    ranked: list[tuple[str, int]] = []
     normalized_cols = {col: _normalize(col) for col in df.columns}
     for col, normalized in normalized_cols.items():
         for keywords in keyword_groups:
             if all(k in normalized for k in keywords):
-                score = len(keywords)
-                if score > best_score:
-                    best_score = score
-                    best_col = col
+                ranked.append((col, len(keywords)))
 
-    return best_col
+    if not ranked:
+        return [] if return_all else None
+
+    ranked.sort(key=lambda item: item[1], reverse=True)
+    if return_all:
+        return [col for col, _ in ranked]
+
+    return ranked[0][0]
 
 
 def _learning_profile_path(user_id: str) -> str:
@@ -699,6 +965,8 @@ def analyze_file(
     summary = {}
     column_types = detect_column_types(df)
 
+    ai_schema = _infer_ai_schema(df, column_types, date_field=date_field)
+
     type_counts = {}
     for detected_type in column_types.values():
         type_counts[detected_type] = type_counts.get(detected_type, 0) + 1
@@ -932,6 +1200,8 @@ def analyze_file(
     else:
         refined_insights.append("Perfil de aprendizaje no disponible: falta identificador de usuario.")
 
+    data_movie = build_data_movie(df, ai_schema)
+
     return {
         "summary": summary,
         "graphs": graphs,
@@ -941,4 +1211,6 @@ def analyze_file(
         "refined_insights": refined_insights,
         "historical_deviation": historical_deviation,
         "learning_updated": learning_updated,
+        "ai_schema": ai_schema,
+        "data_movie": data_movie,
     }
