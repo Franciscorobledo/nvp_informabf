@@ -339,6 +339,32 @@ def build_data_movie(df: pd.DataFrame, ai_schema: dict | None) -> dict | None:
         numeric_candidates = [c for c, t in column_types.items() if t == "numeric"]
 
     has_timeline = False
+
+    def _build_block_frames() -> list[dict]:
+        block_frames: list[dict] = []
+        total_rows = len(df)
+        chunk_count = min(12, max(6, int(np.sqrt(total_rows)) or 1))
+        chunk_size = max(1, int(np.ceil(total_rows / chunk_count)))
+
+        for idx in range(0, total_rows, chunk_size):
+            block = df.iloc[idx : idx + chunk_size]
+            metrics: dict[str, float] = {}
+            for metric in numeric_candidates:
+                if metric not in block.columns:
+                    continue
+                numeric_series = pd.to_numeric(block[metric], errors="coerce")
+                if numeric_series.notna().any():
+                    metrics[metric] = float(numeric_series.mean())
+            metrics["count_registros"] = int(len(block))
+            block_frames.append(
+                {
+                    "time_label": f"Bloque {len(block_frames) + 1}",
+                    "metrics": metrics,
+                }
+            )
+
+        return block_frames
+
     frames_data: list[dict] = []
 
     if date_col and date_col in df.columns:
@@ -372,26 +398,11 @@ def build_data_movie(df: pd.DataFrame, ai_schema: dict | None) -> dict | None:
             )
         has_timeline = True
     else:
-        total_rows = len(df)
-        chunk_count = min(12, max(6, int(np.sqrt(total_rows)) or 1))
-        chunk_size = max(1, int(np.ceil(total_rows / chunk_count)))
+        frames_data = _build_block_frames()
 
-        for idx in range(0, total_rows, chunk_size):
-            block = df.iloc[idx : idx + chunk_size]
-            metrics: dict[str, float] = {}
-            for metric in numeric_candidates:
-                if metric not in block.columns:
-                    continue
-                numeric_series = pd.to_numeric(block[metric], errors="coerce")
-                if numeric_series.notna().any():
-                    metrics[metric] = float(numeric_series.mean())
-            metrics["count_registros"] = int(len(block))
-            frames_data.append(
-                {
-                    "time_label": f"Bloque {len(frames_data) + 1}",
-                    "metrics": metrics,
-                }
-            )
+    if len(frames_data) < 2:
+        frames_data = _build_block_frames()
+        has_timeline = False
 
     if len(frames_data) < 2:
         return None
