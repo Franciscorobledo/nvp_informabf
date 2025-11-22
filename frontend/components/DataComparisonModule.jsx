@@ -1,0 +1,302 @@
+import React, { useMemo, useState } from "react";
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Legend,
+  Line,
+  LineChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
+import API_URL from "../src/api";
+
+const focusOptions = [
+  { value: "todo", label: "Todo" },
+  { value: "venta", label: "Venta" },
+  { value: "stock", label: "Stock" },
+  { value: "producto", label: "Producto" },
+  { value: "reportes", label: "Reportes" },
+];
+
+const SummaryStat = ({ label, value, accent }) => (
+  <div className="rounded-xl border border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-800/60 p-4 space-y-1">
+    <p className="text-xs uppercase tracking-wide text-gray-500 dark:text-slate-400">{label}</p>
+    <p className={`text-2xl font-bold ${accent ?? "text-gray-900 dark:text-white"}`}>{value}</p>
+  </div>
+);
+
+const DataComparisonModule = ({ onUnauthorized }) => {
+  const [fileA, setFileA] = useState(null);
+  const [fileB, setFileB] = useState(null);
+  const [labelA, setLabelA] = useState("Dataset A");
+  const [labelB, setLabelB] = useState("Dataset B");
+  const [focus, setFocus] = useState("todo");
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState(null);
+  const [error, setError] = useState("");
+
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+    setError("");
+
+    if (!fileA || !fileB) {
+      setError("Debes seleccionar ambos archivos para comparar.");
+      return;
+    }
+
+    const token = localStorage.getItem("token");
+    if (!token) {
+      onUnauthorized?.("Tu sesión expiró. Inicia sesión nuevamente.");
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append("file_a", fileA);
+    formData.append("file_b", fileB);
+    formData.append("user_focus", focus);
+    formData.append("label_a", labelA || "Dataset A");
+    formData.append("label_b", labelB || "Dataset B");
+
+    try {
+      setLoading(true);
+      const response = await fetch(`${API_URL}/analyze/compare`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+      });
+
+      if (!response.ok) {
+        if ([401, 403].includes(response.status)) {
+          onUnauthorized?.("Tu sesión expiró. Inicia sesión nuevamente.");
+          return;
+        }
+        const msg = await response.text();
+        throw new Error(msg || "No se pudo generar la comparativa.");
+      }
+
+      const data = await response.json();
+      setResult(data);
+    } catch (err) {
+      console.error("Error en comparativa:", err);
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const summary = result?.comparison?.summary;
+  const byEntity = result?.comparison?.by_entity;
+  const byTime = result?.comparison?.by_time;
+
+  const diffPercentLabel = useMemo(() => {
+    if (!summary?.diff_percent && summary?.diff_percent !== 0) return "-";
+    return `${(summary.diff_percent * 100).toFixed(1)}%`;
+  }, [summary]);
+
+  const renderEntityTable = () => {
+    if (!byEntity?.rows?.length) return null;
+
+    return (
+      <div className="overflow-auto rounded-xl border border-gray-200 dark:border-slate-800">
+        <table className="min-w-full text-sm">
+          <thead className="bg-gray-50 dark:bg-slate-800 text-left">
+            <tr>
+              <th className="px-4 py-3 font-semibold text-gray-700 dark:text-slate-200">{byEntity.entity_key || "Entidad"}</th>
+              <th className="px-4 py-3 font-semibold text-gray-700 dark:text-slate-200">{labelA}</th>
+              <th className="px-4 py-3 font-semibold text-gray-700 dark:text-slate-200">{labelB}</th>
+              <th className="px-4 py-3 font-semibold text-gray-700 dark:text-slate-200">Diferencia</th>
+              <th className="px-4 py-3 font-semibold text-gray-700 dark:text-slate-200">Estado</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-200 dark:divide-slate-700">
+            {byEntity.rows.slice(0, 30).map((row) => (
+              <tr key={row.entity} className="hover:bg-gray-50 dark:hover:bg-slate-800/50">
+                <td className="px-4 py-3 font-medium text-gray-900 dark:text-white">{row.entity}</td>
+                <td className="px-4 py-3 text-gray-700 dark:text-slate-200">{row.value_a?.toLocaleString?.("es-CL") ?? row.value_a}</td>
+                <td className="px-4 py-3 text-gray-700 dark:text-slate-200">{row.value_b?.toLocaleString?.("es-CL") ?? row.value_b}</td>
+                <td className={`px-4 py-3 font-semibold ${row.diff_abs >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
+                  {row.diff_abs?.toLocaleString?.("es-CL") ?? row.diff_abs}
+                </td>
+                <td className="px-4 py-3">
+                  <span
+                    className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${
+                      row.status === "up"
+                        ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-200"
+                        : row.status === "new"
+                        ? "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-200"
+                        : row.status === "lost"
+                        ? "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-200"
+                        : "bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-200"
+                    }`}
+                  >
+                    {row.status}
+                  </span>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
+  };
+
+  return (
+    <section className="space-y-6">
+      <div className="text-center space-y-2">
+        <h2 className="text-xl font-semibold text-gray-800 dark:text-white">📈 Comparativa de datos</h2>
+        <p className="text-sm text-gray-600 dark:text-slate-300">
+          Compara dos periodos o fuentes de datos, detecta variaciones y obtén insights rápidos.
+        </p>
+      </div>
+
+      <form onSubmit={handleSubmit} className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className="rounded-2xl border border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 space-y-3">
+          <p className="text-sm font-semibold text-gray-800 dark:text-white">Dataset A</p>
+          <input
+            type="file"
+            accept=".csv,.xlsx,.zip"
+            onChange={(e) => setFileA(e.target.files?.[0] ?? null)}
+            className="w-full text-sm text-gray-700 dark:text-slate-200"
+          />
+          <input
+            type="text"
+            value={labelA}
+            onChange={(e) => setLabelA(e.target.value)}
+            placeholder="Etiqueta (opcional)"
+            className="w-full rounded-lg border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 px-3 py-2 text-sm"
+          />
+        </div>
+
+        <div className="rounded-2xl border border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 space-y-3">
+          <p className="text-sm font-semibold text-gray-800 dark:text-white">Dataset B</p>
+          <input
+            type="file"
+            accept=".csv,.xlsx,.zip"
+            onChange={(e) => setFileB(e.target.files?.[0] ?? null)}
+            className="w-full text-sm text-gray-700 dark:text-slate-200"
+          />
+          <input
+            type="text"
+            value={labelB}
+            onChange={(e) => setLabelB(e.target.value)}
+            placeholder="Etiqueta (opcional)"
+            className="w-full rounded-lg border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 px-3 py-2 text-sm"
+          />
+        </div>
+
+        <div className="lg:col-span-2 flex flex-wrap items-center gap-3 justify-between">
+          <label className="text-sm font-medium text-gray-700 dark:text-slate-200 flex items-center gap-2">
+            Foco de usuario
+            <select
+              value={focus}
+              onChange={(e) => setFocus(e.target.value)}
+              className="rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-sm"
+            >
+              {focusOptions.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="inline-flex items-center gap-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 text-sm font-semibold shadow-md disabled:opacity-60"
+          >
+            {loading ? "Procesando..." : "Comparar"}
+          </button>
+        </div>
+      </form>
+
+      {error && (
+        <div className="rounded-xl border border-red-200 bg-red-50 text-red-700 px-4 py-3 text-sm">
+          {error}
+        </div>
+      )}
+
+      {summary && (
+        <div className="space-y-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <SummaryStat label={`Filas ${labelA}`} value={summary.rows_a.toLocaleString()} />
+            <SummaryStat label={`Filas ${labelB}`} value={summary.rows_b.toLocaleString()} />
+            <SummaryStat label="Variación absoluta" value={summary.diff_abs.toLocaleString(undefined, { maximumFractionDigits: 2 })} accent={summary.diff_abs >= 0 ? "text-emerald-600" : "text-rose-600"} />
+            <SummaryStat label="Variación %" value={diffPercentLabel} accent={summary.diff_percent >= 0 ? "text-emerald-600" : "text-rose-600"} />
+          </div>
+
+          {summary.insight_text && (
+            <div className="rounded-xl border border-blue-200 bg-blue-50 text-blue-800 px-4 py-3 text-sm dark:border-blue-800 dark:bg-blue-900/30 dark:text-blue-100">
+              {summary.insight_text}
+            </div>
+          )}
+
+          {byTime?.has_time && byTime.rows?.length > 0 && (
+            <div className="rounded-2xl border border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-semibold text-gray-800 dark:text-white">Evolución temporal ({byTime.date_column})</p>
+                <span className="text-xs text-gray-500 dark:text-slate-300">Granularidad: {byTime.timeline_granularity || "auto"}</span>
+              </div>
+              <div className="h-72">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={byTime.rows} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                    <XAxis dataKey="period" tick={{ fontSize: 12 }} />
+                    <YAxis tick={{ fontSize: 12 }} />
+                    <Tooltip />
+                    <Legend />
+                    <Line type="monotone" dataKey="metric_a" stroke="#2563eb" name={labelA} strokeWidth={2} dot={false} />
+                    <Line type="monotone" dataKey="metric_b" stroke="#10b981" name={labelB} strokeWidth={2} dot={false} />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          )}
+
+          {byEntity?.rows?.length > 0 && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <div className="rounded-2xl border border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4">
+                  <p className="text-sm font-semibold text-gray-800 dark:text-white mb-3">Top alzas</p>
+                  <div className="h-64">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={byEntity.top_increases} layout="vertical" margin={{ top: 10, right: 10, left: 30, bottom: 10 }}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis type="number" />
+                        <YAxis dataKey="entity" type="category" width={120} />
+                        <Tooltip />
+                        <Bar dataKey="diff_abs" fill="#10b981" name="Diferencia" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4">
+                  <p className="text-sm font-semibold text-gray-800 dark:text-white mb-3">Top caídas</p>
+                  <div className="h-64">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={byEntity.top_decreases} layout="vertical" margin={{ top: 10, right: 10, left: 30, bottom: 10 }}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis type="number" />
+                        <YAxis dataKey="entity" type="category" width={120} />
+                        <Tooltip />
+                        <Bar dataKey="diff_abs" fill="#ef4444" name="Diferencia" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+              </div>
+
+              {renderEntityTable()}
+            </div>
+          )}
+        </div>
+      )}
+    </section>
+  );
+};
+
+export default DataComparisonModule;

@@ -19,7 +19,12 @@ import smtplib
 from email.message import EmailMessage
 
 from utils.file_utils import validate_file
-from analysis import analyze_file, detect_column_types, generate_data_movie_payload
+from analysis import (
+    analyze_file,
+    detect_column_types,
+    generate_data_movie_payload,
+    _infer_ai_schema,
+)
 from auth import admin_required, get_current_user, router as auth_router
 from ai_module import check_openai_status, infer_dataset_schema_with_ai
 from utils.dataframe_loader import read_dataframes
@@ -179,6 +184,232 @@ def add_wrapped_text(canvas_obj, text, x, y, width, line_height=12, font_name="H
         canvas_obj.drawString(x, y, line)
         y -= line_height
     return y
+
+
+def _normalize_dataset(
+    df: pd.DataFrame, focus: str | None
+) -> tuple[pd.DataFrame, dict, dict]:
+    """Limpia un dataframe y obtiene un esquema heurístico + notas de IA."""
+
+    cleaned = df.replace(["", "NA", "NaN", "None"], np.nan).dropna(how="all")
+    column_types = detect_column_types(cleaned)
+    heuristic_schema = _infer_ai_schema(cleaned, column_types)
+    ai_notes = infer_dataset_schema_with_ai(cleaned.head(5_000), focus=focus)
+
+    if isinstance(heuristic_schema, dict):
+        heuristic_schema = {**heuristic_schema, "ai_notes": ai_notes}
+
+    return cleaned, heuristic_schema, column_types
+
+
+def _select_dataset_purpose(focus: str | None, schema_a: dict, schema_b: dict) -> str:
+    if focus and focus != "todo":
+        return focus
+
+    for schema in (schema_a, schema_b):
+        if isinstance(schema, dict):
+            purpose = schema.get("dataset_purpose")
+            if purpose:
+                return purpose
+    return "generico"
+
+
+def _pick_first_column(candidates: list[str], df_a: pd.DataFrame, df_b: pd.DataFrame) -> str | None:
+    for col in candidates:
+        if col and col in df_a.columns and col in df_b.columns:
+            return col
+    for col in candidates:
+        if col and (col in df_a.columns or col in df_b.columns):
+            return col
+    return None
+
+
+def _select_main_metric(
+    schema_a: dict, schema_b: dict, column_types_a: dict, column_types_b: dict
+) -> str | None:
+    candidates: list[str] = []
+    for schema in (schema_a, schema_b):
+        if isinstance(schema, dict):
+            candidates.extend(schema.get("main_numeric_metrics") or [])
+
+    for col in candidates:
+        if (
+            col in column_types_a
+            and column_types_a.get(col) == "numeric"
+            and col in column_types_b
+            and column_types_b.get(col) == "numeric"
+        ):
+            return col
+
+    for col in candidates:
+        if (col in column_types_a and column_types_a.get(col) == "numeric") or (
+            col in column_types_b and column_types_b.get(col) == "numeric"
+        ):
+            return col
+
+    for col, detected in {**column_types_a, **column_types_b}.items():
+        if detected == "numeric":
+            return col
+
+    return None
+
+
+def _select_entity_column(schema_a: dict, schema_b: dict, df_a: pd.DataFrame, df_b: pd.DataFrame) -> str | None:
+    candidates: list[str] = []
+    for schema in (schema_a, schema_b):
+        if isinstance(schema, dict):
+            candidates.extend(schema.get("main_entity_columns") or [])
+
+    if not candidates:
+        object_cols = [
+            col
+            for col in df_a.columns
+            if pd.api.types.is_object_dtype(df_a[col]) or pd.api.types.is_string_dtype(df_a[col])
+        ]
+        candidates.extend(object_cols)
+
+    return _pick_first_column(candidates, df_a, df_b)
+
+
+def _select_date_column(schema_a: dict, schema_b: dict, df_a: pd.DataFrame, df_b: pd.DataFrame) -> str | None:
+    candidates: list[str] = []
+    for schema in (schema_a, schema_b):
+        if isinstance(schema, dict):
+            candidate = schema.get("date_column")
+            if candidate:
+                candidates.append(candidate)
+
+    return _pick_first_column(candidates, df_a, df_b)
+
+
+def _select_timeline_granularity(schema_a: dict, schema_b: dict) -> str:
+    for schema in (schema_a, schema_b):
+        if isinstance(schema, dict):
+            granularity = schema.get("timeline_granularity")
+            if granularity:
+                return granularity
+    return "month"
+
+
+def build_comparison(
+    df_a: pd.DataFrame,
+    df_b: pd.DataFrame,
+    schema_a: dict,
+    schema_b: dict,
+    column_types_a: dict,
+    column_types_b: dict,
+    label_a: str,
+    label_b: str,
+    user_focus: str,
+) -> dict:
+    dataset_purpose = _select_dataset_purpose(user_focus, schema_a, schema_b)
+    main_metric = _select_main_metric(schema_a, schema_b, column_types_a, column_types_b)
+    entity_column = _select_entity_column(schema_a, schema_b, df_a, df_b)
+    date_column = _select_date_column(schema_a, schema_b, df_a, df_b)
+    timeline_granularity = _select_timeline_granularity(schema_a, schema_b)
+
+    if not main_metric:
+        raise HTTPException(status_code=400, detail="No se encontró una métrica principal para comparar.")
+
+    metric_a = pd.to_numeric(df_a.get(main_metric), errors="coerce")
+    metric_b = pd.to_numeric(df_b.get(main_metric), errors="coerce")
+
+    total_a = float(metric_a.sum(skipna=True)) if main_metric in df_a.columns else 0.0
+    total_b = float(metric_b.sum(skipna=True)) if main_metric in df_b.columns else 0.0
+    diff_abs = total_b - total_a
+    diff_percent = (diff_abs / total_a) if total_a else None
+
+    by_entity = {"entity_key": entity_column, "rows": [], "top_increases": [], "top_decreases": [], "new_entities": [], "lost_entities": []}
+    if entity_column and main_metric in df_a.columns and main_metric in df_b.columns:
+        group_a = (
+            df_a.groupby(entity_column)[main_metric]
+            .apply(lambda s: pd.to_numeric(s, errors="coerce").sum())
+            .rename("value_a")
+        )
+        group_b = (
+            df_b.groupby(entity_column)[main_metric]
+            .apply(lambda s: pd.to_numeric(s, errors="coerce").sum())
+            .rename("value_b")
+        )
+
+        merged = pd.concat([group_a, group_b], axis=1).fillna(0)
+        merged["diff_abs"] = merged["value_b"] - merged["value_a"]
+        merged["diff_percent"] = merged.apply(
+            lambda r: (r["diff_abs"] / r["value_a"]) if r["value_a"] else None, axis=1
+        )
+
+        def status_row(row):
+            if row["value_a"] == 0 and row["value_b"] > 0:
+                return "new"
+            if row["value_a"] > 0 and row["value_b"] == 0:
+                return "lost"
+            return "up" if row["diff_abs"] > 0 else "down"
+
+        merged["status"] = merged.apply(status_row, axis=1)
+        merged_reset = merged.reset_index().rename(columns={entity_column: "entity"})
+
+        rows = merged_reset.to_dict(orient="records")
+        by_entity["rows"] = rows
+        by_entity["top_increases"] = sorted(rows, key=lambda r: r.get("diff_abs", 0), reverse=True)[:5]
+        by_entity["top_decreases"] = sorted(rows, key=lambda r: r.get("diff_abs", 0))[:5]
+        by_entity["new_entities"] = [r for r in rows if r.get("status") == "new"]
+        by_entity["lost_entities"] = [r for r in rows if r.get("status") == "lost"]
+
+    by_time = {"has_time": False, "date_column": date_column, "rows": [], "timeline_granularity": timeline_granularity}
+    if date_column and main_metric in df_a.columns and main_metric in df_b.columns:
+        freq_map = {"day": "D", "week": "W", "month": "M"}
+        freq = freq_map.get(timeline_granularity, "M")
+        by_time["has_time"] = True
+
+        def _prepare_time(df: pd.DataFrame, label: str):
+            copy = df[[date_column, main_metric]].copy()
+            copy[date_column] = pd.to_datetime(copy[date_column], errors="coerce")
+            copy = copy.dropna(subset=[date_column])
+            copy[main_metric] = pd.to_numeric(copy[main_metric], errors="coerce")
+            return copy.groupby(pd.Grouper(key=date_column, freq=freq))[main_metric].sum().rename(label)
+
+        series_a = _prepare_time(df_a, "metric_a") if date_column in df_a.columns else None
+        series_b = _prepare_time(df_b, "metric_b") if date_column in df_b.columns else None
+
+        if series_a is not None or series_b is not None:
+            merged = pd.concat([series_a, series_b], axis=1).fillna(0)
+            merged["diff_abs"] = merged["metric_b"] - merged["metric_a"]
+            merged["diff_percent"] = merged.apply(
+                lambda r: (r["diff_abs"] / r["metric_a"]) if r["metric_a"] else None, axis=1
+            )
+            merged_reset = merged.reset_index().rename(columns={date_column: "period"})
+            merged_reset["period"] = merged_reset["period"].dt.strftime("%Y-%m-%d")
+            by_time["rows"] = merged_reset.to_dict(orient="records")
+
+    insight_text = f"La variación total de {main_metric} es de {diff_percent:.1%}." if diff_percent is not None else None
+    if by_entity.get("top_increases"):
+        top_names = ", ".join(r["entity"] for r in by_entity["top_increases"][:3])
+        insight_text = (insight_text or "") + f" Principales alzas: {top_names}."
+    if by_entity.get("top_decreases"):
+        bottom_names = ", ".join(r["entity"] for r in by_entity["top_decreases"][:3])
+        insight_text = (insight_text or "") + f" Principales caídas: {bottom_names}."
+
+    comparison = {
+        "summary": {
+            "label_a": label_a,
+            "label_b": label_b,
+            "rows_a": int(len(df_a)),
+            "rows_b": int(len(df_b)),
+            "columns_a": int(df_a.shape[1]),
+            "columns_b": int(df_b.shape[1]),
+            "dataset_purpose": dataset_purpose,
+            "main_metric": main_metric,
+            "total_a": total_a,
+            "total_b": total_b,
+            "diff_abs": diff_abs,
+            "diff_percent": diff_percent,
+            "insight_text": insight_text,
+        },
+        "by_entity": by_entity,
+        "by_time": by_time,
+    }
+
+    return json_safe_deep(comparison)
 
 
 def build_executive_report(analysis_data: dict) -> io.BytesIO:
@@ -771,6 +1002,68 @@ async def analyze_data_movie(
     except Exception as exc:
         logging.error("❌ Error generando película de datos: %s", exc)
         raise HTTPException(status_code=500, detail=f"Error al generar la película de datos: {exc}")
+
+
+@app.post("/analyze/compare")
+async def compare_datasets(
+    file_a: UploadFile = File(...),
+    file_b: UploadFile = File(...),
+    user_focus: str = Form("todo"),
+    label_a: str = Form("Dataset A"),
+    label_b: str = Form("Dataset B"),
+    current_user=Depends(get_current_user),
+):
+    """Compara dos archivos y entrega métricas y variaciones clave."""
+
+    for upload in (file_a, file_b):
+        if not validate_file(upload.filename):
+            raise HTTPException(status_code=400, detail="Formato no soportado (.csv, .xlsx o .zip)")
+
+    content_a, content_b = await file_a.read(), await file_b.read()
+    dataframes_a = read_dataframes(file_a, content_a)
+    dataframes_b = read_dataframes(file_b, content_b)
+
+    if not dataframes_a or not dataframes_b:
+        raise HTTPException(status_code=400, detail="No se pudieron leer ambos archivos para la comparativa.")
+
+    try:
+        df_a = pd.concat(dataframes_a, ignore_index=True)
+        df_b = pd.concat(dataframes_b, ignore_index=True)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"No se pudieron combinar los archivos: {exc}")
+
+    try:
+        df_a, ai_schema_a, column_types_a = _normalize_dataset(df_a, user_focus)
+        df_b, ai_schema_b, column_types_b = _normalize_dataset(df_b, user_focus)
+
+        comparison = build_comparison(
+            df_a,
+            df_b,
+            ai_schema_a if isinstance(ai_schema_a, dict) else {},
+            ai_schema_b if isinstance(ai_schema_b, dict) else {},
+            column_types_a,
+            column_types_b,
+            label_a,
+            label_b,
+            user_focus,
+        )
+
+        return JSONResponse(
+            content=json_safe_deep(
+                {
+                    "label_a": label_a,
+                    "label_b": label_b,
+                    "ai_schema_a": ai_schema_a,
+                    "ai_schema_b": ai_schema_b,
+                    "comparison": comparison,
+                }
+            )
+        )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logging.error("❌ Error en comparativa: %s", exc)
+        raise HTTPException(status_code=500, detail=f"Error al generar la comparativa: {exc}")
 
 
 @app.post("/report", dependencies=[Depends(get_current_user)])
