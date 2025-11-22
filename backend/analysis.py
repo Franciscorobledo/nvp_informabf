@@ -1,4 +1,6 @@
 import io
+import json
+import os
 import base64
 import unicodedata
 import pandas as pd
@@ -21,6 +23,7 @@ plt.style.use("seaborn-v0_8-whitegrid")
 # controlar consumo de memoria/CPU en Render sin perder tendencias globales.
 MAX_PLOT_ROWS = 5000
 MAX_CORR_COLUMNS = 12
+LEARNING_BASE_PATH = "/tmp/learning_profiles"
 
 
 # ---------------------------------------------------------------------
@@ -219,6 +222,215 @@ def _find_best_column(df, keyword_groups):
                     best_col = col
 
     return best_col
+
+
+def _learning_profile_path(user_id: str) -> str:
+    user_dir = os.path.join(LEARNING_BASE_PATH, user_id)
+    os.makedirs(user_dir, exist_ok=True)
+    return os.path.join(user_dir, "learning_profile.json")
+
+
+def _load_learning_profile(user_id: str) -> dict | None:
+    if not user_id:
+        return None
+    path = _learning_profile_path(user_id)
+    if not os.path.exists(path):
+        return None
+    try:
+        with open(path, "r", encoding="utf-8") as fh:
+            return json.load(fh)
+    except Exception:
+        return None
+
+
+def _persist_learning_profile(user_id: str, profile: dict) -> None:
+    if not user_id:
+        return
+    path = _learning_profile_path(user_id)
+    try:
+        with open(path, "w", encoding="utf-8") as fh:
+            json.dump(profile, fh, ensure_ascii=False, indent=2)
+    except Exception as exc:
+        print(f"⚠️ No se pudo guardar el learning_profile: {exc}")
+
+
+def _compute_current_learning_stats(df: pd.DataFrame, column_types: dict) -> dict:
+    stats = {
+        "columns": {},
+        "anomalies": [],
+        "stock_levels": None,
+    }
+
+    stock_col = _find_best_column(
+        df,
+        [["stock"], ["inventario"], ["existencia"], ["bodega"], ["almacen"], ["inventory"]],
+    )
+    if stock_col:
+        stock_series = pd.to_numeric(df[stock_col], errors="coerce")
+        if stock_series.notna().any():
+            stats["stock_levels"] = {
+                "column": stock_col,
+                "typical_level": float(stock_series.mean()),
+            }
+
+    for col, detected_type in column_types.items():
+        series = df[col]
+        null_ratio = series.isna().mean()
+        entry = {
+            "type": detected_type,
+            "null_ratio": float(null_ratio),
+        }
+
+        if detected_type == "numeric":
+            numeric_series = pd.to_numeric(series, errors="coerce")
+            if numeric_series.notna().any():
+                desc = numeric_series.describe()
+                q1, q3 = numeric_series.quantile([0.25, 0.75])
+                iqr = q3 - q1
+                lower, upper = q1 - 1.5 * iqr, q3 + 1.5 * iqr
+                outlier_ratio = ((numeric_series < lower) | (numeric_series > upper)).mean()
+
+                entry.update(
+                    {
+                        "mean": float(desc.get("mean", 0)),
+                        "min": float(desc.get("min", 0)),
+                        "max": float(desc.get("max", 0)),
+                        "std": float(desc.get("std", 0) if not np.isnan(desc.get("std", 0)) else 0),
+                        "range": {"p25": float(q1), "p75": float(q3)},
+                        "outlier_ratio": float(outlier_ratio),
+                    }
+                )
+
+                if outlier_ratio > 0.1:
+                    stats["anomalies"].append(f"{col}: {outlier_ratio:.0%} de outliers")
+        else:
+            entry.update({"mean": None, "min": None, "max": None, "std": None, "range": None})
+
+        stats["columns"][col] = entry
+
+    stats["generated_at"] = datetime.utcnow().isoformat()
+    return stats
+
+
+def _compare_with_history(current: dict, historical: dict | None) -> tuple[float, list[str]]:
+    if not historical or not historical.get("columns"):
+        return 0.0, ["Sin historial previo: se inicializa el perfil de aprendizaje."]
+
+    deviations: list[float] = []
+    insights: list[str] = []
+    hist_columns = historical.get("columns", {})
+
+    for col, stat in current.get("columns", {}).items():
+        hist = hist_columns.get(col)
+        if not hist:
+            continue
+
+        if stat.get("mean") is not None and hist.get("mean") not in (None, 0):
+            mean_dev = abs(stat["mean"] - hist["mean"]) / max(abs(hist["mean"]), 1e-6)
+            deviations.append(mean_dev)
+            if mean_dev > 0.25:
+                insights.append(f"Variación fuerte en {col}: promedio actual {stat['mean']:.2f} vs histórico {hist['mean']:.2f}")
+
+        if stat.get("null_ratio") is not None and hist.get("null_ratio") is not None:
+            null_dev = abs(stat["null_ratio"] - hist["null_ratio"])
+            deviations.append(null_dev)
+            if null_dev > 0.05:
+                insights.append(f"Cambio en nulos de {col}: ahora {stat['null_ratio']:.1%} (antes {hist['null_ratio']:.1%})")
+
+        if stat.get("std") is not None and hist.get("std") not in (None, 0):
+            std_dev = abs(stat["std"] - hist["std"]) / max(abs(hist["std"]), 1e-6)
+            deviations.append(std_dev)
+            if std_dev > 0.3:
+                insights.append(f"Patrón de variabilidad distinto en {col}: σ {stat['std']:.2f} vs {hist['std']:.2f}")
+
+    if current.get("stock_levels") and historical.get("stock_levels"):
+        curr_stock = current["stock_levels"]
+        hist_stock = historical["stock_levels"]
+        if curr_stock.get("column") == hist_stock.get("column") and hist_stock.get("typical_level"):
+            stock_dev = abs(curr_stock["typical_level"] - hist_stock["typical_level"]) / max(
+                abs(hist_stock["typical_level"]), 1e-6
+            )
+            deviations.append(stock_dev)
+            if stock_dev > 0.3:
+                insights.append(
+                    f"Nivel de stock inusual en {curr_stock['column']}: {curr_stock['typical_level']:.2f} vs histórico {hist_stock['typical_level']:.2f}"
+                )
+
+    overall = float(round(np.mean(deviations), 3)) if deviations else 0.0
+    return overall, insights
+
+
+def _merge_learning_profile(historical: dict | None, current: dict) -> dict:
+    merged = historical.copy() if historical else {"columns": {}, "anomalies": [], "meta": {"files_seen": 0}}
+    files_seen = merged.get("meta", {}).get("files_seen", 0)
+    new_files_seen = files_seen + 1
+
+    merged["anomalies"] = list(set((historical or {}).get("anomalies", []) + current.get("anomalies", [])))
+
+    for col, stat in current.get("columns", {}).items():
+        existing = merged["columns"].get(col, {})
+        merged["columns"][col] = {
+            "type": stat.get("type") or existing.get("type"),
+            "null_ratio": float(
+                (
+                    existing.get("null_ratio", 0) * files_seen
+                    + (stat.get("null_ratio") or 0)
+                )
+                / new_files_seen
+            ),
+            "mean": None,
+            "min": None,
+            "max": None,
+            "std": None,
+            "range": stat.get("range") or existing.get("range"),
+            "outlier_ratio": stat.get("outlier_ratio", existing.get("outlier_ratio")),
+        }
+
+        if stat.get("mean") is not None:
+            merged["columns"][col]["mean"] = float(
+                (
+                    (existing.get("mean", 0) or 0) * files_seen
+                    + stat["mean"]
+                )
+                / new_files_seen
+            )
+            merged["columns"][col]["min"] = (
+                stat.get("min")
+                if existing.get("min") is None
+                else min(existing.get("min"), stat.get("min"))
+            )
+            merged["columns"][col]["max"] = (
+                stat.get("max")
+                if existing.get("max") is None
+                else max(existing.get("max"), stat.get("max"))
+            )
+            merged["columns"][col]["std"] = float(
+                (
+                    (existing.get("std", 0) or 0) * files_seen
+                    + (stat.get("std") or 0)
+                )
+                / new_files_seen
+            )
+
+    if current.get("stock_levels"):
+        hist_stock = (historical or {}).get("stock_levels")
+        curr_stock = current.get("stock_levels")
+        if hist_stock and hist_stock.get("column") == curr_stock.get("column"):
+            merged["stock_levels"] = {
+                "column": curr_stock.get("column"),
+                "typical_level": float(
+                    (
+                        (hist_stock.get("typical_level", 0) or 0) * files_seen
+                        + curr_stock.get("typical_level", 0)
+                    )
+                    / new_files_seen
+                ),
+            }
+        else:
+            merged["stock_levels"] = curr_stock
+
+    merged["meta"] = {"files_seen": new_files_seen, "last_updated": datetime.utcnow().isoformat()}
+    return merged
 
 
 def generate_sales_insights(df):
@@ -477,6 +689,7 @@ def analyze_file(
     segment_by=None,
     file_types=None,
     usage_context: dict | None = None,
+    user_id: str | None = None,
 ):
     """Analiza el dataset y genera estadísticas, gráficos e insights."""
     df = df.copy()
@@ -702,10 +915,30 @@ def analyze_file(
 
     data_health = compute_health_score(df, column_types)
 
+    refined_insights: list[str] = []
+    historical_deviation: dict | None = None
+    learning_updated = False
+
+    if user_id:
+        current_stats = _compute_current_learning_stats(df, column_types)
+        historical_profile = _load_learning_profile(user_id)
+        deviation_score, insights = _compare_with_history(current_stats, historical_profile)
+        refined_insights.extend(insights)
+        historical_deviation = {"score": deviation_score, "notes": insights}
+
+        updated_profile = _merge_learning_profile(historical_profile, current_stats)
+        _persist_learning_profile(user_id, updated_profile)
+        learning_updated = True
+    else:
+        refined_insights.append("Perfil de aprendizaje no disponible: falta identificador de usuario.")
+
     return {
         "summary": summary,
         "graphs": graphs,
         "ai_summary": ai_summary,
         "sample": sample_data,
         "data_health": data_health,
+        "refined_insights": refined_insights,
+        "historical_deviation": historical_deviation,
+        "learning_updated": learning_updated,
     }

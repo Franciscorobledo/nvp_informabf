@@ -521,6 +521,7 @@ async def upload_file(
             segment_by=segment_field,
             file_types=file_types,
             usage_context=usage_context,
+            user_id=current_user.get("username") if isinstance(current_user, dict) else None,
         )
 
         # 🔹 Normalizar todo para JSON seguro
@@ -531,6 +532,9 @@ async def upload_file(
             "graphs": result.get("graphs", []),
             "ai_summary": result.get("ai_summary", "No se generó resumen automático."),
             "data_health": result.get("data_health", {}),
+            "refined_insights": result.get("refined_insights", []),
+            "historical_deviation": result.get("historical_deviation"),
+            "learning_updated": result.get("learning_updated", False),
         })
 
         logging.info("✅ Análisis completado correctamente.")
