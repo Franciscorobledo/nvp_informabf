@@ -111,6 +111,18 @@ const FileUpload = ({ onDataReceived, onUnauthorized }) => {
     stock: ["stock", "inventario", "existencia", "bodega", "almacen"],
     producto: ["producto", "sku", "item", "referencia", "catalogo"],
     reportes: ["reporte", "report", "analisis", "analysis"],
+    auditoria: [
+      "auditoria",
+      "control",
+      "riesgo",
+      "compliance",
+      "fraude",
+      "hallazgo",
+      "segregacion",
+      "acceso",
+      "log",
+      "trazabilidad",
+    ],
   };
 
   const matchesCategory = (text, category) => {
@@ -293,6 +305,11 @@ const FileUpload = ({ onDataReceived, onUnauthorized }) => {
         "Prepara un resumen ejecutivo con los hallazgos clave y compártelo con los stakeholders esta semana.",
         "Crea un tablero recurrente con los KPIs destacados y agenda revisión quincenal con los responsables.",
         "Documenta supuestos y limitaciones del dataset para que el equipo los tenga presentes en decisiones.",
+      ],
+      auditoria: [
+        "Monitorea la ejecución de controles críticos (plan vs. ejecutado) y documenta las excepciones con evidencias.",
+        "Revisa accesos y segregación de funciones en procesos sensibles y genera alertas por accesos no revisados.",
+        "Da seguimiento a hallazgos abiertos: aging, reincidencias y tiempos de remediación por responsable.",
       ],
       general: [
         "Comparte los hallazgos principales con el equipo y acuerda responsables y fechas de seguimiento.",
@@ -635,6 +652,33 @@ const FileUpload = ({ onDataReceived, onUnauthorized }) => {
 
   const suggestedActions = buildSuggestedActions();
 
+  const getFocusIndicators = () => {
+    if (categoryFilter !== "auditoria") return [];
+
+    return [
+      {
+        title: "Controles y cumplimiento",
+        description:
+          "% de controles críticos ejecutados vs. planificados y tasa de excepciones documentadas.",
+      },
+      {
+        title: "Accesos y segregación",
+        description:
+          "% de accesos críticos revisados, violaciones de segregación de funciones y usuarios con privilegios temporales.",
+      },
+      {
+        title: "Hallazgos y remediación",
+        description:
+          "Número de hallazgos abiertos, días promedio de cierre, reincidencias y SLA de remediación por responsable.",
+      },
+      {
+        title: "Trazabilidad operacional",
+        description:
+          "Transacciones sin evidencia o fuera de horario, cambios en datos maestros y anomalías detectadas en logs.",
+      },
+    ];
+  };
+
   const focusInsightsPanel = () => setActiveTab("insights");
 
   const focusFilter = () => {
@@ -652,9 +696,9 @@ const FileUpload = ({ onDataReceived, onUnauthorized }) => {
           🎯 Foco del informe
         </label>
         <p className="text-xs text-gray-600 dark:text-slate-300 mb-2">
-          Elige un contexto (ventas, stock, producto o reportes) para priorizar
-          los KPIs y visualizaciones más relevantes. "Todo" mantiene el
-          comportamiento actual.
+          Elige un contexto (ventas, stock, producto, auditoría o reportes)
+          para priorizar los KPIs y visualizaciones más relevantes. "Todo"
+          mantiene el comportamiento actual.
         </p>
         <div className="relative w-full sm:w-80">
           <select
@@ -668,12 +712,35 @@ const FileUpload = ({ onDataReceived, onUnauthorized }) => {
             <option value="ventas">🛒 Venta</option>
             <option value="stock">📦 Stock</option>
             <option value="producto">📌 Producto</option>
+            <option value="auditoria">🕵️ Auditoría</option>
             <option value="reportes">📈 Reportes de análisis</option>
           </select>
           <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-gray-400 dark:text-slate-500">
             ▼
           </span>
         </div>
+        {getFocusIndicators().length > 0 && (
+          <div className="mt-3 grid gap-2 sm:grid-cols-2">
+            {getFocusIndicators().map((indicator) => (
+              <div
+                key={indicator.title}
+                className="flex items-start gap-3 rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/30 p-3"
+              >
+                <span className="mt-0.5 text-lg" aria-hidden="true">
+                  📌
+                </span>
+                <div>
+                  <p className="text-sm font-semibold text-amber-900 dark:text-amber-100">
+                    {indicator.title}
+                  </p>
+                  <p className="text-xs text-amber-800/90 dark:text-amber-100/80 leading-relaxed">
+                    {indicator.description}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Subida de archivo */}
