@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from "react";
 import DataUploadAnalysis from "./DataUploadAnalysis";
 import DataMovieModule from "./DataMovieModule";
+import DataComparisonModule from "./DataComparisonModule";
 
 const moduleDefinitions = [
   {
@@ -134,15 +135,7 @@ const HomeModules = ({ user, onUnauthorized, onDataReceived }) => {
         )}
 
         {selectedModule === "comparativa" && (
-          <div className="text-center space-y-2">
-            <p className="text-lg font-semibold text-gray-800 dark:text-white">
-              Comparativa de datos
-            </p>
-            <p className="text-sm text-gray-600 dark:text-slate-300">
-              Estamos construyendo esta experiencia para que puedas cruzar periodos y
-              fuentes. Próximamente estará disponible.
-            </p>
-          </div>
+          <DataComparisonModule onUnauthorized={onUnauthorized} />
         )}
       </div>
     </div>
