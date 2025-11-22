@@ -31,6 +31,7 @@ const FileUpload = ({ onDataReceived, onUnauthorized }) => {
   const [emailFeedback, setEmailFeedback] = useState("");
   const [jobId, setJobId] = useState(null);
   const [progress, setProgress] = useState(0);
+  const [displayProgress, setDisplayProgress] = useState(0);
   const [analysisStep, setAnalysisStep] = useState("cargando");
   const [preAnalysis, setPreAnalysis] = useState(null);
   const [polling, setPolling] = useState(false);
@@ -169,6 +170,23 @@ const FileUpload = ({ onDataReceived, onUnauthorized }) => {
       clearInterval(interval);
     };
   }, [jobId, polling, onUnauthorized, onDataReceived]);
+
+  useEffect(() => {
+    if (displayProgress === progress) return;
+
+    const interval = setInterval(() => {
+      setDisplayProgress((prev) => {
+        const diff = progress - prev;
+        if (Math.abs(diff) < 1) return progress;
+
+        const step = Math.max(Math.abs(diff) * 0.2, 1);
+        const next = prev + Math.sign(diff) * Math.min(step, Math.abs(diff));
+        return Math.min(Math.max(next, 0), 100);
+      });
+    }, 80);
+
+    return () => clearInterval(interval);
+  }, [progress, displayProgress]);
 
   const categoryKeywords = {
     ventas: [
@@ -598,6 +616,7 @@ const FileUpload = ({ onDataReceived, onUnauthorized }) => {
     setPreAnalysis(null);
     setJobId(null);
     setProgress(0);
+    setDisplayProgress(0);
     setAnalysisStep("cargando");
     setStatusMessage("");
     setPolling(false);
@@ -954,16 +973,20 @@ const FileUpload = ({ onDataReceived, onUnauthorized }) => {
                   {getStepLabel(analysisStep)}
                 </h3>
               </div>
-              <span className="text-sm font-semibold text-blue-600 dark:text-blue-300">
-                {Math.round(progress)}%
-              </span>
+              {displayProgress < 100 && (
+                <span className="text-sm font-semibold text-blue-600 dark:text-blue-300">
+                  {Math.round(displayProgress)}%
+                </span>
+              )}
             </div>
-            <div className="w-full h-3 rounded-full bg-gray-100 dark:bg-slate-800 overflow-hidden">
-              <div
-                className="h-full bg-gradient-to-r from-blue-500 via-indigo-500 to-emerald-400 transition-all duration-500"
-                style={{ width: `${Math.min(progress, 100)}%` }}
-              />
-            </div>
+            {displayProgress < 100 && (
+              <div className="w-full h-3 rounded-full bg-gray-100 dark:bg-slate-800 overflow-hidden">
+                <div
+                  className="h-full bg-gradient-to-r from-blue-500 via-indigo-500 to-emerald-400 transition-all duration-500"
+                  style={{ width: `${Math.min(displayProgress, 100)}%` }}
+                />
+              </div>
+            )}
             {statusMessage && (
               <p className="text-xs text-gray-600 dark:text-slate-300 mt-2">{statusMessage}</p>
             )}
