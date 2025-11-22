@@ -28,6 +28,7 @@ const FileUpload = ({ onDataReceived, onUnauthorized }) => {
   const [reportEmail, setReportEmail] = useState("");
   const [sendingReport, setSendingReport] = useState(false);
   const [emailFeedback, setEmailFeedback] = useState("");
+  const filterSelectRef = useRef(null);
 
   const tokenClientRef = useRef(null);
   const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
@@ -634,6 +635,13 @@ const FileUpload = ({ onDataReceived, onUnauthorized }) => {
 
   const suggestedActions = buildSuggestedActions();
 
+  const focusInsightsPanel = () => setActiveTab("insights");
+
+  const focusFilter = () => {
+    setActiveTab("resumen");
+    filterSelectRef.current?.focus();
+  };
+
   return (
     <div className="flex flex-col items-center space-y-6 w-full max-w-5xl mx-auto text-gray-800 dark:text-slate-100">
       <div className="w-full px-2">
@@ -653,6 +661,7 @@ const FileUpload = ({ onDataReceived, onUnauthorized }) => {
             id="category-filter"
             value={categoryFilter}
             onChange={(e) => setCategoryFilter(e.target.value)}
+            ref={filterSelectRef}
             className="w-full appearance-none bg-white dark:bg-slate-900 border border-gray-300 dark:border-slate-700 rounded-lg px-4 py-3 pr-10 shadow-sm text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 dark:text-slate-100"
           >
             <option value="todos">🔎 Todo / sin filtro</option>
@@ -768,234 +777,372 @@ const FileUpload = ({ onDataReceived, onUnauthorized }) => {
 
       {/* Resultados del análisis */}
       {analysis && (
-        <div className="mt-10 w-full bg-white dark:bg-slate-900 rounded-2xl p-8 shadow-xl border border-gray-200 dark:border-slate-800">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
-            <h3 className="text-base font-semibold text-gray-800 dark:text-slate-100">
-              Vista: {categoryFilter === "todos" ? "Todo" : `Enfoque en ${categoryFilter}`}
-            </h3>
+        <div className="mt-10 w-full space-y-4">
+          <div className="relative overflow-hidden rounded-3xl border border-gray-200 dark:border-slate-800 bg-gradient-to-r from-white via-gray-50 to-blue-50 dark:from-slate-900 dark:via-slate-900 dark:to-slate-950 shadow-2xl p-6">
+            <div className="absolute inset-y-0 left-0 w-1.5 bg-gradient-to-b from-blue-500 via-indigo-400 to-sky-300" aria-hidden="true" />
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+              <div className="space-y-1">
+                <p className="text-xs uppercase tracking-[0.2em] text-gray-500 dark:text-slate-400">Panel de resultados</p>
+                <h3 className="text-2xl font-bold text-gray-900 dark:text-white">
+                  Vista {categoryFilter === "todos" ? "general" : `enfoque en ${categoryFilter}`}
+                </h3>
+                <p className="text-sm text-gray-600 dark:text-slate-300 max-w-2xl">
+                  Una experiencia tipo workspace para revisar resumen, visualizaciones, insights de IA y el reporte ejecutivo en tarjetas limpias.
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-3 justify-end">
+                <button
+                  onClick={focusFilter}
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-gray-200 dark:border-slate-700 bg-white/80 dark:bg-slate-800 text-gray-800 dark:text-slate-100 shadow-sm hover:shadow-md transition"
+                >
+                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d="M4 6h16" />
+                    <path d="M6 12h12" />
+                    <path d="M10 18h4" />
+                  </svg>
+                  Filtrar
+                </button>
+                <button
+                  onClick={focusInsightsPanel}
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-blue-200 text-blue-700 bg-blue-50 dark:bg-slate-800/70 dark:border-slate-700 dark:text-blue-200 shadow-sm hover:shadow-md transition"
+                >
+                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d="M12 5v14" />
+                    <path d="M5 12h14" />
+                  </svg>
+                  Resaltar insights
+                </button>
+                <button
+                  onClick={handleDownloadReport}
+                  disabled={downloading || !analysis}
+                  className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl font-semibold transition shadow-sm focus:outline-none focus:ring-2 focus:ring-emerald-200 ${
+                    downloading || !analysis
+                      ? "bg-gray-200 text-gray-500 cursor-not-allowed"
+                      : "bg-emerald-500 text-white hover:bg-emerald-600"
+                  }`}
+                >
+                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d="M12 3v12" />
+                    <path d="M7 12l5 5 5-5" />
+                    <path d="M5 21h14" />
+                  </svg>
+                  {downloading ? "Exportando..." : "Exportar"}
+                </button>
+              </div>
+            </div>
             {categoryFilter !== "todos" && (
-              <p className="text-xs text-gray-500 dark:text-slate-400 italic">
+              <p className="mt-3 text-xs text-gray-500 dark:text-slate-400 italic">
                 Si no hay coincidencias, verás los datos completos para mantener el contexto.
               </p>
             )}
           </div>
 
-          {/* Tabs */}
-          <div className="flex flex-wrap justify-center gap-2 mb-6 border-b border-gray-200 dark:border-slate-800 pb-2">
-            {tabs.map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`px-4 py-2 text-sm font-semibold rounded-lg transition-all duration-300 ${
-                  activeTab === tab.id
-                    ? "text-blue-700 bg-blue-50 dark:text-blue-200 dark:bg-slate-800 border border-blue-200 dark:border-slate-700 shadow-sm"
-                    : "text-gray-600 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-300"
-                }`}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </div>
+          <div className="rounded-2xl border border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xl">
+            <div className="flex flex-wrap gap-2 p-4 border-b border-gray-200 dark:border-slate-800 bg-gray-50/60 dark:bg-slate-900/70">
+              {tabs.map((tab) => (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`px-4 py-2 text-sm font-semibold rounded-xl transition-all duration-300 flex items-center gap-2 ${
+                    activeTab === tab.id
+                      ? "text-blue-700 bg-white shadow-sm border border-blue-200 dark:text-blue-200 dark:bg-slate-800 dark:border-slate-700"
+                      : "text-gray-600 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-300"
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
 
-          {/* Contenido dinámico */}
-          <div className="p-4">
-            {/* 📄 RESUMEN */}
-            {activeTab === "resumen" && (
-              <div>
-                {renderHealthPanel()}
-                <h3 className="text-lg font-semibold mb-2 text-gray-800 dark:text-slate-100">
-                  📄 Resumen del dataset
-                </h3>
-                <DatasetSummaryPanel summary={filterSummaryByCategory(analysis.summary)} />
-              </div>
-            )}
-
-            {/* 📊 GRÁFICOS */}
-            {activeTab === "graficos" && (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                {filterGraphsByCategory(analysis.graphs)?.length > 0 ? (
-                  filterGraphsByCategory(analysis.graphs).map((chart, i) => (
-                    <div
-                      key={i}
-                      className="bg-gradient-to-br from-white to-gray-50 dark:from-slate-900 dark:to-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl shadow-md hover:shadow-lg transition-all duration-300 p-4"
-                    >
-                      <h4 className="text-gray-800 dark:text-slate-100 font-semibold mb-2 text-center">
-                        {chart.column || `Gráfico ${i + 1}`}
-                      </h4>
-                      <img
-                        src={chart.image}
-                        alt={chart.column}
-                        className="rounded-lg shadow-sm border border-gray-100 mx-auto"
-                        style={{ maxHeight: "320px", objectFit: "contain" }}
-                      />
+            <div className="p-6">
+              {/* 📄 RESUMEN */}
+              {activeTab === "resumen" && (
+                <div className="space-y-6">
+                  <div className="relative overflow-hidden rounded-2xl border border-gray-200 dark:border-slate-800 shadow-inner bg-gradient-to-r from-white via-slate-50 to-white dark:from-slate-900 dark:via-slate-900 dark:to-slate-950 p-6">
+                    <div className="absolute left-0 top-0 h-full w-1 bg-blue-500/70 rounded-full" aria-hidden="true" />
+                    <div className="pl-4 space-y-2">
+                      <p className="text-xs font-semibold tracking-wide text-blue-600 dark:text-blue-300">Salud del dataset</p>
+                      <p className="text-sm text-gray-600 dark:text-slate-300">Score de calidad, nulos, outliers y recomendaciones accionables.</p>
                     </div>
-                  ))
-                ) : (
-                  <p className="text-gray-500 dark:text-slate-400 italic text-center">
-                    No hay gráficos disponibles.
-                  </p>
-                )}
-              </div>
-            )}
-
-            {/* 🤖 INSIGHTS */}
-            {activeTab === "insights" && (
-              <div className="space-y-6">
-                <div className="grid gap-4 lg:grid-cols-2">
-                  <div className="bg-blue-50 dark:bg-slate-800 p-6 rounded-xl border-l-4 border-blue-500 dark:border-blue-400 shadow-sm">
-                    <h4 className="font-semibold text-blue-700 dark:text-blue-200 mb-2">💬 Análisis de IA</h4>
-                    <p className="text-blue-800 dark:text-blue-100 whitespace-pre-wrap leading-relaxed">
-                      {filterInsights(analysis.ai_summary) || "No se recibieron insights de IA."}
-                    </p>
+                    <div className="mt-4">{renderHealthPanel()}</div>
                   </div>
 
-                  <div className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-gray-200 dark:border-slate-800 shadow-sm">
-                    <div className="flex items-start justify-between gap-3 mb-3">
+                  <div className="bg-gray-50/80 dark:bg-slate-900/50 rounded-2xl border border-dashed border-gray-200 dark:border-slate-800 p-5">
+                    <div className="flex items-center justify-between flex-wrap gap-3 mb-4">
                       <div>
-                        <p className="text-sm font-semibold text-emerald-700 dark:text-emerald-300">
-                          ⚡ Acciones sugeridas
-                        </p>
-                        <p className="text-xs text-gray-500 dark:text-slate-400">
-                          Generadas dinámicamente según tus insights y el enfoque seleccionado.
-                        </p>
+                        <p className="text-xs uppercase tracking-[0.15em] text-gray-500 dark:text-slate-400">Resumen estructurado</p>
+                        <h3 className="text-lg font-bold text-gray-900 dark:text-white">Dataset en tarjetas</h3>
+                        <p className="text-sm text-gray-600 dark:text-slate-300">KPIs claros (min, max, count) y top 3 categorías en una cuadrícula legible.</p>
                       </div>
-                      <span className="text-lg" role="img" aria-hidden="true">
-                        ✅
+                      <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white dark:bg-slate-800 text-xs text-gray-600 dark:text-slate-200 border border-gray-200 dark:border-slate-700">
+                        <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                        Datos listos para compartir
                       </span>
                     </div>
-                    {suggestedActions.length > 0 ? (
-                      <ul className="space-y-3">
-                        {suggestedActions.map((action, index) => (
-                          <li
-                            key={`${action}-${index}`}
-                            className="flex items-start gap-3 bg-emerald-50 dark:bg-slate-800/60 rounded-lg p-3 border border-emerald-100 dark:border-slate-700"
-                          >
-                            <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-emerald-600 text-white text-sm font-bold">
-                              {index + 1}
+                    <DatasetSummaryPanel summary={filterSummaryByCategory(analysis.summary)} />
+                  </div>
+                </div>
+              )}
+
+              {/* 📊 GRÁFICOS */}
+              {activeTab === "graficos" && (
+                <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+                  {filterGraphsByCategory(analysis.graphs)?.length > 0 ? (
+                    filterGraphsByCategory(analysis.graphs).map((chart, i) => (
+                      <div
+                        key={i}
+                        className="group relative overflow-hidden rounded-2xl border border-gray-200 dark:border-slate-800 bg-gradient-to-br from-white to-slate-50 dark:from-slate-900 dark:to-slate-950 shadow-lg"
+                      >
+                        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-slate-800">
+                          <div className="flex items-center gap-3">
+                            <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-200">
+                              <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                <path d="M3 3v18h18" />
+                                <path d="M7 16l3-3 4 4 5-5" />
+                              </svg>
                             </span>
-                            <p className="text-sm text-gray-800 dark:text-slate-100 leading-relaxed">{action}</p>
-                          </li>
-                        ))}
-                      </ul>
-                    ) : (
-                      <p className="text-sm text-gray-500 dark:text-slate-400">
-                        Carga un archivo y obtén recomendaciones listas para ejecutar.
+                            <div>
+                              <p className="text-xs uppercase tracking-wide text-gray-500 dark:text-slate-400">Visualización</p>
+                              <h4 className="text-base font-semibold text-gray-900 dark:text-white">{chart.column || `Gráfico ${i + 1}`}</h4>
+                            </div>
+                          </div>
+                          <div className="relative">
+                            <div className="inline-flex items-center gap-1 text-xs text-gray-500 dark:text-slate-400 border border-gray-200 dark:border-slate-700 rounded-full px-3 py-1">
+                              <span className="w-2 h-2 rounded-full bg-blue-500" />
+                              Hover para detalles
+                            </div>
+                            <div className="pointer-events-none absolute right-0 mt-2 w-48 rounded-xl bg-white/95 dark:bg-slate-900/95 shadow-lg border border-gray-200 dark:border-slate-800 p-3 text-xs text-gray-600 dark:text-slate-200 opacity-0 translate-y-1 group-hover:opacity-100 group-hover:translate-y-0 transition duration-200">
+                              Gráficos enmarcados con sombra sutil y tipografía reforzada para un look tipo Notion/Linear.
+                            </div>
+                          </div>
+                        </div>
+                        <div className="p-5">
+                          <div className="overflow-hidden rounded-xl border border-gray-100 dark:border-slate-800 shadow-inner bg-white dark:bg-slate-900">
+                            <img
+                              src={chart.image}
+                              alt={chart.column}
+                              className="rounded-lg mx-auto"
+                              style={{ maxHeight: "320px", objectFit: "contain" }}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-gray-500 dark:text-slate-400 italic text-center">
+                      No hay gráficos disponibles.
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {/* 🤖 INSIGHTS */}
+              {activeTab === "insights" && (
+                <div className="space-y-6">
+                  <div className="grid gap-4 lg:grid-cols-2">
+                    <div className="relative rounded-2xl border border-blue-200 dark:border-slate-800 bg-gradient-to-br from-blue-50 via-white to-blue-100 dark:from-slate-900 dark:via-slate-900 dark:to-slate-950 p-6 shadow-lg">
+                      <div className="flex items-center gap-2 mb-3">
+                        <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-blue-600 text-white">
+                          <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                            <path d="M12 3v4" />
+                            <path d="M6.6 7l-2.1 3.6" />
+                            <path d="M17.4 7l2.1 3.6" />
+                            <path d="M3 13h4" />
+                            <path d="M17 13h4" />
+                            <path d="M6.6 19l-2.1-3.6" />
+                            <path d="M17.4 19l2.1-3.6" />
+                            <path d="M12 17v4" />
+                          </svg>
+                        </span>
+                        <div>
+                          <p className="text-xs uppercase tracking-[0.15em] text-blue-700 dark:text-blue-200">Panel inteligente</p>
+                          <h4 className="text-lg font-semibold text-gray-900 dark:text-white">Insights generados por IA</h4>
+                        </div>
+                      </div>
+                      <div className="mt-3 max-h-64 overflow-y-auto pr-2">
+                        <p className="text-sm text-blue-900 dark:text-blue-100 whitespace-pre-wrap leading-relaxed">
+                          {filterInsights(analysis.ai_summary) || "No se recibieron insights de IA."}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-gray-200 dark:border-slate-800 shadow-lg">
+                      <div className="flex items-start justify-between gap-3 mb-3">
+                        <div>
+                          <p className="text-xs uppercase tracking-[0.15em] text-emerald-600 dark:text-emerald-300">Acciones sugeridas</p>
+                          <h4 className="text-lg font-semibold text-gray-900 dark:text-white">Checklist priorizado</h4>
+                          <p className="text-xs text-gray-500 dark:text-slate-400">Generadas según tus insights y el enfoque seleccionado.</p>
+                        </div>
+                        <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-500 text-white" aria-hidden="true">
+                          <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M20 6 9 17l-5-5" />
+                          </svg>
+                        </span>
+                      </div>
+                      {suggestedActions.length > 0 ? (
+                        <ul className="space-y-3 max-h-60 overflow-y-auto pr-2">
+                          {suggestedActions.map((action, index) => (
+                            <li
+                              key={`${action}-${index}`}
+                              className="flex items-start gap-3 bg-emerald-50 dark:bg-slate-800/60 rounded-lg p-3 border border-emerald-100 dark:border-slate-700"
+                            >
+                              <span className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-emerald-600 text-white text-sm font-bold">
+                                {index + 1}
+                              </span>
+                              <p className="text-sm text-gray-800 dark:text-slate-100 leading-relaxed">{action}</p>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className="text-sm text-gray-500 dark:text-slate-400">
+                          Carga un archivo y obtén recomendaciones listas para ejecutar.
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  {filterGraphsByCategory(aiCharts).length > 0 && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {filterGraphsByCategory(aiCharts).map((chart, index) => (
+                        <div
+                          key={`${chart.title}-${index}`}
+                          className="bg-white dark:bg-slate-900 rounded-2xl border border-gray-200 dark:border-slate-800 shadow-lg p-4"
+                        >
+                          <h5 className="text-sm font-semibold text-gray-800 dark:text-slate-100 mb-3 text-center">
+                            {chart.title}
+                          </h5>
+                          <div className="h-64">
+                            <ResponsiveContainer width="100%" height="100%">
+                              {chart.type === "bar" ? (
+                                <BarChart data={chart.data} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                                  <CartesianGrid strokeDasharray="3 3" strokeOpacity={0.2} />
+                                  <XAxis dataKey={chart.xKey} tick={{ fontSize: 12 }} />
+                                  <YAxis tick={{ fontSize: 12 }} />
+                                  <Tooltip
+                                    formatter={(value) => Number(value).toLocaleString()}
+                                    contentStyle={{
+                                      borderRadius: "12px",
+                                      border: "1px solid #e5e7eb",
+                                      boxShadow: "0 10px 40px rgba(0,0,0,0.12)",
+                                    }}
+                                  />
+                                  <Legend />
+                                  <Bar dataKey={chart.yKey} name={chart.yKey} fill="#3b82f6" radius={[8, 8, 0, 0]} />
+                                </BarChart>
+                              ) : (
+                                <LineChart data={chart.data} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                                  <CartesianGrid strokeDasharray="3 3" strokeOpacity={0.2} />
+                                  <XAxis dataKey={chart.xKey} tick={{ fontSize: 12 }} />
+                                  <YAxis tick={{ fontSize: 12 }} />
+                                  <Tooltip
+                                    formatter={(value) => Number(value).toLocaleString()}
+                                    contentStyle={{
+                                      borderRadius: "12px",
+                                      border: "1px solid #e5e7eb",
+                                      boxShadow: "0 10px 40px rgba(0,0,0,0.12)",
+                                    }}
+                                  />
+                                  <Legend />
+                                  <Line type="monotone" dataKey={chart.yKey} name={chart.yKey} stroke="#10b981" strokeWidth={2} dot={{ r: 3 }} />
+                                </LineChart>
+                              )}
+                            </ResponsiveContainer>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* 📑 REPORTE EJECUTIVO */}
+              {activeTab === "reporte" && (
+                <div className="flex flex-col gap-6 w-full">
+                  <div className="rounded-2xl border border-gray-200 dark:border-slate-800 bg-gradient-to-r from-white to-gray-50 dark:from-slate-900 dark:to-slate-950 shadow-lg p-6">
+                    <div className="flex items-start gap-3">
+                      <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-500 text-white" aria-hidden="true">
+                        <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M4 4h16v14H5.5L4 19.5V4z" />
+                        </svg>
+                      </span>
+                      <div className="space-y-1">
+                        <p className="text-xs uppercase tracking-[0.15em] text-emerald-600 dark:text-emerald-300">Reporte ejecutivo</p>
+                        <h4 className="text-lg font-semibold text-gray-900 dark:text-white">PDF listo para comité</h4>
+                        <p className="text-sm text-gray-600 dark:text-slate-300">
+                          Exporta y comparte insights, estadísticas y visualizaciones detectadas automáticamente en tu dataset.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="w-full max-w-2xl space-y-3">
+                    <label className="block text-sm font-semibold text-gray-700 dark:text-slate-100">Enviar por correo electrónico</label>
+                    <p className="text-xs text-gray-600 dark:text-slate-300">
+                      Ingresa un correo para enviar el PDF generado directamente a tu bandeja de entrada.
+                    </p>
+                    <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center">
+                      <input
+                        type="email"
+                        value={reportEmail}
+                        onChange={(e) => setReportEmail(e.target.value)}
+                        placeholder="ejemplo@correo.com"
+                        className="flex-1 rounded-xl border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-emerald-400"
+                      />
+                      <button
+                        onClick={handleSendReportEmail}
+                        disabled={sendingReport || downloading || !analysis}
+                        className={`w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl font-semibold transition shadow-md focus:outline-none focus:ring-4 focus:ring-emerald-200 ${
+                          sendingReport || downloading || !analysis
+                            ? "bg-gray-300 text-gray-500 cursor-not-allowed"
+                            : "bg-emerald-500 text-white hover:bg-emerald-600"
+                        }`}
+                      >
+                        <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                          <path d="M4 4l8 6 8-6" />
+                          <path d="M4 20h16V6" />
+                        </svg>
+                        <span className="text-sm sm:text-base font-semibold">
+                          {sendingReport ? "Enviando..." : "Enviar PDF"}
+                        </span>
+                      </button>
+                    </div>
+                    {emailFeedback && (
+                      <p
+                        className={`text-sm text-left ${
+                          emailFeedback.startsWith("⚠️")
+                            ? "text-amber-700 dark:text-amber-300"
+                            : "text-emerald-700 dark:text-emerald-300"
+                        }`}
+                      >
+                        {emailFeedback}
                       </p>
                     )}
                   </div>
+
+                  <button
+                    onClick={handleDownloadReport}
+                    disabled={downloading || !analysis}
+                    className={`group relative inline-flex items-center justify-center gap-2 px-8 py-3 rounded-full font-semibold tracking-wide transition-all duration-300 shadow-lg focus:outline-none focus:ring-4 focus:ring-emerald-200 ${
+                      downloading || !analysis
+                        ? "bg-gray-300 text-gray-500 cursor-not-allowed"
+                        : "bg-gradient-to-r from-emerald-400 via-emerald-500 to-emerald-600 text-white hover:scale-[1.02] hover:shadow-xl"
+                    }`}
+                  >
+                    <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <path d="M12 3v12" />
+                      <path d="M7 12l5 5 5-5" />
+                      <path d="M5 21h14" />
+                    </svg>
+                    <span className="text-sm sm:text-base font-semibold">
+                      {downloading ? "Generando reporte..." : "Descargar reporte"}
+                    </span>
+                    {!downloading && analysis && (
+                      <span className="pointer-events-none absolute inset-0 rounded-full border border-white/30 blur-sm opacity-0 group-hover:opacity-100 transition" />
+                    )}
+                  </button>
                 </div>
-
-                {filterGraphsByCategory(aiCharts).length > 0 && (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {filterGraphsByCategory(aiCharts).map((chart, index) => (
-                      <div
-                        key={`${chart.title}-${index}`}
-                        className="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-800 shadow p-4"
-                      >
-                        <h5 className="text-sm font-semibold text-gray-800 dark:text-slate-100 mb-3 text-center">
-                          {chart.title}
-                        </h5>
-                        <div className="h-64">
-                          <ResponsiveContainer width="100%" height="100%">
-                            {chart.type === "bar" ? (
-                              <BarChart data={chart.data} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                                <CartesianGrid strokeDasharray="3 3" strokeOpacity={0.2} />
-                                <XAxis dataKey={chart.xKey} tick={{ fontSize: 12 }} />
-                                <YAxis tick={{ fontSize: 12 }} />
-                                <Tooltip formatter={(value) => Number(value).toLocaleString()} />
-                                <Legend />
-                                <Bar dataKey={chart.yKey} name={chart.yKey} fill="#3b82f6" radius={[8, 8, 0, 0]} />
-                              </BarChart>
-                            ) : (
-                              <LineChart data={chart.data} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                                <CartesianGrid strokeDasharray="3 3" strokeOpacity={0.2} />
-                                <XAxis dataKey={chart.xKey} tick={{ fontSize: 12 }} />
-                                <YAxis tick={{ fontSize: 12 }} />
-                                <Tooltip formatter={(value) => Number(value).toLocaleString()} />
-                                <Legend />
-                                <Line type="monotone" dataKey={chart.yKey} name={chart.yKey} stroke="#10b981" strokeWidth={2} dot={{ r: 3 }} />
-                              </LineChart>
-                            )}
-                          </ResponsiveContainer>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* 📑 REPORTE EJECUTIVO */}
-            {activeTab === "reporte" && (
-              <div className="flex flex-col items-center text-center space-y-6 w-full">
-                <p className="text-gray-700 dark:text-slate-200 max-w-2xl">
-                  Genera un reporte ejecutivo en PDF con los principales insights,
-                  estadísticas y visualizaciones detectadas automáticamente en tu
-                  dataset.
-                </p>
-
-                <div className="w-full max-w-2xl space-y-3 text-left">
-                  <label className="block text-sm font-semibold text-gray-700 dark:text-slate-100">
-                    Enviar por correo electrónico
-                  </label>
-                  <p className="text-xs text-gray-600 dark:text-slate-300">
-                    Ingresa un correo para enviar el PDF generado directamente a tu bandeja de entrada.
-                  </p>
-                  <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center">
-                    <input
-                      type="email"
-                      value={reportEmail}
-                      onChange={(e) => setReportEmail(e.target.value)}
-                      placeholder="ejemplo@correo.com"
-                      className="flex-1 rounded-lg border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-emerald-400"
-                    />
-                    <button
-                      onClick={handleSendReportEmail}
-                      disabled={sendingReport || downloading || !analysis}
-                      className={`w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-3 rounded-lg font-semibold transition shadow-md focus:outline-none focus:ring-4 focus:ring-emerald-200 ${
-                        sendingReport || downloading || !analysis
-                          ? "bg-gray-300 text-gray-500 cursor-not-allowed"
-                          : "bg-emerald-500 text-white hover:bg-emerald-600"
-                      }`}
-                    >
-                      <span className="text-lg">✉️</span>
-                      <span className="text-sm sm:text-base font-semibold">
-                        {sendingReport ? "Enviando..." : "Enviar PDF"}
-                      </span>
-                    </button>
-                  </div>
-                  {emailFeedback && (
-                    <p
-                      className={`text-sm text-left ${
-                        emailFeedback.startsWith("⚠️")
-                          ? "text-amber-700 dark:text-amber-300"
-                          : "text-emerald-700 dark:text-emerald-300"
-                      }`}
-                    >
-                      {emailFeedback}
-                    </p>
-                  )}
-                </div>
-
-                <button
-                  onClick={handleDownloadReport}
-                  disabled={downloading || !analysis}
-                  className={`group relative inline-flex items-center justify-center gap-2 px-8 py-3 rounded-full font-semibold tracking-wide transition-all duration-300 shadow-lg focus:outline-none focus:ring-4 focus:ring-emerald-200 ${
-                    downloading || !analysis
-                      ? "bg-gray-300 text-gray-500 cursor-not-allowed"
-                      : "bg-gradient-to-r from-emerald-400 via-emerald-500 to-emerald-600 text-white hover:scale-[1.02] hover:shadow-xl"
-                  }`}
-                >
-                  <span className="text-xl">📥</span>
-                  <span className="text-sm sm:text-base font-semibold">
-                    {downloading ? "Generando reporte..." : "Descargar reporte"}
-                  </span>
-                  {!downloading && analysis && (
-                    <span className="pointer-events-none absolute inset-0 rounded-full border border-white/30 blur-sm opacity-0 group-hover:opacity-100 transition" />
-                  )}
-                </button>
-              </div>
-            )}
+              )}
+            </div>
           </div>
         </div>
       )}

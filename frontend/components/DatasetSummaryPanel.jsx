@@ -61,7 +61,7 @@ const pickIcon = (column, type) => {
 };
 
 const BaseCard = ({ children }) => (
-  <div className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-xl shadow-sm p-4">
+  <div className="bg-white/90 dark:bg-slate-900/80 border border-gray-200 dark:border-slate-800 rounded-xl shadow-md backdrop-blur-sm p-4">
     {children}
   </div>
 );
@@ -99,6 +99,28 @@ const DatasetSummaryPanel = ({ summary }) => {
   }));
 
   const anomalies = analyzed.filter(({ stats, type }) => stats?.error || type === "error");
+
+  const numericColumns = analyzed.filter(({ type }) => type === "numeric");
+  const datasetCount = numericColumns.reduce((acc, { stats }) => {
+    const value = Number(stats?.count);
+    return Number.isFinite(value) ? Math.max(acc ?? value, value) : acc;
+  }, null);
+
+  const minValue = numericColumns.reduce((acc, { stats }) => {
+    const value = Number(stats?.min);
+    if (!Number.isFinite(value)) return acc;
+    if (acc === null) return value;
+    return Math.min(acc, value);
+  }, null);
+
+  const maxValue = numericColumns.reduce((acc, { stats }) => {
+    const value = Number(stats?.max);
+    if (!Number.isFinite(value)) return acc;
+    if (acc === null) return value;
+    return Math.max(acc, value);
+  }, null);
+
+  const topCategorical = analyzed.find(({ type, stats }) => type === "categorical" && stats && Object.keys(stats).length > 0);
 
   const smartNarratives = analyzed
     .map((item) => {
@@ -190,6 +212,30 @@ const DatasetSummaryPanel = ({ summary }) => {
     { total: analyzed.length }
   );
 
+  const topCategories = topCategorical
+    ? Object.entries(topCategorical.stats)
+        .sort(([, a], [, b]) => Number(b) - Number(a))
+        .slice(0, 3)
+    : [];
+
+  const kpiCards = [
+    {
+      label: "Registros analizados",
+      value: datasetCount !== null ? formatNumber(datasetCount) : "--",
+      helper: "Basado en campos numéricos detectados",
+    },
+    {
+      label: "Mínimo global",
+      value: minValue !== null ? formatNumber(minValue) : "--",
+      helper: "Valor mínimo entre columnas numéricas",
+    },
+    {
+      label: "Máximo global",
+      value: maxValue !== null ? formatNumber(maxValue) : "--",
+      helper: "Valor máximo entre columnas numéricas",
+    },
+  ];
+
   const renderTopItems = (stats) => {
     const sorted = Object.entries(stats)
       .sort(([, a], [, b]) => Number(b) - Number(a))
@@ -260,7 +306,33 @@ const DatasetSummaryPanel = ({ summary }) => {
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
+        {kpiCards.map((kpi) => (
+          <BaseCard key={kpi.label}>
+            <p className="text-xs uppercase tracking-wide text-gray-500 dark:text-slate-400">{kpi.label}</p>
+            <p className="text-2xl font-bold text-gray-900 dark:text-white">{kpi.value}</p>
+            <p className="text-xs text-gray-500 dark:text-slate-400 mt-1">{kpi.helper}</p>
+          </BaseCard>
+        ))}
+
+        <BaseCard>
+          <p className="text-xs uppercase tracking-wide text-gray-500 dark:text-slate-400">Top 3 categorías</p>
+          {topCategories.length > 0 ? (
+            <div className="mt-2 space-y-2">
+              {topCategories.map(([label, value]) => (
+                <div key={label} className="flex items-center justify-between text-sm">
+                  <span className="text-gray-700 dark:text-slate-200 truncate mr-2">{label}</span>
+                  <span className="font-semibold text-gray-900 dark:text-white">{formatNumber(value)}</span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-gray-500 dark:text-slate-400 mt-1">Esperando datos categóricos.</p>
+          )}
+        </BaseCard>
+      </div>
+
       {smartNarratives.length > 0 && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
           {smartNarratives.map((insight) => (
