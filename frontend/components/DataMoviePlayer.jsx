@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { hasPlayableDataMovie } from "./dataMovieUtils";
 
 const DataMoviePlayer = ({ dataMovie }) => {
   const frames = useMemo(() => dataMovie?.frames || [], [dataMovie]);
@@ -21,12 +22,10 @@ const DataMoviePlayer = ({ dataMovie }) => {
     return () => clearInterval(timer);
   }, [isPlaying, frames.length]);
 
-  if (!dataMovie || !frames.length) {
-    return (
-      <div className="mt-4 w-full rounded-2xl border border-dashed border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-900 p-6 text-center text-gray-500 dark:text-slate-300">
-        No se pudo generar la película de datos para este archivo.
-      </div>
-    );
+  const hasPlayableFrames = hasPlayableDataMovie(dataMovie);
+
+  if (!hasPlayableFrames) {
+    return null;
   }
 
   const currentFrame = frames[currentIndex] || {};
