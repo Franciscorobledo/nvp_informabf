@@ -25,7 +25,12 @@ const DataMoviePlayer = ({ dataMovie }) => {
   const hasPlayableFrames = hasPlayableDataMovie(dataMovie);
 
   if (!hasPlayableFrames) {
-    return null;
+    return (
+      <div className="rounded-2xl border border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 shadow-sm text-center text-sm text-gray-600 dark:text-slate-300">
+        No se pudo generar la película de datos. Intenta con un archivo que contenga
+        fechas o métricas numéricas para construir la narrativa.
+      </div>
+    );
   }
 
   const currentFrame = frames[currentIndex] || {};

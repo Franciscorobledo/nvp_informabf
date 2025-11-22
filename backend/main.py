@@ -19,7 +19,7 @@ import smtplib
 from email.message import EmailMessage
 
 from utils.file_utils import validate_file
-from analysis import analyze_file, detect_column_types
+from analysis import analyze_file, detect_column_types, generate_data_movie_payload
 from auth import admin_required, get_current_user, router as auth_router
 from ai_module import check_openai_status, infer_dataset_schema_with_ai
 from utils.dataframe_loader import read_dataframes
@@ -741,6 +741,36 @@ async def upload_file(
     except Exception as e:
         logging.error(f"❌ Error en el análisis: {e}")
         raise HTTPException(status_code=500, detail=f"Error en el análisis: {e}")
+
+
+@app.post("/analyze/movie")
+async def analyze_data_movie(
+    file: UploadFile = File(...),
+    user_focus: str = Form(None),
+    current_user=Depends(get_current_user),
+):
+    if not file:
+        raise HTTPException(status_code=400, detail="No se recibió ningún archivo para la película de datos.")
+
+    if not validate_file(file.filename):
+        raise HTTPException(status_code=400, detail="Formato no soportado (.csv, .xlsx o .zip)")
+
+    content = await file.read()
+    dataframes = read_dataframes(file, content)
+    if not dataframes:
+        raise HTTPException(status_code=400, detail="No se pudo leer información del archivo enviado.")
+
+    try:
+        df = pd.concat(dataframes, ignore_index=True)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"No se pudo combinar la información: {exc}")
+
+    try:
+        payload = generate_data_movie_payload(df, focus=user_focus)
+        return JSONResponse(content=json_safe_deep(payload))
+    except Exception as exc:
+        logging.error("❌ Error generando película de datos: %s", exc)
+        raise HTTPException(status_code=500, detail=f"Error al generar la película de datos: {exc}")
 
 
 @app.post("/report", dependencies=[Depends(get_current_user)])
