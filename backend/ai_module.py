@@ -2,6 +2,7 @@
 import os
 import json
 import logging
+from datetime import datetime
 from openai import OpenAI
 from dotenv import load_dotenv
 
@@ -149,7 +150,11 @@ def infer_dataset_schema_with_ai(sample_df, focus: str | None = None):
     if sample_df is None or getattr(sample_df, "empty", True):
         return "No se pudo generar el pre-análisis porque la muestra está vacía."
 
-    preview_rows = sample_df.head(10).to_dict(orient="records")
+    preview_rows = sample_df.head(10).applymap(
+        lambda value: value.isoformat()
+        if isinstance(value, datetime)
+        else value
+    ).to_dict(orient="records")
     column_hints = {}
 
     if pd is not None:
@@ -166,7 +171,7 @@ Actúa como arquitecto de datos. Con una muestra pequeña, identifica esquema y 
 
 Contexto de negocio: {focus or 'sin foco declarado'}.
 Muestra de registros (JSON):
-{json.dumps(preview_rows, ensure_ascii=False, indent=2)}
+{json.dumps(preview_rows, ensure_ascii=False, indent=2, default=str)}
 
 Perfil de columnas:
 {json.dumps(column_hints, ensure_ascii=False, indent=2)}
