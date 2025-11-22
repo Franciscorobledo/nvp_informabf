@@ -13,6 +13,7 @@ import {
 } from "recharts";
 import DatasetSummaryPanel from "./DatasetSummaryPanel";
 import DataMoviePlayer from "./DataMoviePlayer";
+import { hasPlayableDataMovie } from "./dataMovieUtils";
 
 const FileUpload = ({ onDataReceived, onUnauthorized }) => {
   const [files, setFiles] = useState([]);
@@ -38,6 +39,9 @@ const FileUpload = ({ onDataReceived, onUnauthorized }) => {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [statusMessage, setStatusMessage] = useState("");
   const filterSelectRef = useRef(null);
+
+  const dataMovie = analysis?.data_movie;
+  const hasDataMovie = hasPlayableDataMovie(dataMovie);
 
   const tokenClientRef = useRef(null);
   const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
@@ -1430,18 +1434,20 @@ const FileUpload = ({ onDataReceived, onUnauthorized }) => {
               )}
             </div>
           </div>
-          <div className="mt-10 space-y-3">
-            <div className="space-y-1">
-              <h3 className="text-xl font-semibold text-gray-900 dark:text-white flex items-center gap-2">
-                <span role="img" aria-hidden="true">🎬</span>
-                Película de datos
-              </h3>
-              <p className="text-sm text-gray-600 dark:text-slate-300">
-                Recorre los momentos clave del análisis en formato de video interactivo.
-              </p>
+          {hasDataMovie && (
+            <div className="mt-10 space-y-3">
+              <div className="space-y-1">
+                <h3 className="text-xl font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                  <span role="img" aria-hidden="true">🎬</span>
+                  Película de datos
+                </h3>
+                <p className="text-sm text-gray-600 dark:text-slate-300">
+                  Recorre los momentos clave del análisis en formato de video interactivo.
+                </p>
+              </div>
+              <DataMoviePlayer dataMovie={dataMovie} />
             </div>
-            <DataMoviePlayer dataMovie={analysis?.data_movie ?? null} />
-          </div>
+          )}
         </div>
       )}
     </div>
