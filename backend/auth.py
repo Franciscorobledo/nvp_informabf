@@ -24,7 +24,51 @@ SECRET_KEY = os.getenv("SECRET_KEY", "DEV_SECRET_KEY")
 ALGORITHM = os.getenv("ALGORITHM", "HS256")
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", 120))
 DEFAULT_ADMIN_PASSWORD = os.getenv("DEFAULT_ADMIN_PASSWORD", "Francisco8")
-STORAGE_DIR = Path(os.getenv("AUTH_STORAGE_DIR", Path(__file__).parent / "data"))
+
+# Se usa una carpeta fuera del árbol del proyecto para evitar que despliegues
+# o actualizaciones del código sobreescriban las cuentas creadas. Se puede
+# personalizar con AUTH_STORAGE_DIR. En entornos como Render (p. ej. planes
+# gratuitos que hibernan), se intentará usar directorios persistentes si
+# existen (por ejemplo ``/data`` o variables proporcionadas por el proveedor).
+
+
+def _resolve_storage_dir() -> Path:
+    """Selecciona una ubicación de almacenamiento que sobreviva reinicios.
+
+    Prioriza rutas explícitas vía ``AUTH_STORAGE_DIR`` y directorios comunes en
+    servicios PaaS (``RENDER_DISK_PATH``, ``RENDER_DATA_DIR`` o ``/data``). Si
+    ninguno es utilizable, cae a una carpeta en el ``home``.
+    """
+
+    explicit_dir = os.getenv("AUTH_STORAGE_DIR")
+    if explicit_dir:
+        return Path(explicit_dir).expanduser()
+
+    candidates = [
+        os.getenv("RENDER_DISK_PATH"),
+        os.getenv("RENDER_DATA_DIR"),
+        "/data",
+        Path.home() / ".informabf",
+    ]
+
+    for candidate in candidates:
+        if not candidate:
+            continue
+        path = Path(candidate).expanduser()
+        try:
+            path.mkdir(parents=True, exist_ok=True)
+        except Exception as exc:
+            logging.warning("No se pudo preparar %s como almacenamiento: %s", path, exc)
+            continue
+        return path
+
+    # Como último recurso, usar la carpeta actual del proyecto.
+    fallback = Path.cwd() / "data"
+    fallback.mkdir(parents=True, exist_ok=True)
+    return fallback
+
+
+STORAGE_DIR = _resolve_storage_dir() / "auth_storage"
 
 # Archivos de compatibilidad con la ruta anterior. Si existen, se usarán como
 # base para inicializar el nuevo almacenamiento persistente en STORAGE_DIR.
@@ -81,10 +125,10 @@ def _normalize_record(username: str, record) -> dict:
 def _ensure_storage() -> None:
     """Garantiza la existencia del archivo de usuarios con el admin inicial.
 
-    A partir de este cambio, el archivo vivo se almacena en ``backend/data``
-    (o en la ruta definida por ``AUTH_STORAGE_DIR``) para evitar que los
-    despliegues sobrescriban las cuentas creadas. Si existen los archivos
-    originales junto al código, se migran automáticamente a la nueva ubicación.
+    Los archivos se guardan en un directorio persistente (configurable por
+    ``AUTH_STORAGE_DIR``) para evitar que los despliegues sobrescriban las
+    cuentas creadas. Si existen los archivos originales junto al código, se
+    migran automáticamente a la nueva ubicación.
     """
     STORAGE_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -123,7 +167,8 @@ def _ensure_storage() -> None:
         }
     else:
         normalized_admin = _normalize_record("admin", admin_record)
-        normalized_admin["hashed_password"] = hash_password(DEFAULT_ADMIN_PASSWORD)
+        if not normalized_admin.get("hashed_password"):
+            normalized_admin["hashed_password"] = hash_password(DEFAULT_ADMIN_PASSWORD)
         data["admin"] = normalized_admin
 
     USERS_FILE.write_text(json.dumps(data, indent=2), encoding="utf-8")
