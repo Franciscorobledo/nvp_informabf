@@ -67,6 +67,108 @@ def detect_column_types(df):
     return column_types
 
 
+def compute_health_score(df: pd.DataFrame, column_types: dict) -> dict:
+    """Calcula un KPI de salud (0-100) en función de la calidad y riesgos del dataset."""
+
+    total_cells = max(len(df) * max(len(df.columns), 1), 1)
+    missing_ratio = df.isna().sum().sum() / total_cells
+
+    # Errores de formato numérico y de fecha
+    invalid_numeric = 0
+    numeric_points = 0
+    invalid_dates = 0
+    date_points = 0
+
+    for col, detected_type in column_types.items():
+        series = df[col]
+        if detected_type == "numeric":
+            numeric_points += series.notna().sum()
+            coerced = pd.to_numeric(series, errors="coerce")
+            invalid_numeric += (series.notna() & coerced.isna()).sum()
+        elif detected_type == "date":
+            parsed = pd.to_datetime(series, errors="coerce", infer_datetime_format=True)
+            date_points += series.notna().sum()
+            invalid_dates += (series.notna() & parsed.isna()).sum()
+
+    format_error_ratio = (invalid_numeric + invalid_dates) / max(numeric_points + date_points, 1)
+    invalid_date_ratio = invalid_dates / max(date_points, 1)
+
+    # Duplicados y outliers
+    duplicate_ratio = df.duplicated().mean() if len(df) else 0
+    outlier_counts = 0
+    numeric_total = 0
+
+    for col, detected_type in column_types.items():
+        if detected_type != "numeric":
+            continue
+        series = pd.to_numeric(df[col], errors="coerce").dropna()
+        if len(series) < 5:
+            continue
+        q1, q3 = series.quantile([0.25, 0.75])
+        iqr = q3 - q1
+        lower, upper = q1 - 1.5 * iqr, q3 + 1.5 * iqr
+        outliers = ((series < lower) | (series > upper)).sum()
+        outlier_counts += outliers
+        numeric_total += len(series)
+
+    outlier_ratio = outlier_counts / max(numeric_total, 1)
+
+    # Riesgo de quiebre de stock
+    stock_col = _find_best_column(df, [["stock"], ["inventario"], ["existencia"], ["bodega"], ["almacen"]])
+    stockout_ratio = 0
+    if stock_col:
+        stock_series = pd.to_numeric(df[stock_col], errors="coerce")
+        if stock_series.notna().any():
+            stockout_ratio = (stock_series.fillna(0) <= 0).mean()
+
+    # Puntuación (100 perfecto, 0 crítico)
+    score = 100
+    score -= min(30, missing_ratio * 100 * 0.6)
+    score -= min(15, format_error_ratio * 100 * 0.5)
+    score -= min(10, invalid_date_ratio * 100 * 0.7)
+    score -= min(10, duplicate_ratio * 100)
+    score -= min(15, stockout_ratio * 100)
+    score -= min(10, outlier_ratio * 100 * 0.5)
+
+    health_score = max(0, min(100, round(score, 1)))
+
+    if health_score >= 85:
+        status = "healthy"
+    elif health_score >= 60:
+        status = "watch"
+    else:
+        status = "critical"
+
+    drivers = []
+    if missing_ratio > 0.02:
+        drivers.append(f"{missing_ratio:.1%} de los datos están vacíos o nulos")
+    if format_error_ratio > 0.02:
+        drivers.append(f"{format_error_ratio:.1%} de los campos numéricos/fecha tienen formato inválido")
+    if invalid_date_ratio > 0.01:
+        drivers.append(f"{invalid_date_ratio:.1%} de las fechas no pudieron parsearse")
+    if duplicate_ratio > 0.01:
+        drivers.append(f"{duplicate_ratio:.1%} de las filas son duplicadas")
+    if stockout_ratio > 0:
+        drivers.append(f"{stockout_ratio:.1%} de los registros muestran stock en cero o negativo")
+    if outlier_ratio > 0.05:
+        drivers.append(f"{outlier_ratio:.1%} de los valores numéricos son outliers (IQR)")
+
+    recommendations = [
+        "Completa o depura las columnas con mayor porcentaje de nulos para estabilizar los KPIs.",
+        "Estandariza formatos numéricos y de fecha antes de cargar la información.",
+        "Elimina duplicados y valida reglas de unicidad (ID, combinación clave).",
+        "Configura alertas de stock mínimo para evitar quiebres en los SKU críticos.",
+        "Revisa valores extremos: confirma si son errores de captura o casos de negocio válidos.",
+    ]
+
+    return {
+        "health_score": health_score,
+        "health_status": status,
+        "drivers": drivers,
+        "recommendations": recommendations,
+    }
+
+
 def json_safe(value):
     """Convierte cualquier valor a formato serializable para JSON."""
     if isinstance(value, (pd.Timestamp, datetime)):
@@ -598,9 +700,12 @@ def analyze_file(
     except Exception:
         sample_data = []
 
+    data_health = compute_health_score(df, column_types)
+
     return {
         "summary": summary,
         "graphs": graphs,
         "ai_summary": ai_summary,
         "sample": sample_data,
+        "data_health": data_health,
     }

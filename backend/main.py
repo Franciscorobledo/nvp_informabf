@@ -529,7 +529,8 @@ async def upload_file(
             "summary": result.get("summary", {}),
             "sample": safe_sample,
             "graphs": result.get("graphs", []),
-            "ai_summary": result.get("ai_summary", "No se generó resumen automático.")
+            "ai_summary": result.get("ai_summary", "No se generó resumen automático."),
+            "data_health": result.get("data_health", {}),
         })
 
         logging.info("✅ Análisis completado correctamente.")

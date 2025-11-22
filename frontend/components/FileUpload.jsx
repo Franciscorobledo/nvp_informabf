@@ -160,6 +160,109 @@ const FileUpload = ({ onDataReceived, onUnauthorized }) => {
     return filtered.length ? filtered.join(" ") : text;
   };
 
+  const renderHealthPanel = () => {
+    const kpi = analysis?.data_health;
+    if (!kpi) return null;
+
+    const statusConfig = {
+      healthy: {
+        label: "Saludable",
+        badgeBg: "bg-emerald-100 dark:bg-emerald-900/60",
+        badgeText: "text-emerald-800 dark:text-emerald-100",
+        border: "border-emerald-200 dark:border-emerald-800",
+        bar: "bg-emerald-500",
+      },
+      watch: {
+        label: "Revisar",
+        badgeBg: "bg-amber-100 dark:bg-amber-900/60",
+        badgeText: "text-amber-800 dark:text-amber-100",
+        border: "border-amber-200 dark:border-amber-800",
+        bar: "bg-amber-400",
+      },
+      critical: {
+        label: "Crítico",
+        badgeBg: "bg-rose-100 dark:bg-rose-900/60",
+        badgeText: "text-rose-800 dark:text-rose-100",
+        border: "border-rose-200 dark:border-rose-800",
+        bar: "bg-rose-500",
+      },
+    };
+
+    const config = statusConfig[kpi.health_status] || statusConfig.watch;
+    const scoreValue = Math.max(0, Math.min(100, kpi.health_score ?? 0));
+
+    return (
+      <div
+        className={`mb-6 p-6 rounded-2xl bg-gradient-to-br from-white to-gray-50 dark:from-slate-900 dark:to-slate-800 border shadow-sm ${config.border}`}
+      >
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+          <div className="space-y-2">
+            <p className="text-sm font-semibold text-gray-600 dark:text-slate-300">
+              🩺 KPI Health Score
+            </p>
+            <div className="flex items-end gap-3">
+              <span className="text-4xl font-extrabold text-gray-900 dark:text-white">
+                {kpi.health_score ?? "--"}
+              </span>
+              <span
+                className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold ${config.badgeBg} ${config.badgeText}`}
+              >
+                <span className="text-lg" role="img" aria-hidden="true">
+                  {kpi.health_status === "healthy" ? "✅" : kpi.health_status === "watch" ? "⚠️" : "🚨"}
+                </span>
+                {config.label}
+              </span>
+            </div>
+            <p className="text-xs text-gray-500 dark:text-slate-400">
+              0 = crítico, 100 = excelente. Calculado según nulos, formatos, fechas, duplicados, stock y outliers.
+            </p>
+          </div>
+
+          <div className="flex-1 space-y-3">
+            <div className="w-full h-3 rounded-full bg-gray-100 dark:bg-slate-800 overflow-hidden">
+              <div
+                className={`h-full ${config.bar}`}
+                style={{ width: `${scoreValue}%` }}
+                role="presentation"
+              />
+            </div>
+
+            <div>
+              <p className="text-sm font-semibold text-gray-700 dark:text-slate-200 mb-2">
+                Principales drivers
+              </p>
+              {kpi.drivers?.length ? (
+                <ul className="list-disc list-inside space-y-1 text-sm text-gray-700 dark:text-slate-200">
+                  {kpi.drivers.map((driver, idx) => (
+                    <li key={`${driver}-${idx}`}>{driver}</li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-sm text-gray-500 dark:text-slate-400">
+                  Sin riesgos significativos detectados.
+                </p>
+              )}
+            </div>
+
+            {kpi.recommendations?.length > 0 && (
+              <div className="flex flex-wrap gap-2 pt-1">
+                {kpi.recommendations.slice(0, 4).map((rec, idx) => (
+                  <span
+                    key={`${rec}-${idx}`}
+                    className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-blue-50 dark:bg-slate-800 text-blue-700 dark:text-blue-200 text-xs"
+                  >
+                    <span aria-hidden="true">💡</span>
+                    {rec}
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   const buildSuggestedActions = () => {
     if (!analysis) return [];
 
@@ -699,6 +802,7 @@ const FileUpload = ({ onDataReceived, onUnauthorized }) => {
             {/* 📄 RESUMEN */}
             {activeTab === "resumen" && (
               <div>
+                {renderHealthPanel()}
                 <h3 className="text-lg font-semibold mb-2 text-gray-800 dark:text-slate-100">
                   📄 Resumen del dataset
                 </h3>
