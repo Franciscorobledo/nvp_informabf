@@ -28,6 +28,13 @@ const FileUpload = ({ onDataReceived, onUnauthorized }) => {
   const [reportEmail, setReportEmail] = useState("");
   const [sendingReport, setSendingReport] = useState(false);
   const [emailFeedback, setEmailFeedback] = useState("");
+  const [jobId, setJobId] = useState(null);
+  const [progress, setProgress] = useState(0);
+  const [analysisStep, setAnalysisStep] = useState("cargando");
+  const [preAnalysis, setPreAnalysis] = useState(null);
+  const [polling, setPolling] = useState(false);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [statusMessage, setStatusMessage] = useState("");
   const filterSelectRef = useRef(null);
 
   const tokenClientRef = useRef(null);
@@ -97,6 +104,71 @@ const FileUpload = ({ onDataReceived, onUnauthorized }) => {
     });
   }, [drivePickerReady, googleClientId]);
 
+  useEffect(() => {
+    if (!jobId || !polling) return;
+    const token = localStorage.getItem("token");
+    if (!token) {
+      setPolling(false);
+      onUnauthorized?.("Tu sesión expiró. Inicia sesión nuevamente.");
+      return;
+    }
+
+    const API_URL = import.meta.env.VITE_API_URL || "http://localhost:1000";
+    let cancelled = false;
+
+    const fetchStatus = async () => {
+      try {
+        const res = await fetch(`${API_URL}/analyze/status/${jobId}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+
+        if (!res.ok) {
+          if ([401, 403].includes(res.status)) {
+            onUnauthorized?.("Tu sesión expiró. Inicia sesión nuevamente.");
+            setPolling(false);
+            setIsAnalyzing(false);
+            return;
+          }
+          const msg = await res.text();
+          throw new Error(msg || "No se pudo consultar el estado del análisis.");
+        }
+
+        const data = await res.json();
+        if (cancelled) return;
+
+        setProgress(data.progress ?? 0);
+        setAnalysisStep(data.step || "cargando");
+        setStatusMessage(getStepLabel(data.step));
+
+        if (data.done) {
+          setPolling(false);
+          setIsAnalyzing(false);
+          if (data.error) {
+            alert(`Error en el análisis: ${data.error}`);
+            return;
+          }
+          if (data.result) {
+            setAnalysis(data.result);
+            setAiCharts(generateAiCharts(data.result.sample));
+            onDataReceived?.(data.result);
+          }
+        }
+      } catch (error) {
+        console.error("Error consultando estado del análisis:", error);
+        if (!cancelled) {
+          setStatusMessage("No se pudo consultar el progreso.");
+        }
+      }
+    };
+
+    fetchStatus();
+    const interval = setInterval(fetchStatus, 1500);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [jobId, polling, onUnauthorized, onDataReceived]);
+
   const categoryKeywords = {
     ventas: [
       "venta",
@@ -124,6 +196,17 @@ const FileUpload = ({ onDataReceived, onUnauthorized }) => {
       "trazabilidad",
     ],
   };
+
+  const stepLabels = {
+    cargando: "Leyendo archivo…",
+    pre_analisis: "Generando pre-análisis…",
+    analisis_completo: "Analizando dataset completo…",
+    ia: "Generando insights de IA…",
+    reporte: "Preparando reportes…",
+    error: "Ocurrió un error en el análisis",
+  };
+
+  const getStepLabel = (step) => stepLabels[step] || "Procesando…";
 
   const matchesCategory = (text, category) => {
     if (category === "todos") return true;
@@ -509,15 +592,26 @@ const FileUpload = ({ onDataReceived, onUnauthorized }) => {
       return;
     }
 
+    setAnalysis(null);
+    setAiCharts([]);
+    setPreAnalysis(null);
+    setJobId(null);
+    setProgress(0);
+    setAnalysisStep("cargando");
+    setStatusMessage("");
+    setPolling(false);
+    setIsAnalyzing(true);
+
     const formData = new FormData();
     files.forEach((fileItem) => formData.append("files", fileItem));
+    formData.append("focus", categoryFilter);
     setLoading(true);
 
     try {
       const API_URL = import.meta.env.VITE_API_URL || "http://localhost:1000";
-      console.log("🌐 Subiendo archivo a:", `${API_URL}/upload`);
+      console.log("🌐 Iniciando análisis en:", `${API_URL}/analyze/start`);
 
-      const res = await fetch(`${API_URL}/upload`, {
+      const res = await fetch(`${API_URL}/analyze/start`, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${token}`,
@@ -530,6 +624,7 @@ const FileUpload = ({ onDataReceived, onUnauthorized }) => {
 
         if ([401, 403].includes(res.status)) {
           onUnauthorized?.("Tu sesión expiró. Por favor, vuelve a iniciar sesión.");
+          setIsAnalyzing(false);
           return;
         }
 
@@ -539,13 +634,17 @@ const FileUpload = ({ onDataReceived, onUnauthorized }) => {
       }
 
       const data = await res.json();
-      console.log("📊 Datos del backend:", data);
-      setAnalysis(data);
-      setAiCharts(generateAiCharts(data.sample));
-      onDataReceived?.(data);
+      console.log("📊 Job lanzado:", data);
+      setJobId(data.job_id);
+      setPreAnalysis(data.pre_analysis);
+      setProgress(data.progress ?? 20);
+      setAnalysisStep(data.step || "pre_analisis");
+      setStatusMessage(getStepLabel(data.step));
+      setPolling(true);
     } catch (err) {
       console.error("💥 Error al conectar con el backend:", err);
       alert("Error de conexión. Verifica que el backend esté corriendo en el puerto 1000.");
+      setIsAnalyzing(false);
     } finally {
       setLoading(false);
     }
@@ -831,16 +930,112 @@ const FileUpload = ({ onDataReceived, onUnauthorized }) => {
 
         <button
           onClick={handleUpload}
-          disabled={loading || files.length === 0}
+          disabled={loading || isAnalyzing || files.length === 0}
           className={`w-full sm:w-auto px-6 py-3 rounded-lg font-semibold transition-all duration-300 ${
-            loading || files.length === 0
+            loading || isAnalyzing || files.length === 0
               ? "bg-gray-400 text-white cursor-not-allowed"
               : "bg-blue-600 hover:bg-blue-700 text-white shadow"
           }`}
         >
-          {loading ? "Analizando..." : "Analizar archivo(s)"}
+          {loading || isAnalyzing ? "Analizando..." : "Analizar archivo(s)"}
         </button>
       </div>
+
+      {(preAnalysis || isAnalyzing) && (
+        <div className="w-full max-w-5xl mt-6 space-y-4">
+          <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 shadow">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-3">
+              <div>
+                <p className="text-xs uppercase tracking-[0.2em] text-gray-500 dark:text-slate-400">
+                  Estado del análisis
+                </p>
+                <h3 className="text-lg font-semibold text-gray-800 dark:text-slate-100">
+                  {getStepLabel(analysisStep)}
+                </h3>
+              </div>
+              <span className="text-sm font-semibold text-blue-600 dark:text-blue-300">
+                {Math.round(progress)}%
+              </span>
+            </div>
+            <div className="w-full h-3 rounded-full bg-gray-100 dark:bg-slate-800 overflow-hidden">
+              <div
+                className="h-full bg-gradient-to-r from-blue-500 via-indigo-500 to-emerald-400 transition-all duration-500"
+                style={{ width: `${Math.min(progress, 100)}%` }}
+              />
+            </div>
+            {statusMessage && (
+              <p className="text-xs text-gray-600 dark:text-slate-300 mt-2">{statusMessage}</p>
+            )}
+          </div>
+
+          {preAnalysis && (
+            <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 shadow space-y-4">
+              <div className="flex items-center gap-2">
+                <div className="w-10 h-10 rounded-full bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-200 flex items-center justify-center font-bold">
+                  ⚡️
+                </div>
+                <div>
+                  <p className="text-xs uppercase tracking-[0.2em] text-gray-500 dark:text-slate-400">Pre-análisis rápido</p>
+                  <h3 className="text-lg font-semibold text-gray-800 dark:text-slate-100">
+                    {preAnalysis.rows?.toLocaleString()} filas · {preAnalysis.columns} columnas
+                  </h3>
+                </div>
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-3">
+                <div className="p-3 rounded-xl bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700">
+                  <p className="text-xs text-gray-500 dark:text-slate-300">Columnas numéricas</p>
+                  <p className="text-xl font-bold text-gray-900 dark:text-white">{preAnalysis.numeric_column_count}</p>
+                </div>
+                <div className="p-3 rounded-xl bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700">
+                  <p className="text-xs text-gray-500 dark:text-slate-300">Candidatos de fecha</p>
+                  <p className="text-sm font-semibold text-emerald-700 dark:text-emerald-300">
+                    {preAnalysis.date_candidates?.length
+                      ? preAnalysis.date_candidates.join(", ")
+                      : "Sin detectar"}
+                  </p>
+                </div>
+                <div className="p-3 rounded-xl bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700">
+                  <p className="text-xs text-gray-500 dark:text-slate-300">Esquema IA</p>
+                  <p className="text-sm text-gray-700 dark:text-slate-200 line-clamp-3">
+                    {preAnalysis.ai_schema}
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="p-3 rounded-xl bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700">
+                  <p className="text-xs font-semibold text-gray-500 dark:text-slate-300 mb-1">
+                    Columnas detectadas
+                  </p>
+                  <p className="text-sm text-gray-700 dark:text-slate-200 leading-relaxed">
+                    {preAnalysis.column_names?.slice(0, 12).join(", ")}
+                    {preAnalysis.column_names?.length > 12 && "…"}
+                  </p>
+                </div>
+                <div className="p-3 rounded-xl bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700">
+                  <p className="text-xs font-semibold text-gray-500 dark:text-slate-300 mb-1">
+                    Nulos por columna (top)
+                  </p>
+                  <div className="flex flex-wrap gap-2 text-xs text-gray-700 dark:text-slate-200">
+                    {Object.entries(preAnalysis.null_counts || {})
+                      .sort(([, a], [, b]) => b - a)
+                      .slice(0, 6)
+                      .map(([col, count]) => (
+                        <span
+                          key={col}
+                          className="px-2 py-1 rounded-full bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700"
+                        >
+                          {col}: {count}
+                        </span>
+                      ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Resultados del análisis */}
       {analysis && (
