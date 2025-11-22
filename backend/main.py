@@ -150,7 +150,7 @@ def quick_date_detection(df: pd.DataFrame) -> list[str]:
             date_columns.append(col)
             continue
 
-        parsed = pd.to_datetime(series, errors="coerce", infer_datetime_format=True)
+        parsed = pd.to_datetime(series, errors="coerce", dayfirst=True)
         if parsed.notna().mean() > 0.65:
             date_columns.append(col)
 
