@@ -9,6 +9,13 @@ variable de entorno `AUTH_STORAGE_DIR`. Si el archivo nuevo no existe, se
 migrará automáticamente el contenido del archivo legado ubicado junto al código
 (`backend/users.json`) para no perder cuentas creadas previamente.
 
+## Duración de los tokens de sesión
+
+Por defecto los tokens de acceso ahora duran 24 horas. Puedes ajustar este
+comportamiento estableciendo la variable de entorno
+`ACCESS_TOKEN_EXPIRE_MINUTES` con la duración deseada (en minutos) antes de
+levantar el backend.
+
 ## Integración con Google Drive (frontend)
 
 Para permitir que el usuario seleccione archivos directamente desde Google
