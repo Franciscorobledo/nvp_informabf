@@ -1,8 +1,6 @@
 import React, { useState, useEffect } from "react";
 import Login from "./Login";
-import FileUpload from "../components/FileUpload";
-import UserManagement from "./UserManagement";
-import AdminOpenAIUsage from "./AdminOpenAIUsage";
+import HomeModules from "../components/HomeModules";
 
 const App = () => {
   const [user, setUser] = useState(null);
@@ -191,31 +189,13 @@ const App = () => {
 
           {/* MAIN */}
           <main>
-            <h2 className="text-lg font-semibold mb-4 text-gray-700 dark:text-slate-100 text-center">
-              📊 Carga y análisis de datos
-            </h2>
-
-            <FileUpload
-              key={user.username}
+            <HomeModules
+              user={user}
               onUnauthorized={handleUnauthorized}
               onDataReceived={(data) =>
                 console.log("📈 Resultado del análisis:", data)
               }
             />
-
-            {user.role === "admin" && (
-              <div className="mt-10 space-y-3">
-                <h3 className="text-lg font-semibold text-gray-700 dark:text-slate-100 text-center">
-                  👤 Administración de usuarios
-                </h3>
-                <UserManagement onUnauthorized={handleUnauthorized} />
-                <AdminOpenAIUsage onUnauthorized={handleUnauthorized} />
-              </div>
-            )}
-
-            <div className="mt-10 text-gray-600 dark:text-slate-300 text-sm text-center italic">
-              Carga tus archivos .CSV o .XLSX para generar visualizaciones automáticas.
-            </div>
           </main>
 
           {/* FOOTER */}

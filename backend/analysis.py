@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 from datetime import datetime
 from pandas.api.types import is_datetime64_any_dtype, is_numeric_dtype
 
-from ai_module import generate_ai_insights
+from ai_module import generate_ai_insights, infer_dataset_schema_with_ai
 
 # ---------------------------------------------------------------------
 # 🧩 CONFIGURACIÓN GLOBAL DE PLOTS (Render-safe)
@@ -461,6 +461,47 @@ def build_data_movie(df: pd.DataFrame, ai_schema: dict | None) -> dict | None:
         "has_timeline": has_timeline,
         "movie_title": f"Película de datos: {friendly_purpose}",
         "movie_subtitle": "Resumen visual de la evolución de tus datos",
+    }
+
+
+def generate_data_movie_payload(
+    df: pd.DataFrame, focus: str | None = None
+) -> dict:
+    """Crea el paquete mínimo para reproducir una película de datos.
+
+    Incluye un resumen básico, el esquema inferido y los frames listos
+    para el frontend.
+    """
+
+    if df is None or df.empty:
+        raise ValueError("El dataset está vacío; no se puede generar la película de datos")
+
+    cleaned = df.copy()
+    cleaned = cleaned.replace(["", "NA", "NaN", "None"], np.nan).dropna(how="all")
+
+    column_types = detect_column_types(cleaned)
+    ai_schema = _infer_ai_schema(cleaned, column_types)
+
+    focus_normalized = (focus or "").strip().lower()
+    if focus_normalized and focus_normalized not in {"todo", "todos", "all"}:
+        ai_schema["dataset_purpose"] = focus_normalized
+
+    ai_notes = infer_dataset_schema_with_ai(cleaned.head(5_000), focus=focus)
+    if isinstance(ai_schema, dict) and ai_notes:
+        ai_schema["ai_notes"] = ai_notes
+
+    data_movie = build_data_movie(cleaned, ai_schema)
+
+    basic_summary = {
+        "rows": int(len(cleaned)),
+        "columns": int(cleaned.shape[1]),
+        "dataset_purpose": ai_schema.get("dataset_purpose") if isinstance(ai_schema, dict) else None,
+    }
+
+    return {
+        "basic_summary": basic_summary,
+        "ai_schema": ai_schema,
+        "data_movie": data_movie,
     }
 
 
