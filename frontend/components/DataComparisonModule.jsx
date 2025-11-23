@@ -96,26 +96,50 @@ const DataComparisonModule = ({ onUnauthorized }) => {
     try {
       setIsComparing(true);
       setCompareResult(null);
-      const response = await fetch(`${API_URL}/compare/start`, {
+
+      const startResponse = await fetch(`${API_URL}/compare/start`, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` },
         body: formData,
       });
 
-      if (!response.ok) {
-        if ([401, 403].includes(response.status)) {
-          onUnauthorized?.("Tu sesión expiró. Inicia sesión nuevamente.");
-          return;
-        }
-        const msg = await response.text();
-        throw new Error(msg || "No se pudo iniciar la comparativa.");
+      if (startResponse.ok) {
+        const data = await startResponse.json();
+        setCompareJobId(data.job_id);
+        setPreSummary(data.pre_summary);
+        setCompareProgress(data.progress ?? 0);
+        setCompareStep(data.step || "preparando_datos");
+        return;
       }
 
-      const data = await response.json();
-      setCompareJobId(data.job_id);
-      setPreSummary(data.pre_summary);
-      setCompareProgress(data.progress ?? 0);
-      setCompareStep(data.step || "preparando_datos");
+      if ([401, 403].includes(startResponse.status)) {
+        onUnauthorized?.("Tu sesión expiró. Inicia sesión nuevamente.");
+        return;
+      }
+
+      // Fallback para backends que aún no exponen /compare/start
+      if (startResponse.status === 404) {
+        const legacyResponse = await fetch(`${API_URL}/analyze/compare`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}` },
+          body: formData,
+        });
+
+        if (!legacyResponse.ok) {
+          const msg = await legacyResponse.text();
+          throw new Error(msg || "No se pudo iniciar la comparativa (legacy).");
+        }
+
+        const legacyData = await legacyResponse.json();
+        setCompareResult(legacyData);
+        setCompareProgress(100);
+        setCompareStep("completo");
+        setIsComparing(false);
+        return;
+      }
+
+      const msg = await startResponse.text();
+      throw new Error(msg || "No se pudo iniciar la comparativa.");
     } catch (err) {
       console.error("Error en comparativa:", err);
       setCompareError(err.message);
