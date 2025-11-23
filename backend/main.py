@@ -9,6 +9,7 @@ import threading
 import jwt
 import os
 import numpy as np
+import uvicorn
 from datetime import datetime
 import base64
 import textwrap
@@ -49,6 +50,8 @@ ALGORITHM = os.getenv("ALGORITHM", "HS256")
 ENV = os.getenv("ENV", "development")
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
 ALLOW_ONRENDER_WILDCARD = os.getenv("ALLOW_ONRENDER_WILDCARD", "true").lower() in {"1", "true", "yes"}
+HOST = os.getenv("HOST", "0.0.0.0")
+PORT = int(os.getenv("PORT", "1000"))
 SMTP_HOST = os.getenv("SMTP_HOST")
 SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
 SMTP_USERNAME = os.getenv("SMTP_USERNAME")
@@ -1105,3 +1108,12 @@ async def email_report(payload: EmailReportPayload):
         raise HTTPException(status_code=500, detail="No se pudo enviar el reporte por correo.")
 
     return {"detail": "Reporte enviado correctamente por correo."}
+
+
+if __name__ == "__main__":
+    uvicorn.run(
+        "main:app",
+        host=HOST,
+        port=PORT,
+        reload=ENV == "development",
+    )
