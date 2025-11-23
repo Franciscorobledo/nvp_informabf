@@ -14,3 +14,5 @@ matplotlib
 numpy
 PyJWT
 reportlab
+SQLAlchemy
+psycopg2-binary

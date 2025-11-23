@@ -37,7 +37,7 @@ from analysis import (
     generate_data_movie_payload,
     _infer_ai_schema,
 )
-from auth import admin_required, get_current_user, router as auth_router
+from auth import admin_required, ensure_default_admin, get_current_user, router as auth_router
 from ai_module import check_openai_status, infer_dataset_schema_with_ai
 from utils.dataframe_loader import read_dataframes
 from utils.openai_keys import get_openai_api_key, persist_openai_api_key
@@ -49,6 +49,7 @@ from reportlab.lib import colors
 from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
 from reportlab.lib.utils import ImageReader
+from database import Base, SessionLocal, engine
 
 # ==============================
 # CONFIGURACIÓN GLOBAL
@@ -138,6 +139,13 @@ if allow_origin_regex:
 # ==============================
 app.include_router(auth_router, prefix="/auth", tags=["Autenticación"])
 app.include_router(usage_router)
+
+
+@app.on_event("startup")
+def startup_event():
+    Base.metadata.create_all(bind=engine)
+    with SessionLocal() as db:
+        ensure_default_admin(db)
 
 # ==============================
 # FUNCIONES AUXILIARES

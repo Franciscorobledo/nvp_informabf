@@ -126,6 +126,7 @@ No repitas texto del resumen heurístico; complementa con decisiones accionables
             user=(usage_context or {}).get("user"),
             source=(usage_context or {}).get("source"),
             files=(usage_context or {}).get("files"),
+            action=(usage_context or {}).get("action") or "analysis",
         )
         logging.info("✅ Análisis IA generado correctamente.")
         return f"🤖 Análisis generado por IA\n{content}"
@@ -204,6 +205,7 @@ Responde en máximo 8 viñetas.
             prompt_tokens=getattr(usage, "prompt_tokens", None) if usage else None,
             completion_tokens=getattr(usage, "completion_tokens", None) if usage else None,
             source="schema_inference",
+            action="schema_inference",
         )
         return content
     except Exception as exc:
