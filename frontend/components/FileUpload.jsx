@@ -38,6 +38,7 @@ const FileUpload = ({ onDataReceived, onUnauthorized }) => {
   const [polling, setPolling] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [statusMessage, setStatusMessage] = useState("");
+  const [demoMetadata, setDemoMetadata] = useState(null);
   const filterSelectRef = useRef(null);
 
   const dataMovie = analysis?.data_movie;
@@ -515,7 +516,10 @@ const FileUpload = ({ onDataReceived, onUnauthorized }) => {
     return charts.slice(0, 2);
   };
 
-  const handleFileChange = (e) => setFiles(Array.from(e.target.files || []));
+  const handleFileChange = (e) => {
+    setDemoMetadata(null);
+    setFiles(Array.from(e.target.files || []));
+  };
 
   const downloadDriveFile = async (fileId, accessToken, suggestedName) => {
     try {
@@ -615,6 +619,7 @@ const FileUpload = ({ onDataReceived, onUnauthorized }) => {
       return;
     }
 
+    setDemoMetadata(null);
     setAnalysis(null);
     setAiCharts([]);
     setPreAnalysis(null);
@@ -670,6 +675,54 @@ const FileUpload = ({ onDataReceived, onUnauthorized }) => {
       alert("Error de conexión. Verifica que el backend esté corriendo en el puerto 1000.");
       setIsAnalyzing(false);
     } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDemoAnalyze = async () => {
+    setDemoMetadata(null);
+    setAnalysis(null);
+    setFiles([]);
+    setStatusMessage("Cargando demo…");
+    setActiveTab("resumen");
+    setIsAnalyzing(true);
+    setProgress(0);
+    setDisplayProgress(0);
+
+    const token = localStorage.getItem("token");
+    const API_URL = import.meta.env.VITE_API_URL || "http://localhost:1000";
+    try {
+      const res = await fetch(
+        `${API_URL}/demo/analyze?scenario=ventas_demo`,
+        {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        }
+      );
+
+      if ([401, 403].includes(res.status)) {
+        onUnauthorized?.("Tu sesión expiró. Vuelve a iniciar sesión.");
+        setIsAnalyzing(false);
+        return;
+      }
+
+      if (!res.ok) {
+        const msg = await res.text();
+        throw new Error(msg || "No se pudo cargar la demo.");
+      }
+
+      const data = await res.json();
+      setAnalysis(data);
+      setAiCharts(generateAiCharts(data.sample));
+      setDemoMetadata(data.demo_metadata || { is_demo: true, scenario: "ventas_demo" });
+      onDataReceived?.(data);
+      setStatusMessage("Demo lista");
+      setProgress(100);
+      setDisplayProgress(100);
+    } catch (error) {
+      console.error("Error al cargar demo:", error);
+      alert(error.message || "No se pudo cargar la demo");
+    } finally {
+      setIsAnalyzing(false);
       setLoading(false);
     }
   };
@@ -912,8 +965,14 @@ const FileUpload = ({ onDataReceived, onUnauthorized }) => {
               onChange={handleFileChange}
               accept=".csv, .xlsx, .zip"
               multiple
+              disabled={demoMetadata?.is_demo}
               className="w-full sm:w-auto border border-gray-300 dark:border-slate-700 p-3 rounded-lg shadow-sm focus:ring focus:ring-blue-300 bg-white dark:bg-slate-900 dark:text-slate-100 dark:placeholder-slate-400"
             />
+            {demoMetadata?.is_demo && (
+              <p className="text-xs text-amber-600 dark:text-amber-300 text-center">
+                Estás viendo datos de ejemplo. Inicia un análisis real para reemplazarlos.
+              </p>
+            )}
           </>
         ) : (
           <div className="w-full space-y-2 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-xl p-4 shadow-sm">
@@ -952,17 +1011,27 @@ const FileUpload = ({ onDataReceived, onUnauthorized }) => {
           </p>
         )}
 
-        <button
-          onClick={handleUpload}
-          disabled={loading || isAnalyzing || files.length === 0}
-          className={`w-full sm:w-auto px-6 py-3 rounded-lg font-semibold transition-all duration-300 ${
-            loading || isAnalyzing || files.length === 0
-              ? "bg-gray-400 text-white cursor-not-allowed"
-              : "bg-blue-600 hover:bg-blue-700 text-white shadow"
-          }`}
-        >
-          {loading || isAnalyzing ? "Analizando..." : "Analizar archivo(s)"}
-        </button>
+        <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
+          <button
+            onClick={handleUpload}
+            disabled={loading || isAnalyzing || files.length === 0 || demoMetadata?.is_demo}
+            className={`flex-1 px-6 py-3 rounded-lg font-semibold transition-all duration-300 ${
+              loading || isAnalyzing || files.length === 0 || demoMetadata?.is_demo
+                ? "bg-gray-400 text-white cursor-not-allowed"
+                : "bg-blue-600 hover:bg-blue-700 text-white shadow"
+            }`}
+          >
+            {loading || isAnalyzing ? "Analizando..." : "Analizar archivo(s)"}
+          </button>
+
+          <button
+            onClick={handleDemoAnalyze}
+            disabled={isAnalyzing}
+            className="flex-1 px-6 py-3 rounded-lg font-semibold border border-emerald-300 text-emerald-700 dark:text-emerald-200 bg-emerald-50 dark:bg-emerald-900/30 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 transition shadow-sm"
+          >
+            {isAnalyzing && !analysis ? "Cargando demo…" : "Probar con datos de ejemplo"}
+          </button>
+        </div>
       </div>
 
       {(preAnalysis || isAnalyzing) && (
@@ -1079,6 +1148,11 @@ const FileUpload = ({ onDataReceived, onUnauthorized }) => {
                 <p className="text-sm text-gray-600 dark:text-slate-300 max-w-2xl">
                   Una experiencia tipo workspace para revisar resumen, visualizaciones, insights de IA y el reporte ejecutivo en tarjetas limpias.
                 </p>
+                {demoMetadata?.is_demo && (
+                  <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-200 border border-amber-200 dark:border-amber-700 text-xs font-semibold">
+                    Demo activa · Escenario: {demoMetadata.scenario}
+                  </span>
+                )}
               </div>
               <div className="flex flex-wrap gap-3 justify-end">
                 <button

@@ -16,6 +16,7 @@ const DataMovieModule = ({ onUnauthorized }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
   const [response, setResponse] = useState(null);
+  const [demoMetadata, setDemoMetadata] = useState(null);
 
   const apiUrl = useMemo(
     () => import.meta.env.VITE_API_URL || "http://localhost:1000",
@@ -24,6 +25,7 @@ const DataMovieModule = ({ onUnauthorized }) => {
 
   const handleSubmit = async () => {
     setError("");
+    setDemoMetadata(null);
     if (!file) {
       setError("Selecciona un archivo para generar la película de datos.");
       return;
@@ -61,8 +63,42 @@ const DataMovieModule = ({ onUnauthorized }) => {
 
       const data = await res.json();
       setResponse(data);
+      setDemoMetadata(null);
     } catch (err) {
       console.error("Error al generar película de datos", err);
+      setError(err.message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleDemoMovie = async () => {
+    setError("");
+    setIsLoading(true);
+    setResponse(null);
+    setDemoMetadata(null);
+
+    const token = localStorage.getItem("token");
+    try {
+      const res = await fetch(`${apiUrl}/demo/movie?scenario=ventas_demo`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+
+      if ([401, 403].includes(res.status)) {
+        onUnauthorized?.("Tu sesión expiró. Inicia sesión nuevamente.");
+        return;
+      }
+
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(text || "No se pudo generar la película demo.");
+      }
+
+      const data = await res.json();
+      setResponse(data);
+      setDemoMetadata(data.demo_metadata || { is_demo: true, scenario: "ventas_demo" });
+    } catch (err) {
+      console.error("Error al generar película demo", err);
       setError(err.message);
     } finally {
       setIsLoading(false);
@@ -132,15 +168,25 @@ const DataMovieModule = ({ onUnauthorized }) => {
         </div>
       )}
 
-      <button
-        onClick={handleSubmit}
-        disabled={isLoading}
-        className={`inline-flex items-center gap-2 px-6 py-3 rounded-xl font-semibold text-white shadow-md transition focus:outline-none focus:ring-4 focus:ring-emerald-200 ${
-          isLoading ? "bg-emerald-400 cursor-not-allowed" : "bg-emerald-600 hover:bg-emerald-700"
-        }`}
-      >
-        {isLoading ? "Generando…" : "Generar película de datos"}
-      </button>
+      <div className="flex flex-col sm:flex-row gap-3">
+        <button
+          onClick={handleSubmit}
+          disabled={isLoading}
+          className={`flex-1 inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl font-semibold text-white shadow-md transition focus:outline-none focus:ring-4 focus:ring-emerald-200 ${
+            isLoading ? "bg-emerald-400 cursor-not-allowed" : "bg-emerald-600 hover:bg-emerald-700"
+          }`}
+        >
+          {isLoading ? "Generando…" : "Generar película de datos"}
+        </button>
+
+        <button
+          onClick={handleDemoMovie}
+          disabled={isLoading}
+          className="flex-1 inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl font-semibold border border-amber-300 text-amber-800 dark:text-amber-200 bg-amber-50 dark:bg-amber-900/30 hover:bg-amber-100 dark:hover:bg-amber-900/50 transition"
+        >
+          {isLoading ? "Cargando demo…" : "Probar película con datos de ejemplo"}
+        </button>
+      </div>
 
       {response && (
         <div className="space-y-4">
@@ -168,6 +214,11 @@ const DataMovieModule = ({ onUnauthorized }) => {
                 </p>
               )}
             </div>
+            {demoMetadata?.is_demo && (
+              <div className="rounded-2xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/30 p-4 shadow-sm text-amber-800 dark:text-amber-100">
+                Demo activa · Escenario: {demoMetadata.scenario}
+              </div>
+            )}
           </div>
 
           <div className="rounded-3xl border border-slate-800 bg-slate-950/80 p-4">

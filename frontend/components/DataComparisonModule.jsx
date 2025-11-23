@@ -77,10 +77,12 @@ const DataComparisonModule = ({ onUnauthorized }) => {
   const [preSummary, setPreSummary] = useState(null);
   const [showTechnical, setShowTechnical] = useState(false);
   const [showEntityTable, setShowEntityTable] = useState(false);
+  const [demoMetadata, setDemoMetadata] = useState(null);
 
   const handleSubmit = async (event) => {
     event.preventDefault();
     setCompareError("");
+    setDemoMetadata(null);
     setCompareProgress(0);
     setCompareStep("subiendo_archivos");
     setUploadProgress(0);
@@ -165,6 +167,48 @@ const DataComparisonModule = ({ onUnauthorized }) => {
 
       console.error("Error en comparativa:", err);
       setCompareError(err.message);
+      setIsComparing(false);
+    }
+  };
+
+  const handleDemoCompare = async () => {
+    setCompareError("");
+    setIsComparing(true);
+    setCompareProgress(25);
+    setCompareStep("leyendo_archivos");
+    setCompareResult(null);
+    setDemoMetadata(null);
+    setPreSummary(null);
+
+    const token = localStorage.getItem("token");
+    try {
+      const res = await fetch(`${API_URL}/demo/compare?scenario=ventas_2024_vs_2025`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+
+      if ([401, 403].includes(res.status)) {
+        onUnauthorized?.("Tu sesión expiró. Inicia sesión nuevamente.");
+        setIsComparing(false);
+        return;
+      }
+
+      if (!res.ok) {
+        const msg = await res.text();
+        throw new Error(msg || "No se pudo cargar la comparativa demo.");
+      }
+
+      const data = await res.json();
+      setCompareResult(data);
+      setLabelA(data.label_a || "Ventas 2024 (demo)");
+      setLabelB(data.label_b || "Ventas 2025 (demo)");
+      setDemoMetadata(data.demo_metadata || { is_demo: true, scenario: "ventas_2024_vs_2025" });
+      setCompareProgress(100);
+      setCompareStep("completo");
+    } catch (err) {
+      console.error("Error en comparativa demo:", err);
+      setCompareError(err.message);
+      setCompareStep("error");
+    } finally {
       setIsComparing(false);
     }
   };
@@ -298,6 +342,11 @@ const DataComparisonModule = ({ onUnauthorized }) => {
         <p className="text-sm text-gray-600 dark:text-slate-300">
           Compara dos periodos o fuentes de datos, detecta variaciones y obtén insights rápidos.
         </p>
+        {demoMetadata?.is_demo && (
+          <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-200 border border-amber-200 dark:border-amber-700 text-xs font-semibold">
+            Comparativa demo: Ventas 2024 vs 2025
+          </span>
+        )}
       </div>
 
       <form onSubmit={handleSubmit} className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -316,7 +365,11 @@ const DataComparisonModule = ({ onUnauthorized }) => {
           <input
             type="file"
             accept=".csv,.xlsx,.zip"
-            onChange={(e) => setFileA(e.target.files?.[0] ?? null)}
+            onChange={(e) => {
+              setDemoMetadata(null);
+              setFileA(e.target.files?.[0] ?? null);
+            }}
+            disabled={demoMetadata?.is_demo}
             className="w-full text-sm text-gray-700 dark:text-slate-200"
           />
         </div>
@@ -336,7 +389,11 @@ const DataComparisonModule = ({ onUnauthorized }) => {
           <input
             type="file"
             accept=".csv,.xlsx,.zip"
-            onChange={(e) => setFileB(e.target.files?.[0] ?? null)}
+            onChange={(e) => {
+              setDemoMetadata(null);
+              setFileB(e.target.files?.[0] ?? null);
+            }}
+            disabled={demoMetadata?.is_demo}
             className="w-full text-sm text-gray-700 dark:text-slate-200"
           />
         </div>
@@ -363,6 +420,15 @@ const DataComparisonModule = ({ onUnauthorized }) => {
             className="inline-flex items-center gap-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 text-sm font-semibold shadow-md disabled:opacity-60"
           >
             {isComparing ? "Procesando comparativa..." : "Comparar"}
+          </button>
+
+          <button
+            type="button"
+            onClick={handleDemoCompare}
+            disabled={isComparing}
+            className="inline-flex items-center gap-2 rounded-lg border border-amber-300 text-amber-800 dark:text-amber-200 bg-amber-50 dark:bg-amber-900/30 px-5 py-2 text-sm font-semibold shadow-sm hover:bg-amber-100 dark:hover:bg-amber-900/50 disabled:opacity-60"
+          >
+            {isComparing ? "Cargando demo..." : "Probar comparativa de ejemplo"}
           </button>
         </div>
       </form>
