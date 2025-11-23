@@ -7,10 +7,12 @@ import {
   Line,
   LineChart,
   ResponsiveContainer,
+  ReferenceLine,
   Tooltip,
   XAxis,
   YAxis,
 } from "recharts";
+import axios from "axios";
 import API_URL from "../src/api";
 
 const focusOptions = [
@@ -30,9 +32,10 @@ const SummaryStat = ({ label, value, accent }) => (
 
 const ProgressBar = ({ progress, step }) => {
   const stepMessages = {
-    preparando_datos: "Preparando archivos…",
+    subiendo_archivos: "Subiendo archivos…",
+    preparando_datos: "Preparando datos…",
     leyendo_archivos: "Leyendo datasets…",
-    comparando_datasets: "Comparando métricas…",
+    comparando_datasets: "Comparando datasets…",
     generando_insights: "Generando insights…",
     completo: "Comparativa lista.",
     error: "Ocurrió un error en la comparación.",
@@ -67,13 +70,20 @@ const DataComparisonModule = ({ onUnauthorized }) => {
   const [compareProgress, setCompareProgress] = useState(0);
   const [compareStep, setCompareStep] = useState("");
   const [isComparing, setIsComparing] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const [compareError, setCompareError] = useState("");
   const [compareResult, setCompareResult] = useState(null);
   const [preSummary, setPreSummary] = useState(null);
+  const [showTechnical, setShowTechnical] = useState(false);
+  const [showEntityTable, setShowEntityTable] = useState(false);
 
   const handleSubmit = async (event) => {
     event.preventDefault();
     setCompareError("");
+    setCompareProgress(0);
+    setCompareStep("subiendo_archivos");
+    setUploadProgress(0);
 
     if (!fileA || !fileB) {
       setCompareError("Debes seleccionar ambos archivos para comparar.");
@@ -95,52 +105,64 @@ const DataComparisonModule = ({ onUnauthorized }) => {
 
     try {
       setIsComparing(true);
+      setIsUploading(true);
       setCompareResult(null);
 
-      const startResponse = await fetch(`${API_URL}/compare/start`, {
-        method: "POST",
+      const startResponse = await axios.post(`${API_URL}/compare/start`, formData, {
         headers: { Authorization: `Bearer ${token}` },
-        body: formData,
+        onUploadProgress: (event) => {
+          if (!event.total) return;
+          const percent = Math.round((event.loaded / event.total) * 100);
+          setUploadProgress(percent);
+        },
       });
 
-      if (startResponse.ok) {
-        const data = await startResponse.json();
-        setCompareJobId(data.job_id);
-        setPreSummary(data.pre_summary);
-        setCompareProgress(data.progress ?? 0);
-        setCompareStep(data.step || "preparando_datos");
-        return;
-      }
+      const data = startResponse.data;
+      setUploadProgress(100);
+      setIsUploading(false);
+      setCompareJobId(data.job_id);
+      setPreSummary(data.pre_summary);
+      setCompareProgress(data.progress ?? 0);
+      setCompareStep(data.step || "preparando_datos");
+      return;
+    } catch (err) {
+      setIsUploading(false);
+      if (axios.isAxiosError(err)) {
+        const status = err.response?.status;
 
-      if ([401, 403].includes(startResponse.status)) {
-        onUnauthorized?.("Tu sesión expiró. Inicia sesión nuevamente.");
-        return;
-      }
-
-      // Fallback para backends que aún no exponen /compare/start
-      if (startResponse.status === 404) {
-        const legacyResponse = await fetch(`${API_URL}/analyze/compare`, {
-          method: "POST",
-          headers: { Authorization: `Bearer ${token}` },
-          body: formData,
-        });
-
-        if (!legacyResponse.ok) {
-          const msg = await legacyResponse.text();
-          throw new Error(msg || "No se pudo iniciar la comparativa (legacy).");
+        if ([401, 403].includes(status)) {
+          onUnauthorized?.("Tu sesión expiró. Inicia sesión nuevamente.");
+          setIsComparing(false);
+          return;
         }
 
-        const legacyData = await legacyResponse.json();
-        setCompareResult(legacyData);
-        setCompareProgress(100);
-        setCompareStep("completo");
-        setIsComparing(false);
-        return;
+        if (status === 404) {
+          try {
+            const legacyResponse = await axios.post(`${API_URL}/analyze/compare`, formData, {
+              headers: { Authorization: `Bearer ${token}` },
+              onUploadProgress: (event) => {
+                if (!event.total) return;
+                const percent = Math.round((event.loaded / event.total) * 100);
+                setUploadProgress(percent);
+              },
+            });
+
+            const legacyData = legacyResponse.data;
+            setCompareResult(legacyData);
+            setCompareProgress(100);
+            setCompareStep("completo");
+            setIsComparing(false);
+            return;
+          } catch (legacyErr) {
+            const msg = legacyErr.response?.data || legacyErr.message;
+            console.error("Error en comparativa (legacy):", legacyErr);
+            setCompareError(msg || "No se pudo iniciar la comparativa (legacy).");
+            setIsComparing(false);
+            return;
+          }
+        }
       }
 
-      const msg = await startResponse.text();
-      throw new Error(msg || "No se pudo iniciar la comparativa.");
-    } catch (err) {
       console.error("Error en comparativa:", err);
       setCompareError(err.message);
       setIsComparing(false);
@@ -207,22 +229,37 @@ const DataComparisonModule = ({ onUnauthorized }) => {
     return `${(summary.diff_percent * 100).toFixed(1)}%`;
   }, [summary]);
 
+  const resolvedLabelA = useMemo(
+    () => summary?.label_a || labelA || "Dataset A",
+    [labelA, summary]
+  );
+  const resolvedLabelB = useMemo(
+    () => summary?.label_b || labelB || "Dataset B",
+    [labelB, summary]
+  );
+  const mainMetricLabel = useMemo(
+    () => summary?.main_metric_label || summary?.main_metric || "Métrica principal",
+    [summary]
+  );
+
   const renderEntityTable = () => {
     if (!byEntity?.rows?.length) return null;
 
     return (
       <div className="overflow-auto rounded-xl border border-gray-200 dark:border-slate-800">
         <table className="min-w-full text-sm">
-          <thead className="bg-gray-50 dark:bg-slate-800 text-left">
-            <tr>
-              <th className="px-4 py-3 font-semibold text-gray-700 dark:text-slate-200">{byEntity.entity_key || "Entidad"}</th>
-              <th className="px-4 py-3 font-semibold text-gray-700 dark:text-slate-200">{labelA}</th>
-              <th className="px-4 py-3 font-semibold text-gray-700 dark:text-slate-200">{labelB}</th>
-              <th className="px-4 py-3 font-semibold text-gray-700 dark:text-slate-200">Diferencia</th>
-              <th className="px-4 py-3 font-semibold text-gray-700 dark:text-slate-200">Estado</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-200 dark:divide-slate-700">
+            <thead className="bg-gray-50 dark:bg-slate-800 text-left">
+              <tr>
+                <th className="px-4 py-3 font-semibold text-gray-700 dark:text-slate-200">
+                  {byEntity.entity_label || byEntity.entity_key || "Entidad"}
+                </th>
+                <th className="px-4 py-3 font-semibold text-gray-700 dark:text-slate-200">{resolvedLabelA}</th>
+                <th className="px-4 py-3 font-semibold text-gray-700 dark:text-slate-200">{resolvedLabelB}</th>
+                <th className="px-4 py-3 font-semibold text-gray-700 dark:text-slate-200">Diferencia</th>
+                <th className="px-4 py-3 font-semibold text-gray-700 dark:text-slate-200">Estado</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-200 dark:divide-slate-700">
             {byEntity.rows.slice(0, 30).map((row) => (
               <tr key={row.entity} className="hover:bg-gray-50 dark:hover:bg-slate-800/50">
                 <td className="px-4 py-3 font-medium text-gray-900 dark:text-white">{row.entity}</td>
@@ -266,35 +303,41 @@ const DataComparisonModule = ({ onUnauthorized }) => {
       <form onSubmit={handleSubmit} className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <div className="rounded-2xl border border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 space-y-3">
           <p className="text-sm font-semibold text-gray-800 dark:text-white">Dataset A</p>
+          <label className="space-y-1 block">
+            <span className="text-xs font-semibold text-gray-600 dark:text-slate-300">Nombre del dataset</span>
+            <input
+              type="text"
+              value={labelA}
+              onChange={(e) => setLabelA(e.target.value)}
+              placeholder="Ej: Ventas noviembre 2025 (retail)"
+              className="w-full rounded-lg border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 px-3 py-2 text-sm"
+            />
+          </label>
           <input
             type="file"
             accept=".csv,.xlsx,.zip"
             onChange={(e) => setFileA(e.target.files?.[0] ?? null)}
             className="w-full text-sm text-gray-700 dark:text-slate-200"
           />
-          <input
-            type="text"
-            value={labelA}
-            onChange={(e) => setLabelA(e.target.value)}
-            placeholder="Etiqueta (opcional)"
-            className="w-full rounded-lg border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 px-3 py-2 text-sm"
-          />
         </div>
 
         <div className="rounded-2xl border border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 space-y-3">
           <p className="text-sm font-semibold text-gray-800 dark:text-white">Dataset B</p>
+          <label className="space-y-1 block">
+            <span className="text-xs font-semibold text-gray-600 dark:text-slate-300">Nombre del dataset</span>
+            <input
+              type="text"
+              value={labelB}
+              onChange={(e) => setLabelB(e.target.value)}
+              placeholder="Ej: Ventas noviembre 2025 (retail)"
+              className="w-full rounded-lg border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 px-3 py-2 text-sm"
+            />
+          </label>
           <input
             type="file"
             accept=".csv,.xlsx,.zip"
             onChange={(e) => setFileB(e.target.files?.[0] ?? null)}
             className="w-full text-sm text-gray-700 dark:text-slate-200"
-          />
-          <input
-            type="text"
-            value={labelB}
-            onChange={(e) => setLabelB(e.target.value)}
-            placeholder="Etiqueta (opcional)"
-            className="w-full rounded-lg border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 px-3 py-2 text-sm"
           />
         </div>
 
@@ -324,7 +367,11 @@ const DataComparisonModule = ({ onUnauthorized }) => {
         </div>
       </form>
 
-      {isComparing && (
+      {isUploading && (
+        <ProgressBar progress={uploadProgress} step="subiendo_archivos" />
+      )}
+
+      {!isUploading && isComparing && (
         <ProgressBar progress={compareProgress} step={compareStep} />
       )}
 
@@ -354,23 +401,72 @@ const DataComparisonModule = ({ onUnauthorized }) => {
 
       {summary && (
         <div className="space-y-6">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <SummaryStat label={`Filas ${labelA}`} value={summary.rows_a.toLocaleString()} />
-            <SummaryStat label={`Filas ${labelB}`} value={summary.rows_b.toLocaleString()} />
-            <SummaryStat label="Variación absoluta" value={summary.diff_abs.toLocaleString(undefined, { maximumFractionDigits: 2 })} accent={summary.diff_abs >= 0 ? "text-emerald-600" : "text-rose-600"} />
-            <SummaryStat label="Variación %" value={diffPercentLabel} accent={summary.diff_percent >= 0 ? "text-emerald-600" : "text-rose-600"} />
+          <div className="space-y-2">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-lg font-semibold text-gray-800 dark:text-white">
+                Resumen de {resolvedLabelA} vs {resolvedLabelB}
+              </p>
+              <span className="text-xs rounded-full bg-blue-50 text-blue-700 dark:bg-blue-900/40 dark:text-blue-100 px-3 py-1 font-semibold">
+                Métrica principal: {mainMetricLabel}
+              </span>
+            </div>
+            <p className="text-sm text-gray-600 dark:text-slate-300">
+              {summary.insight_text || `En ${resolvedLabelB} la métrica principal cambia ${diffPercentLabel} respecto a ${resolvedLabelA}.`}
+            </p>
           </div>
 
-          {summary.insight_text && (
-            <div className="rounded-xl border border-blue-200 bg-blue-50 text-blue-800 px-4 py-3 text-sm dark:border-blue-800 dark:bg-blue-900/30 dark:text-blue-100">
-              {summary.insight_text}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <SummaryStat
+              label={`${mainMetricLabel} (${resolvedLabelA})`}
+              value={summary.total_a.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+            />
+            <SummaryStat
+              label={`${mainMetricLabel} (${resolvedLabelB})`}
+              value={summary.total_b.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+            />
+            <SummaryStat
+              label="Diferencia absoluta"
+              value={summary.diff_abs.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+              accent={summary.diff_abs >= 0 ? "text-emerald-600" : "text-rose-600"}
+            />
+            <SummaryStat
+              label="Diferencia %"
+              value={diffPercentLabel}
+              accent={summary.diff_percent >= 0 ? "text-emerald-600" : "text-rose-600"}
+            />
+          </div>
+
+          <div className="rounded-2xl border border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 space-y-3">
+            <p className="text-sm font-semibold text-gray-800 dark:text-white">Impacto total</p>
+            <div className="h-56">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart
+                  data={[{ name: mainMetricLabel, value_a: summary.total_a, value_b: summary.total_b }]}
+                  margin={{ top: 10, right: 20, left: 0, bottom: 0 }}
+                  barSize={36}
+                >
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="name" tick={{ fontSize: 12 }} />
+                  <YAxis tick={{ fontSize: 12 }} />
+                  <Tooltip />
+                  <Legend />
+                  <Bar dataKey="value_a" fill="#2563eb" name={resolvedLabelA} radius={[6, 6, 0, 0]} />
+                  <Bar dataKey="value_b" fill="#10b981" name={resolvedLabelB} radius={[6, 6, 0, 0]} />
+                  <ReferenceLine y={0} stroke="#e5e7eb" />
+                </BarChart>
+              </ResponsiveContainer>
             </div>
-          )}
+            <p className="text-xs text-gray-600 dark:text-slate-300">
+              En <strong>{resolvedLabelB}</strong> la métrica principal varia {diffPercentLabel} respecto a <strong>{resolvedLabelA}</strong>.
+            </p>
+          </div>
 
           {byTime?.has_time && byTime.rows?.length > 0 && (
             <div className="rounded-2xl border border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 space-y-3">
               <div className="flex items-center justify-between">
-                <p className="text-sm font-semibold text-gray-800 dark:text-white">Evolución temporal ({byTime.date_column})</p>
+                <p className="text-sm font-semibold text-gray-800 dark:text-white">
+                  Evolución temporal ({byTime.date_column})
+                </p>
                 <span className="text-xs text-gray-500 dark:text-slate-300">Granularidad: {byTime.timeline_granularity || "auto"}</span>
               </div>
               <div className="h-72">
@@ -381,8 +477,11 @@ const DataComparisonModule = ({ onUnauthorized }) => {
                     <YAxis tick={{ fontSize: 12 }} />
                     <Tooltip />
                     <Legend />
-                    <Line type="monotone" dataKey="metric_a" stroke="#2563eb" name={labelA} strokeWidth={2} dot={false} />
-                    <Line type="monotone" dataKey="metric_b" stroke="#10b981" name={labelB} strokeWidth={2} dot={false} />
+                    {byTime?.max_gap?.period && (
+                      <ReferenceLine x={byTime.max_gap.period} stroke="#f59e0b" strokeDasharray="3 3" label="Máx diferencia" />
+                    )}
+                    <Line type="monotone" dataKey="metric_a" stroke="#2563eb" name={resolvedLabelA} strokeWidth={2} dot={false} />
+                    <Line type="monotone" dataKey="metric_b" stroke="#10b981" name={resolvedLabelB} strokeWidth={2} dot={false} />
                   </LineChart>
                 </ResponsiveContainer>
               </div>
@@ -391,6 +490,19 @@ const DataComparisonModule = ({ onUnauthorized }) => {
 
           {byEntity?.rows?.length > 0 && (
             <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-semibold text-gray-800 dark:text-white">
+                  Top variaciones por {byEntity.entity_label || "entidad"}
+                </p>
+                <div className="flex gap-3 text-xs text-gray-600 dark:text-slate-300">
+                  <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-100">
+                    Nuevas: {byEntity.new_count ?? byEntity.new_entities?.length ?? 0}
+                  </span>
+                  <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-100">
+                    Perdidas: {byEntity.lost_count ?? byEntity.lost_entities?.length ?? 0}
+                  </span>
+                </div>
+              </div>
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                 <div className="rounded-2xl border border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4">
                   <p className="text-sm font-semibold text-gray-800 dark:text-white mb-3">Top alzas</p>
@@ -423,9 +535,43 @@ const DataComparisonModule = ({ onUnauthorized }) => {
                 </div>
               </div>
 
-              {renderEntityTable()}
+              <button
+                type="button"
+                onClick={() => setShowEntityTable((prev) => !prev)}
+                className="text-sm font-semibold text-blue-700 dark:text-blue-300 hover:underline"
+              >
+                {showEntityTable ? "Ocultar detalle por entidad" : "Ver detalle por entidad (tabla)"}
+              </button>
+
+              {showEntityTable && renderEntityTable()}
             </div>
           )}
+
+          <div className="rounded-xl border border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4">
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-semibold text-gray-800 dark:text-white">Detalle técnico</p>
+              <button
+                type="button"
+                onClick={() => setShowTechnical((prev) => !prev)}
+                className="text-xs font-semibold text-blue-700 dark:text-blue-300 hover:underline"
+              >
+                {showTechnical ? "Ocultar" : "Ver detalle avanzado"}
+              </button>
+            </div>
+            {showTechnical && (
+              <div className="mt-3 space-y-2 text-xs text-gray-700 dark:text-slate-200">
+                <p>
+                  Filas {resolvedLabelA}: {summary.rows_a.toLocaleString()} · Filas {resolvedLabelB}: {summary.rows_b.toLocaleString()}
+                </p>
+                <p>
+                  Columnas {resolvedLabelA}: {summary.columns_a} · Columnas {resolvedLabelB}: {summary.columns_b}
+                </p>
+                <pre className="overflow-auto rounded-lg bg-gray-900 text-gray-100 p-3">
+                  {JSON.stringify(compareResult?.comparison, null, 2)}
+                </pre>
+              </div>
+            )}
+          </div>
         </div>
       )}
     </section>
