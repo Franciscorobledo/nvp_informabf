@@ -1,157 +1,332 @@
 import React, { useEffect, useMemo, useState } from "react";
+import {
+  LineChart,
+  Line,
+  ResponsiveContainer,
+  CartesianGrid,
+  XAxis,
+  YAxis,
+  Tooltip,
+  ReferenceDot,
+} from "recharts";
+import AvatarPresenter from "./AvatarPresenter";
 import { hasPlayableDataMovie } from "./dataMovieUtils";
 
+const fadeInKeyframes = `
+@keyframes dataMovieFadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}`;
+
+const useCountUp = (targetValue, durationMs = 800) => {
+  const [display, setDisplay] = useState(0);
+
+  useEffect(() => {
+    const start = performance.now();
+    const target = Number(targetValue) || 0;
+
+    const tick = (ts) => {
+      const progress = Math.min((ts - start) / durationMs, 1);
+      setDisplay(Math.floor(progress * target));
+      if (progress < 1) requestAnimationFrame(tick);
+    };
+
+    requestAnimationFrame(tick);
+  }, [targetValue, durationMs]);
+
+  return display.toLocaleString();
+};
+
+const TimelineScene = ({ scene }) => {
+  const data = scene.chart_data || [];
+  if (!data.length) return <p className="text-slate-300">Sin datos temporales.</p>;
+
+  const maxPoint = data.reduce((a, b) => (b.y > a.y ? b : a), data[0]);
+  const minPoint = data.reduce((a, b) => (b.y < a.y ? b : a), data[0]);
+
+  return (
+    <ResponsiveContainer width="100%" height={260}>
+      <LineChart data={data} margin={{ top: 20, right: 20, left: 10, bottom: 0 }}>
+        <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+        <XAxis dataKey="x" stroke="#cbd5e1" tick={{ fontSize: 12 }} />
+        <YAxis stroke="#cbd5e1" tick={{ fontSize: 12 }} />
+        <Tooltip contentStyle={{ background: "#0f172a", border: "1px solid #1e293b", color: "#e2e8f0" }} />
+        <Line
+          type="monotone"
+          dataKey="y"
+          stroke="#60a5fa"
+          strokeWidth={3}
+          dot={{ r: 3, fill: "#60a5fa" }}
+          isAnimationActive
+          animationDuration={900}
+        />
+        <ReferenceDot x={maxPoint.x} y={maxPoint.y} r={6} fill="#22c55e" stroke="none" />
+        <ReferenceDot x={minPoint.x} y={minPoint.y} r={6} fill="#f87171" stroke="none" />
+      </LineChart>
+    </ResponsiveContainer>
+  );
+};
+
+const RankingScene = ({ scene }) => {
+  const entities = scene.entities || [];
+  if (!entities.length) return <p className="text-slate-300">Sin ranking disponible.</p>;
+
+  const maxValue = Math.max(...entities.map((e) => e.value || 0), 1);
+
+  return (
+    <div className="space-y-3">
+      {entities.map((entity, idx) => {
+        const widthPct = Math.max((entity.value / maxValue) * 100, 6);
+        return (
+          <div key={entity.name} className="flex items-center gap-3">
+            <div className="w-24 text-sm text-slate-200 truncate" title={entity.name}>
+              {idx === 0 ? "🏆 " : ""}
+              {entity.name}
+            </div>
+            <div className="h-4 flex-1 rounded-full bg-slate-800 overflow-hidden">
+              <div
+                className={`h-full rounded-full ${idx === 0 ? "bg-emerald-400" : "bg-blue-400"}`}
+                style={{ width: `${widthPct}%`, transition: "width 800ms ease" }}
+              />
+            </div>
+            <div className="w-16 text-right text-sm text-slate-200">
+              {entity.value?.toLocaleString?.()}
+            </div>
+            {entity.share != null && (
+              <div className="w-12 text-right text-xs text-slate-300">{(entity.share * 100).toFixed(0)}%</div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+};
+
+const RisksScene = ({ scene }) => {
+  const alerts = scene.alerts || [];
+  if (!alerts.length) return <p className="text-slate-300">Sin alertas relevantes.</p>;
+
+  return (
+    <div className="grid gap-3 md:grid-cols-2">
+      {alerts.slice(0, 3).map((alert) => (
+        <div
+          key={alert}
+          className="flex items-start gap-3 rounded-xl bg-slate-800/70 p-4 text-slate-100 shadow-md border border-amber-500/30"
+        >
+          <span className="text-2xl animate-pulse">⚠️</span>
+          <p className="text-sm leading-relaxed">{alert}</p>
+        </div>
+      ))}
+    </div>
+  );
+};
+
+const OutroScene = ({ scene, onReplay, onRestart }) => {
+  const recommendations = scene.recommendations || [];
+
+  return (
+    <div className="space-y-4">
+      <ul className="space-y-2">
+        {recommendations.map((rec, idx) => (
+          <li
+            key={rec}
+            className="flex items-start gap-2 text-slate-100"
+            style={{ animation: "dataMovieFadeIn 0.8s ease forwards", animationDelay: `${idx * 120}ms` }}
+          >
+            <span className="mt-0.5">•</span>
+            <span>{rec}</span>
+          </li>
+        ))}
+      </ul>
+      <div className="flex flex-wrap gap-3">
+        <button
+          onClick={onReplay}
+          className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-blue-700"
+        >
+          Reproducir de nuevo
+        </button>
+        <button
+          onClick={onRestart}
+          className="rounded-xl border border-slate-600 px-4 py-2 text-sm font-semibold text-slate-100 hover:border-slate-400"
+        >
+          Volver al inicio de película
+        </button>
+      </div>
+    </div>
+  );
+};
+
+const IntroScene = ({ scene }) => {
+  const rows = useCountUp(scene.kpis?.rows || 0);
+  const entities = useCountUp(scene.kpis?.entities || 0);
+  const metric = useCountUp(scene.kpis?.main_metric_value || 0);
+
+  return (
+    <div className="grid gap-4 md:grid-cols-3">
+      <div className="rounded-2xl bg-slate-800/70 p-4 text-center shadow">
+        <p className="text-xs uppercase text-slate-400">Registros</p>
+        <p className="text-3xl font-extrabold text-white">{rows}</p>
+      </div>
+      <div className="rounded-2xl bg-slate-800/70 p-4 text-center shadow">
+        <p className="text-xs uppercase text-slate-400">Entidades</p>
+        <p className="text-3xl font-extrabold text-white">{entities}</p>
+      </div>
+      {scene.kpis?.main_metric_label && (
+        <div className="rounded-2xl bg-slate-800/70 p-4 text-center shadow">
+          <p className="text-xs uppercase text-slate-400">{scene.kpis.main_metric_label}</p>
+          <p className="text-3xl font-extrabold text-white">{metric}</p>
+        </div>
+      )}
+      {scene.extra?.date_range && (
+        <div className="md:col-span-3 rounded-xl border border-slate-700 bg-slate-800/50 p-3 text-sm text-slate-200">
+          Rango temporal: {scene.extra.date_range}
+        </div>
+      )}
+    </div>
+  );
+};
+
+const renderSceneContent = (scene, onReplay, onRestart) => {
+  // Para agregar un nuevo tipo de escena, extiende este switch y reutiliza el layout principal.
+  switch (scene.type) {
+    case "intro":
+      return <IntroScene scene={scene} />;
+    case "timeline":
+      return <TimelineScene scene={scene} />;
+    case "ranking":
+      return <RankingScene scene={scene} />;
+    case "risks":
+      return <RisksScene scene={scene} />;
+    case "outro":
+      return <OutroScene scene={scene} onReplay={onReplay} onRestart={onRestart} />;
+    default:
+      return <p className="text-slate-300">Escena no soportada todavía.</p>;
+  }
+};
+
 const DataMoviePlayer = ({ dataMovie }) => {
-  const frames = useMemo(() => dataMovie?.frames || [], [dataMovie]);
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const [isPlaying, setIsPlaying] = useState(false);
+  const scenes = useMemo(() => dataMovie?.scenes || dataMovie?.frames || [], [dataMovie]);
+  const [currentSceneIndex, setCurrentSceneIndex] = useState(0);
+  const [isPlaying, setIsPlaying] = useState(true);
+  const [displayedNarration, setDisplayedNarration] = useState("");
 
   useEffect(() => {
-    if (!frames.length) return undefined;
-    setCurrentIndex(0);
-    setIsPlaying(false);
-  }, [frames.length]);
+    if (!scenes.length) return;
+    setCurrentSceneIndex(0);
+    setIsPlaying(true);
+  }, [scenes.length]);
 
   useEffect(() => {
-    if (!isPlaying || frames.length <= 1) return undefined;
+    const narration = scenes[currentSceneIndex]?.narration || "";
+    let index = 0;
+    setDisplayedNarration("");
 
-    const timer = setInterval(() => {
-      setCurrentIndex((prev) => (prev + 1) % frames.length);
-    }, 2600);
+    const typer = setInterval(() => {
+      setDisplayedNarration(narration.slice(0, index));
+      index += 1;
+      if (index > narration.length) clearInterval(typer);
+    }, 20);
 
-    return () => clearInterval(timer);
-  }, [isPlaying, frames.length]);
+    return () => clearInterval(typer);
+  }, [currentSceneIndex, scenes]);
 
-  const hasPlayableFrames = hasPlayableDataMovie(dataMovie);
+  useEffect(() => {
+    if (!isPlaying || scenes.length <= 1) return undefined;
+    const currentScene = scenes[currentSceneIndex] || {};
+    const duration = (currentScene.duration_sec || 6) * 1000;
 
-  if (!hasPlayableFrames) {
+    const timer = setTimeout(() => {
+      if (currentSceneIndex >= scenes.length - 1) {
+        setIsPlaying(false);
+        return;
+      }
+      setCurrentSceneIndex((prev) => Math.min(prev + 1, scenes.length - 1));
+    }, duration);
+
+    return () => clearTimeout(timer);
+  }, [isPlaying, currentSceneIndex, scenes]);
+
+  const hasScenes = hasPlayableDataMovie(dataMovie);
+  const currentScene = scenes[currentSceneIndex] || {};
+
+  const goToScene = (idx, shouldPlay = false) => {
+    setCurrentSceneIndex(idx);
+    setIsPlaying(shouldPlay);
+  };
+
+  if (!hasScenes) {
     return (
-      <div className="rounded-2xl border border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 shadow-sm text-center text-sm text-gray-600 dark:text-slate-300">
-        No se pudo generar la película de datos. Intenta con un archivo que contenga
-        fechas o métricas numéricas para construir la narrativa.
+      <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6 text-center text-sm text-slate-200">
+        No se pudo generar la película de datos. Intenta con un archivo que contenga fechas o métricas numéricas para construir la narrativa.
       </div>
     );
   }
 
-  const currentFrame = frames[currentIndex] || {};
-  const movieTitle = dataMovie.movie_title || "Película de datos";
-  const movieSubtitle = dataMovie.movie_subtitle || "Resumen visual de la evolución";
-
-  const handlePrev = () => setCurrentIndex((prev) => (prev === 0 ? frames.length - 1 : prev - 1));
-  const handleNext = () => setCurrentIndex((prev) => (prev + 1) % frames.length);
-
-  const handleProgressClick = (event) => {
-    if (!frames.length) return;
-    const rect = event.currentTarget.getBoundingClientRect();
-    const ratio = Math.min(Math.max((event.clientX - rect.left) / rect.width, 0), 1);
-    const targetIndex = Math.round(ratio * (frames.length - 1));
-    setCurrentIndex(targetIndex);
-    setIsPlaying(false);
-  };
-
   return (
-    <div className="w-full space-y-4">
-      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-gray-200 dark:border-slate-800 shadow-lg p-6">
-        <div className="flex flex-col gap-2 mb-4">
-          <p className="text-sm font-semibold text-blue-600 dark:text-blue-300">{movieTitle}</p>
-          <h3 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
-            <span role="img" aria-hidden="true">
-              🎬
-            </span>
-            Película de datos
-          </h3>
-          <p className="text-sm text-gray-600 dark:text-slate-300">{movieSubtitle}</p>
-        </div>
+    <div className="rounded-3xl bg-slate-900 p-6 shadow-2xl border border-slate-800 space-y-4">
+      <style>{fadeInKeyframes}</style>
+      <div className="space-y-1">
+        <h3 className="text-2xl font-bold text-white">{dataMovie?.movie_title || "Película de datos"}</h3>
+        <p className="text-sm text-slate-300">{dataMovie?.movie_subtitle || "Presentación guiada"}</p>
+      </div>
 
-        <div className="flex flex-col gap-6">
-          <div className="flex items-center justify-between gap-3 flex-wrap">
-            <div>
-              <p className="text-xs uppercase tracking-[0.15em] text-gray-500 dark:text-slate-400">Momento actual</p>
-              <p className="text-2xl font-extrabold text-gray-900 dark:text-white leading-tight">{currentFrame.time_label}</p>
+      <div className="grid gap-6 lg:grid-cols-3">
+        <div className="lg:col-span-2 rounded-3xl bg-slate-800/70 p-6 shadow-inner border border-slate-700">
+          <div className="mb-4 flex items-center justify-between text-slate-200">
+            <div className="space-y-1">
+              <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Escena</p>
+              <h4 className="text-xl font-semibold">{currentScene.type || ""}</h4>
             </div>
             <div className="flex items-center gap-2">
               <button
                 onClick={() => setIsPlaying((prev) => !prev)}
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white shadow-md transition"
+                className="rounded-full bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-blue-700"
               >
-                <span className="text-lg" role="img" aria-hidden="true">
-                  {isPlaying ? "⏸️" : "▶️"}
-                </span>
-                {isPlaying ? "Pausar" : "Reproducir"}
+                {isPlaying ? "⏸️ Pausar" : "▶️ Reproducir"}
               </button>
               <button
-                onClick={handlePrev}
-                className="inline-flex items-center justify-center px-3 py-2 rounded-xl border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 text-gray-700 dark:text-slate-100 hover:shadow-sm"
+                onClick={() => goToScene(Math.max(currentSceneIndex - 1, 0))}
+                className="rounded-full border border-slate-600 px-3 py-2 text-white hover:border-slate-400"
               >
                 ◀
               </button>
               <button
-                onClick={handleNext}
-                className="inline-flex items-center justify-center px-3 py-2 rounded-xl border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 text-gray-700 dark:text-slate-100 hover:shadow-sm"
+                onClick={() => goToScene(Math.min(currentSceneIndex + 1, scenes.length - 1))}
+                className="rounded-full border border-slate-600 px-3 py-2 text-white hover:border-slate-400"
               >
                 ▶
               </button>
             </div>
           </div>
 
-          <div className="space-y-3">
-            <div
-              className="relative h-3 w-full cursor-pointer rounded-full bg-gray-200 dark:bg-slate-800"
-              onClick={handleProgressClick}
-              aria-label="Progreso de película"
-            >
-              <div
-                className="absolute left-0 top-0 h-full rounded-full bg-blue-500"
-                style={{ width: `${((currentIndex + 1) / frames.length) * 100}%` }}
-              />
-              <div className="absolute inset-0 flex items-center justify-between">
-                {frames.map((frame, idx) => (
-                  <button
-                    key={frame.id}
-                    onClick={() => {
-                      setCurrentIndex(idx);
-                      setIsPlaying(false);
-                    }}
-                    className={`h-3 w-3 rounded-full transition ${
-                      idx === currentIndex
-                        ? "bg-blue-600 ring-4 ring-blue-200 dark:ring-blue-900"
-                        : "bg-white dark:bg-slate-900 border border-gray-300 dark:border-slate-700"
-                    }`}
-                    aria-label={`Ir al frame ${idx + 1}`}
-                  />
-                ))}
-              </div>
-            </div>
-            <div className="flex justify-between text-xs text-gray-500 dark:text-slate-400">
-              <span>Frame {currentIndex + 1} de {frames.length}</span>
-              <span>{currentFrame.context?.granularity !== "none" ? `Granularidad: ${currentFrame.context?.granularity}` : "Sin línea de tiempo"}</span>
-            </div>
-          </div>
-
-          <div className="rounded-2xl border border-gray-200 dark:border-slate-800 bg-gradient-to-br from-white to-gray-50 dark:from-slate-900 dark:to-slate-950 p-6 shadow-inner">
-            <div className="flex flex-col gap-2 mb-4">
-              <h4 className="text-lg font-semibold text-gray-900 dark:text-white">{currentFrame.title}</h4>
-              <p className="text-sm text-gray-600 dark:text-slate-300">{currentFrame.subtitle}</p>
-            </div>
-
-            <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-              {Object.entries(currentFrame.metrics || {}).map(([label, value]) => (
-                <div
-                  key={label}
-                  className="rounded-xl border border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 shadow-sm"
-                >
-                  <p className="text-xs uppercase tracking-wide text-gray-500 dark:text-slate-400">{label}</p>
-                  <p className="text-xl font-bold text-gray-900 dark:text-white">
-                    {typeof value === "number" ? value.toLocaleString() : value}
-                  </p>
-                </div>
-              ))}
-              {(!currentFrame.metrics || !Object.keys(currentFrame.metrics).length) && (
-                <p className="text-sm text-gray-500 dark:text-slate-400">Sin métricas disponibles.</p>
-              )}
-            </div>
+          <div className="min-h-[260px]">
+            {renderSceneContent(currentScene, () => goToScene(0, true), () => goToScene(0, false))}
           </div>
         </div>
+
+        <div className="rounded-3xl bg-slate-800 p-5 shadow-xl border border-slate-700">
+          <AvatarPresenter mood={currentScene.avatar_mood} narration={displayedNarration || currentScene.narration} />
+        </div>
+      </div>
+
+      <div className="flex flex-col gap-3">
+        <div className="flex items-center justify-center gap-2">
+          {scenes.map((scene, idx) => (
+            <button
+              key={scene.id || idx}
+              onClick={() => goToScene(idx, false)}
+              className={`h-3 w-3 rounded-full transition ${
+                idx === currentSceneIndex
+                  ? "bg-blue-500 ring-4 ring-blue-900"
+                  : "bg-slate-700 hover:bg-slate-500"
+              }`}
+              aria-label={`Ir a escena ${idx + 1}`}
+            />
+          ))}
+        </div>
+        <p className="text-center text-xs text-slate-400">
+          Escena {currentSceneIndex + 1} de {scenes.length}
+        </p>
       </div>
     </div>
   );
