@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
+import axios from "axios";
 import {
   Bar,
   BarChart,
@@ -32,6 +33,8 @@ const FileUpload = ({ onDataReceived, onUnauthorized }) => {
   const [emailFeedback, setEmailFeedback] = useState("");
   const [jobId, setJobId] = useState(null);
   const [progress, setProgress] = useState(0);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [analysisProgress, setAnalysisProgress] = useState(0);
   const [displayProgress, setDisplayProgress] = useState(0);
   const [analysisStep, setAnalysisStep] = useState("cargando");
   const [preAnalysis, setPreAnalysis] = useState(null);
@@ -144,10 +147,13 @@ const FileUpload = ({ onDataReceived, onUnauthorized }) => {
         if (cancelled) return;
 
         setProgress(data.progress ?? 0);
+        setAnalysisProgress(data.progress ?? 0);
         setAnalysisStep(data.step || "cargando");
         setStatusMessage(getStepLabel(data.step));
 
         if (data.done) {
+          setProgress(data.progress ?? 100);
+          setAnalysisProgress(data.progress ?? 100);
           setPolling(false);
           setIsAnalyzing(false);
           if (data.error) {
@@ -177,12 +183,13 @@ const FileUpload = ({ onDataReceived, onUnauthorized }) => {
   }, [jobId, polling, onUnauthorized, onDataReceived]);
 
   useEffect(() => {
-    if (displayProgress === progress) return;
+    const target = analysisProgress;
+    if (displayProgress === target) return;
 
     const interval = setInterval(() => {
       setDisplayProgress((prev) => {
-        const diff = progress - prev;
-        if (Math.abs(diff) < 1) return progress;
+        const diff = target - prev;
+        if (Math.abs(diff) < 1) return target;
 
         const step = Math.max(Math.abs(diff) * 0.2, 1);
         const next = prev + Math.sign(diff) * Math.min(step, Math.abs(diff));
@@ -191,7 +198,7 @@ const FileUpload = ({ onDataReceived, onUnauthorized }) => {
     }, 80);
 
     return () => clearInterval(interval);
-  }, [progress, displayProgress]);
+  }, [analysisProgress, displayProgress]);
 
   const categoryKeywords = {
     ventas: [
@@ -625,9 +632,11 @@ const FileUpload = ({ onDataReceived, onUnauthorized }) => {
     setPreAnalysis(null);
     setJobId(null);
     setProgress(0);
+    setUploadProgress(0);
+    setAnalysisProgress(0);
     setDisplayProgress(0);
     setAnalysisStep("cargando");
-    setStatusMessage("");
+    setStatusMessage("Preparando archivo…");
     setPolling(false);
     setIsAnalyzing(true);
 
@@ -640,40 +649,43 @@ const FileUpload = ({ onDataReceived, onUnauthorized }) => {
       const API_URL = import.meta.env.VITE_API_URL || "http://localhost:1000";
       console.log("🌐 Iniciando análisis en:", `${API_URL}/analyze/start`);
 
-      const res = await fetch(`${API_URL}/analyze/start`, {
-        method: "POST",
+      const res = await axios.post(`${API_URL}/analyze/start`, formData, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
-        body: formData,
+        onUploadProgress: (event) => {
+          if (!event.total) return;
+          const percent = Math.round((event.loaded * 100) / event.total);
+          setUploadProgress(percent);
+          setStatusMessage(
+            percent < 100
+              ? "Preparando archivo…"
+              : "Archivo recibido. Lanzando análisis…"
+          );
+        },
       });
 
-      if (!res.ok) {
-        const msg = await res.text();
-
-        if ([401, 403].includes(res.status)) {
-          onUnauthorized?.("Tu sesión expiró. Por favor, vuelve a iniciar sesión.");
-          setIsAnalyzing(false);
-          return;
-        }
-
-        console.error("❌ Error del servidor:", msg);
-        alert(`Error del servidor: ${msg}`);
-        return;
-      }
-
-      const data = await res.json();
+      const data = res.data;
       console.log("📊 Job lanzado:", data);
+      setUploadProgress(100);
       setJobId(data.job_id);
       setPreAnalysis(data.pre_analysis);
       setProgress(data.progress ?? 20);
+      setAnalysisProgress(data.progress ?? 20);
       setAnalysisStep(data.step || "pre_analisis");
-      setStatusMessage(getStepLabel(data.step));
+      setStatusMessage("Analizando datos…");
       setPolling(true);
     } catch (err) {
       console.error("💥 Error al conectar con el backend:", err);
-      alert("Error de conexión. Verifica que el backend esté corriendo en el puerto 1000.");
+      const status = err?.response?.status;
+      if ([401, 403].includes(status)) {
+        onUnauthorized?.("Tu sesión expiró. Por favor, vuelve a iniciar sesión.");
+      } else {
+        const detail = err?.response?.data?.detail || err?.message || "Error de conexión.";
+        alert(typeof detail === "string" ? detail : "No se pudo iniciar el análisis.");
+      }
       setIsAnalyzing(false);
+      setStatusMessage("No se pudo iniciar el análisis.");
     } finally {
       setLoading(false);
     }
@@ -687,6 +699,8 @@ const FileUpload = ({ onDataReceived, onUnauthorized }) => {
     setActiveTab("resumen");
     setIsAnalyzing(true);
     setProgress(0);
+    setAnalysisProgress(0);
+    setUploadProgress(0);
     setDisplayProgress(0);
 
     const token = localStorage.getItem("token");
@@ -717,6 +731,8 @@ const FileUpload = ({ onDataReceived, onUnauthorized }) => {
       onDataReceived?.(data);
       setStatusMessage("Demo lista");
       setProgress(100);
+      setAnalysisProgress(100);
+      setUploadProgress(100);
       setDisplayProgress(100);
     } catch (error) {
       console.error("Error al cargar demo:", error);
@@ -861,6 +877,26 @@ const FileUpload = ({ onDataReceived, onUnauthorized }) => {
     setActiveTab("resumen");
     filterSelectRef.current?.focus();
   };
+
+  const rowsEstimated =
+    (preAnalysis?.rows_est || preAnalysis?.rows || preAnalysis?.sample_size || 0);
+
+  const topNullColumns = preAnalysis
+    ? (() => {
+        const source = preAnalysis.null_percentages || preAnalysis.null_counts || {};
+        const hasPercentages = Boolean(preAnalysis.null_percentages);
+        return Object.entries(source)
+          .sort(([, a], [, b]) => (Number(b ?? 0) || 0) - (Number(a ?? 0) || 0))
+          .slice(0, 3)
+          .map(([col, value]) => {
+            const numericValue = Number(value ?? 0);
+            const displayValue = hasPercentages
+              ? `${numericValue.toFixed(1)}%`
+              : `${numericValue.toLocaleString()}`;
+            return `${col} (${displayValue})`;
+          });
+      })()
+    : [];
 
   return (
     <div className="flex flex-col items-center space-y-6 w-full max-w-5xl mx-auto text-gray-800 dark:text-slate-100">
@@ -1052,12 +1088,35 @@ const FileUpload = ({ onDataReceived, onUnauthorized }) => {
                 </span>
               )}
             </div>
+            {uploadProgress > 0 && (
+              <div className="space-y-2 mb-4">
+                <p className="text-xs font-semibold text-gray-600 dark:text-slate-300">
+                  Progreso de subida
+                </p>
+                <div className="w-full h-2.5 rounded-full bg-gray-100 dark:bg-slate-800 overflow-hidden">
+                  <div
+                    className="h-full bg-gradient-to-r from-amber-400 via-orange-500 to-amber-600 transition-all duration-500"
+                    style={{ width: `${Math.min(uploadProgress, 100)}%` }}
+                  />
+                </div>
+                <p className="text-xs text-gray-600 dark:text-slate-300">
+                  {uploadProgress < 100
+                    ? "Preparando archivo…"
+                    : "Subida completada. Iniciando análisis completo…"}
+                </p>
+              </div>
+            )}
             {displayProgress < 100 && (
-              <div className="w-full h-3 rounded-full bg-gray-100 dark:bg-slate-800 overflow-hidden">
-                <div
-                  className="h-full bg-gradient-to-r from-blue-500 via-indigo-500 to-emerald-400 transition-all duration-500"
-                  style={{ width: `${Math.min(displayProgress, 100)}%` }}
-                />
+              <div className="space-y-2">
+                <p className="text-xs font-semibold text-gray-600 dark:text-slate-300">
+                  Progreso del análisis
+                </p>
+                <div className="w-full h-3 rounded-full bg-gray-100 dark:bg-slate-800 overflow-hidden">
+                  <div
+                    className="h-full bg-gradient-to-r from-blue-500 via-indigo-500 to-emerald-400 transition-all duration-500"
+                    style={{ width: `${Math.min(displayProgress, 100)}%` }}
+                  />
+                </div>
               </div>
             )}
             {statusMessage && (
@@ -1074,10 +1133,14 @@ const FileUpload = ({ onDataReceived, onUnauthorized }) => {
                 <div>
                   <p className="text-xs uppercase tracking-[0.2em] text-gray-500 dark:text-slate-400">Pre-análisis rápido</p>
                   <h3 className="text-lg font-semibold text-gray-800 dark:text-slate-100">
-                    {preAnalysis.rows?.toLocaleString()} filas · {preAnalysis.columns} columnas
+                    {rowsEstimated.toLocaleString()} filas estimadas · {preAnalysis.columns} columnas
                   </h3>
                 </div>
               </div>
+
+              <p className="text-sm text-gray-700 dark:text-slate-200 leading-relaxed">
+                Pre-análisis listo: {rowsEstimated.toLocaleString()} filas estimadas, {preAnalysis.columns} columnas. Columnas con más nulos: {topNullColumns.length ? topNullColumns.join(", ") : "sin nulos relevantes"}.
+              </p>
 
               <div className="grid gap-3 sm:grid-cols-3">
                 <div className="p-3 rounded-xl bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700">

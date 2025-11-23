@@ -928,21 +928,32 @@ def _run_full_analysis_job(
 
 
 def _prepare_pre_analysis(df: pd.DataFrame, focus: str | None):
-    sample_df = df.head(10_000)
+    preview_size = 2_000
+    sample_df = df.head(preview_size)
     columns = list(sample_df.columns)
     null_counts = sample_df.isna().sum().to_dict()
+    null_percentages = {
+        col: float(sample_df[col].isna().mean()) * 100 for col in sample_df.columns
+    }
+    basic_dtypes = {col: str(dtype) for col, dtype in sample_df.dtypes.items()}
     date_candidates = quick_date_detection(sample_df)
-    numeric_columns = [col for col in sample_df.columns if pd.api.types.is_numeric_dtype(sample_df[col])]
+    numeric_columns = [
+        col for col in sample_df.columns if pd.api.types.is_numeric_dtype(sample_df[col])
+    ]
 
-    ai_schema = infer_dataset_schema_with_ai(sample_df, focus=focus)
+    ai_schema = infer_dataset_schema_with_ai(sample_df.head(250), focus=focus)
 
     return {
-        "rows": int(len(sample_df)),
+        "rows_est": int(df.shape[0]),
+        "rows": int(df.shape[0]),
         "columns": int(sample_df.shape[1]),
         "column_names": columns,
         "null_counts": null_counts,
+        "null_percentages": null_percentages,
         "date_candidates": date_candidates,
         "numeric_column_count": len(numeric_columns),
+        "dtypes": basic_dtypes,
+        "sample_size": int(len(sample_df)),
         "ai_schema": ai_schema,
     }
 
