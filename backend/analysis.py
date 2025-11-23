@@ -318,7 +318,7 @@ def _build_frame_title(idx: int, total: int, primary_label: str, is_peak: bool, 
 
 
 def build_data_movie(df: pd.DataFrame, ai_schema: dict | None) -> dict | None:
-    """Construye una presentación guiada (escenas + avatar) a partir del esquema AI."""
+    """Construye la estructura de "película" de datos con escenas y avatar narrador."""
 
     if ai_schema is None or df is None or df.empty:
         return None
@@ -369,18 +369,6 @@ def build_data_movie(df: pd.DataFrame, ai_schema: dict | None) -> dict | None:
     elif dataset_purpose == "stock":
         main_metric_label = "Stock disponible"
 
-    intro_narration_parts = [
-        "Hola, soy tu analista virtual.",
-        f"Este archivo tiene {total_rows} registros",
-    ]
-    if unique_entities:
-        intro_narration_parts.append(f"{unique_entities} {entity_col or 'entidades'}")
-    if metric_col:
-        intro_narration_parts.append(
-            f"un total de {metric_total:,.0f} en {main_metric_label or metric_col}"
-        )
-    intro_narration = ", ".join(intro_narration_parts) + "."
-
     friendly_purpose = {
         "ventas": "ventas",
         "stock": "inventarios",
@@ -388,6 +376,18 @@ def build_data_movie(df: pd.DataFrame, ai_schema: dict | None) -> dict | None:
         "marketing": "campañas",
         "financiero": "finanzas",
     }.get(dataset_purpose, "tus datos")
+
+    intro_narration = " ".join(
+        part
+        for part in [
+            "Bienvenido a tu película de datos.",
+            f"Revisaremos {friendly_purpose} con {total_rows} filas registradas.",
+            f"Encontré {unique_entities} {entity_col or 'entidades'}" if unique_entities else None,
+            f"y un total de {metric_total:,.0f} en {main_metric_label or metric_col}" if metric_col else None,
+            f"Periodo: {date_range}" if date_range else None,
+        ]
+        if part
+    )
 
     scenes: list[dict] = [
         {
@@ -401,13 +401,13 @@ def build_data_movie(df: pd.DataFrame, ai_schema: dict | None) -> dict | None:
                 "main_metric_label": main_metric_label,
                 "main_metric_value": metric_total if metric_col else None,
             },
-            "narration": intro_narration,
-            "extra": {"date_range": date_range} if date_range else None,
+            "narration": intro_narration or "Empecemos el recorrido por tus datos.",
         }
     ]
 
     # Timeline scene
     timeline_points: list[dict] = []
+    timeline_narration = "No identifiqué una fecha clara para la tendencia."
     if date_col:
         working = df.copy()
         working[date_col] = pd.to_datetime(working[date_col], errors="coerce")
@@ -422,7 +422,6 @@ def build_data_movie(df: pd.DataFrame, ai_schema: dict | None) -> dict | None:
                 if pd.isna(ts) or group.empty:
                     continue
 
-                value: float
                 if metric_col:
                     series = _safe_numeric(group[metric_col])
                     value = float(series.sum()) if series.notna().any() else float(len(group))
@@ -434,20 +433,23 @@ def build_data_movie(df: pd.DataFrame, ai_schema: dict | None) -> dict | None:
     if len(timeline_points) >= 2:
         peak_point = max(timeline_points, key=lambda item: item["y"])
         trough_point = min(timeline_points, key=lambda item: item["y"])
+        trend_direction = "al alza" if peak_point["x"] == timeline_points[-1]["x"] else "con altibajos"
         timeline_narration = (
-            f"Aquí ves la evolución. El pico fue el {peak_point['x']} y la caída más fuerte el {trough_point['x']}."
+            "Observa la línea de tiempo: "
+            f"el punto más alto fue el {peak_point['x']} y el más bajo el {trough_point['x']}. "
+            f"La serie luce {trend_direction}."
         )
 
-        scenes.append(
-            {
-                "id": "timeline",
-                "type": "timeline",
-                "duration_sec": 7,
-                "avatar_mood": "focused",
-                "chart_data": timeline_points,
-                "narration": timeline_narration,
-            }
-        )
+    scenes.append(
+        {
+            "id": "timeline",
+            "type": "timeline",
+            "duration_sec": 7,
+            "avatar_mood": "focused",
+            "chart_data": timeline_points,
+            "narration": timeline_narration,
+        }
+    )
 
     # Ranking scene
     ranking_entities: list[dict] = []
@@ -464,32 +466,26 @@ def build_data_movie(df: pd.DataFrame, ai_schema: dict | None) -> dict | None:
         for name, value in ranking_series.head(5).items():
             ranking_entities.append({"name": str(name), "value": float(json_safe(value))})
 
-    if ranking_entities:
-        total_ranking = sum(entity["value"] for entity in ranking_entities) or 1
-        top_entity = ranking_entities[0]["name"]
-        top_share = ranking_entities[0]["value"] / total_ranking if total_ranking else 0
-        ranking_narration = (
-            f"Estos son los principales {entity_col or 'elementos'}. "
-            f"{top_entity} concentra un {top_share:.0%} del total."
-        )
-        scenes.append(
-            {
-                "id": "ranking",
-                "type": "ranking",
-                "duration_sec": 7,
-                "avatar_mood": "happy",
-                "entity_label": entity_col or "Entidad",
-                "entities": [
-                    {
-                        "name": item["name"],
-                        "value": item["value"],
-                        "share": (item["value"] / total_ranking) if total_ranking else None,
-                    }
-                    for item in ranking_entities
-                ],
-                "narration": ranking_narration,
-            }
-        )
+    total_ranking = sum(entity["value"] for entity in ranking_entities) or 1
+    ranking_narration = "Top entidades que más aportan." if ranking_entities else "Sin entidades destacadas aún."
+    scenes.append(
+        {
+            "id": "ranking",
+            "type": "ranking",
+            "duration_sec": 7,
+            "avatar_mood": "happy",
+            "entity_label": entity_col or "Entidad",
+            "entities": [
+                {
+                    "name": item["name"],
+                    "value": item["value"],
+                    "share": (item["value"] / total_ranking) if total_ranking else None,
+                }
+                for item in ranking_entities
+            ],
+            "narration": ranking_narration,
+        }
+    )
 
     # Risks scene
     alerts: list[str] = []
@@ -532,17 +528,16 @@ def build_data_movie(df: pd.DataFrame, ai_schema: dict | None) -> dict | None:
             "duration_sec": 6,
             "avatar_mood": "warning",
             "alerts": alerts[:3],
-            "narration": "Hay algunos puntos a vigilar. Te muestro las alertas más relevantes.",
+            "narration": "Riesgos u oportunidades clave.",
         }
     )
 
     # Outro scene
     recommendations = [
-        "Revisa la reposición de los puntos con riesgo de quiebre.",
-        "Potencia las entidades con mejor rotación.",
-        "Diversifica para disminuir la concentración.",
+        "Acciona sobre los picos y caídas para estabilizar la tendencia.",
+        "Refuerza a las entidades líderes sin descuidar la cola larga.",
+        "Define experimentos para reducir la volatilidad detectada.",
     ]
-    outro_narration = "Para cerrar, aquí tienes acciones recomendadas basadas en este archivo."
 
     scenes.append(
         {
@@ -551,14 +546,14 @@ def build_data_movie(df: pd.DataFrame, ai_schema: dict | None) -> dict | None:
             "duration_sec": 7,
             "avatar_mood": "positive",
             "recommendations": recommendations,
-            "narration": outro_narration,
+            "narration": "Cierre con recomendaciones.",
         }
     )
 
     return {
         "movie_title": f"Película de datos: {friendly_purpose}",
         "movie_subtitle": "Presentación guiada de tu archivo",
-        "scenes": [scene for scene in scenes if scene],
+        "scenes": scenes,
     }
 
 
