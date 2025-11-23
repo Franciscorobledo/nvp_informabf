@@ -253,12 +253,20 @@ def add_wrapped_text(canvas_obj, text, x, y, width, line_height=12, font_name="H
 def _normalize_dataset(
     df: pd.DataFrame, focus: str | None
 ) -> tuple[pd.DataFrame, dict, dict]:
-    """Limpia un dataframe y obtiene un esquema heurístico + notas de IA."""
+    """Limpia un dataframe y obtiene un esquema heurístico + notas de IA.
+
+    Para acelerar el proceso y evitar enviar información sensible/completa a la IA,
+    solo se usa una muestra (hasta 2.000 filas) para la detección de esquema y
+    tipado. El dataframe limpio completo se devuelve para los cálculos finales.
+    """
 
     cleaned = df.replace(["", "NA", "NaN", "None"], np.nan).dropna(how="all")
-    column_types = detect_column_types(cleaned)
-    heuristic_schema = _infer_ai_schema(cleaned, column_types)
-    ai_notes = infer_dataset_schema_with_ai(cleaned.head(5_000), focus=focus)
+    sample_size = min(len(cleaned), 2_000)
+    sample = cleaned.sample(n=sample_size, random_state=42) if sample_size else cleaned
+
+    column_types = detect_column_types(sample)
+    heuristic_schema = _infer_ai_schema(sample, column_types)
+    ai_notes = infer_dataset_schema_with_ai(sample, focus=focus)
 
     if isinstance(heuristic_schema, dict):
         heuristic_schema = {**heuristic_schema, "ai_notes": ai_notes}
@@ -375,23 +383,52 @@ def build_comparison(
     if not main_metric:
         raise HTTPException(status_code=400, detail="No se encontró una métrica principal para comparar.")
 
-    metric_a = pd.to_numeric(df_a.get(main_metric), errors="coerce")
-    metric_b = pd.to_numeric(df_b.get(main_metric), errors="coerce")
+    main_metric_label = (
+        (schema_a or {}).get("main_metric_label")
+        or (schema_b or {}).get("main_metric_label")
+        or str(main_metric).replace("_", " ").title()
+    )
+    entity_label = (
+        (schema_a or {}).get("entity_label")
+        or (schema_b or {}).get("entity_label")
+        or entity_column
+        or "Entidad"
+    )
+
+    required_columns = {main_metric}
+    if entity_column:
+        required_columns.add(entity_column)
+    if date_column:
+        required_columns.add(date_column)
+
+    df_a_reduced = df_a[[c for c in required_columns if c in df_a.columns]].copy()
+    df_b_reduced = df_b[[c for c in required_columns if c in df_b.columns]].copy()
+
+    metric_a = pd.to_numeric(df_a_reduced.get(main_metric, pd.Series(dtype=float)), errors="coerce")
+    metric_b = pd.to_numeric(df_b_reduced.get(main_metric, pd.Series(dtype=float)), errors="coerce")
 
     total_a = float(metric_a.sum(skipna=True)) if main_metric in df_a.columns else 0.0
     total_b = float(metric_b.sum(skipna=True)) if main_metric in df_b.columns else 0.0
     diff_abs = total_b - total_a
     diff_percent = (diff_abs / total_a) if total_a else None
 
-    by_entity = {"entity_key": entity_column, "rows": [], "top_increases": [], "top_decreases": [], "new_entities": [], "lost_entities": []}
-    if entity_column and main_metric in df_a.columns and main_metric in df_b.columns:
+    by_entity = {
+        "entity_key": entity_column,
+        "entity_label": entity_label,
+        "rows": [],
+        "top_increases": [],
+        "top_decreases": [],
+        "new_entities": [],
+        "lost_entities": [],
+    }
+    if entity_column and main_metric in df_a_reduced.columns and main_metric in df_b_reduced.columns:
         group_a = (
-            df_a.groupby(entity_column)[main_metric]
+            df_a_reduced.groupby(entity_column)[main_metric]
             .apply(lambda s: pd.to_numeric(s, errors="coerce").sum())
             .rename("value_a")
         )
         group_b = (
-            df_b.groupby(entity_column)[main_metric]
+            df_b_reduced.groupby(entity_column)[main_metric]
             .apply(lambda s: pd.to_numeric(s, errors="coerce").sum())
             .rename("value_b")
         )
@@ -419,8 +456,14 @@ def build_comparison(
         by_entity["new_entities"] = [r for r in rows if r.get("status") == "new"]
         by_entity["lost_entities"] = [r for r in rows if r.get("status") == "lost"]
 
-    by_time = {"has_time": False, "date_column": date_column, "rows": [], "timeline_granularity": timeline_granularity}
-    if date_column and main_metric in df_a.columns and main_metric in df_b.columns:
+    by_time = {
+        "has_time": False,
+        "date_column": date_column,
+        "rows": [],
+        "timeline_granularity": timeline_granularity,
+        "max_gap": None,
+    }
+    if date_column and main_metric in df_a_reduced.columns and main_metric in df_b_reduced.columns:
         freq_map = {"day": "D", "week": "W", "month": "M"}
         freq = freq_map.get(timeline_granularity, "M")
         by_time["has_time"] = True
@@ -432,8 +475,8 @@ def build_comparison(
             copy[main_metric] = pd.to_numeric(copy[main_metric], errors="coerce")
             return copy.groupby(pd.Grouper(key=date_column, freq=freq))[main_metric].sum().rename(label)
 
-        series_a = _prepare_time(df_a, "metric_a") if date_column in df_a.columns else None
-        series_b = _prepare_time(df_b, "metric_b") if date_column in df_b.columns else None
+        series_a = _prepare_time(df_a_reduced, "metric_a") if date_column in df_a_reduced.columns else None
+        series_b = _prepare_time(df_b_reduced, "metric_b") if date_column in df_b_reduced.columns else None
 
         if series_a is not None or series_b is not None:
             merged = pd.concat([series_a, series_b], axis=1).fillna(0)
@@ -445,13 +488,36 @@ def build_comparison(
             merged_reset["period"] = merged_reset["period"].dt.strftime("%Y-%m-%d")
             by_time["rows"] = merged_reset.to_dict(orient="records")
 
-    insight_text = f"La variación total de {main_metric} es de {diff_percent:.1%}." if diff_percent is not None else None
+            if not merged_reset.empty:
+                max_idx = merged_reset["diff_abs"].abs().idxmax()
+                max_row = merged_reset.loc[max_idx]
+                by_time["max_gap"] = {
+                    "period": max_row.get("period"),
+                    "diff_abs": max_row.get("diff_abs"),
+                    "diff_percent": max_row.get("diff_percent"),
+                }
+
     if by_entity.get("top_increases"):
         top_names = ", ".join(r["entity"] for r in by_entity["top_increases"][:3])
-        insight_text = (insight_text or "") + f" Principales alzas: {top_names}."
+        insight_pref = f" Principales alzas: {top_names}."
+    else:
+        insight_pref = ""
     if by_entity.get("top_decreases"):
         bottom_names = ", ".join(r["entity"] for r in by_entity["top_decreases"][:3])
-        insight_text = (insight_text or "") + f" Principales caídas: {bottom_names}."
+        insight_pref += f" Principales caídas: {bottom_names}."
+
+    insight_text = None
+    if diff_percent is not None:
+        direction = "crece" if diff_abs >= 0 else "cae"
+        insight_text = (
+            f"En {label_b} la métrica principal ({main_metric_label}) {direction} "
+            f"{diff_percent:.1%} respecto a {label_a}."
+        )
+    if insight_pref:
+        insight_text = (insight_text or "") + insight_pref
+
+    by_entity["new_count"] = len(by_entity["new_entities"])
+    by_entity["lost_count"] = len(by_entity["lost_entities"])
 
     comparison = {
         "summary": {
@@ -463,6 +529,7 @@ def build_comparison(
             "columns_b": int(df_b.shape[1]),
             "dataset_purpose": dataset_purpose,
             "main_metric": main_metric,
+            "main_metric_label": main_metric_label,
             "total_a": total_a,
             "total_b": total_b,
             "diff_abs": diff_abs,
