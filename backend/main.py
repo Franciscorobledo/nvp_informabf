@@ -55,6 +55,7 @@ from reportlab.lib.utils import ImageReader
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DOTENV_PATH = os.path.join(BASE_DIR, ".env")
 TMP_DIR = os.path.join(BASE_DIR, "tmp")
+SAMPLE_DATA_DIR = os.path.join(BASE_DIR, "sample_data")
 load_dotenv(dotenv_path=DOTENV_PATH, override=False)
 
 SECRET_KEY = os.getenv("SECRET_KEY", "DEV_SECRET_KEY")
@@ -158,6 +159,20 @@ def json_safe_deep(data):
     if isinstance(data, (list, tuple, set)):
         return [json_safe_deep(v) for v in data]
     return json_safe(data)
+
+
+def _load_sample_dataframe(file_name: str) -> pd.DataFrame:
+    """Lee un CSV de la carpeta de datos de ejemplo."""
+
+    path = os.path.join(SAMPLE_DATA_DIR, file_name)
+    if not os.path.exists(path):
+        raise HTTPException(status_code=404, detail=f"Archivo de ejemplo no encontrado: {file_name}")
+
+    try:
+        return pd.read_csv(path)
+    except Exception as exc:  # noqa: BLE001
+        logging.error("❌ No se pudo cargar el archivo demo %s: %s", file_name, exc)
+        raise HTTPException(status_code=500, detail="No se pudo leer el archivo de ejemplo.") from exc
 
 
 def quick_date_detection(df: pd.DataFrame) -> list[str]:
@@ -930,6 +945,144 @@ def _prepare_pre_analysis(df: pd.DataFrame, focus: str | None):
         "numeric_column_count": len(numeric_columns),
         "ai_schema": ai_schema,
     }
+
+
+# ==============================
+# ENDPOINTS DE DEMO
+# ==============================
+
+
+@app.get("/demo/analyze")
+async def demo_analyze(
+    scenario: str = "ventas_demo", current_user=Depends(get_current_user)
+):
+    scenario_map = {
+        "ventas_demo": "ventas_demo.csv",
+        "stock_demo": "stock_demo.csv",
+    }
+    file_name = scenario_map.get(scenario, scenario)
+    if not file_name.endswith(".csv"):
+        file_name = f"{file_name}.csv"
+
+    df = _load_sample_dataframe(file_name)
+    try:
+        usage_context = {
+            "user": current_user.get("username") if isinstance(current_user, dict) else None,
+            "source": "demo_analyze",
+            "scenario": scenario,
+            "files": [file_name],
+        }
+
+        result = analyze_file(
+            df,
+            date_field=None,
+            metric_field=None,
+            segment_by=None,
+            file_types={".csv"},
+            usage_context=usage_context,
+            user_id=current_user.get("username") if isinstance(current_user, dict) else None,
+        )
+
+        safe_sample = df.head(10).applymap(json_safe).to_dict(orient="records")
+        response = json_safe_deep(
+            {
+                "summary": result.get("summary", {}),
+                "sample": safe_sample,
+                "graphs": result.get("graphs", []),
+                "ai_summary": result.get("ai_summary", "No se generó resumen automático."),
+                "data_health": result.get("data_health", {}),
+                "refined_insights": result.get("refined_insights", []),
+                "historical_deviation": result.get("historical_deviation"),
+                "learning_updated": result.get("learning_updated", False),
+                "ai_schema": result.get("ai_schema"),
+                "data_movie": result.get("data_movie"),
+                "demo_metadata": {"is_demo": True, "scenario": scenario},
+            }
+        )
+        return JSONResponse(content=response)
+    except HTTPException:
+        raise
+    except Exception as exc:  # noqa: BLE001
+        logging.error("❌ Error en análisis demo: %s", exc)
+        raise HTTPException(status_code=500, detail=f"Error al generar la demo: {exc}") from exc
+
+
+@app.get("/demo/movie")
+async def demo_movie(scenario: str = "ventas_demo", current_user=Depends(get_current_user)):
+    scenario_map = {
+        "ventas_demo": "ventas_demo.csv",
+        "stock_demo": "stock_demo.csv",
+    }
+    file_name = scenario_map.get(scenario, scenario)
+    if not file_name.endswith(".csv"):
+        file_name = f"{file_name}.csv"
+
+    df = _load_sample_dataframe(file_name)
+    try:
+        payload = generate_data_movie_payload(df)
+        payload["demo_metadata"] = {"is_demo": True, "scenario": scenario}
+        return JSONResponse(content=json_safe_deep(payload))
+    except Exception as exc:  # noqa: BLE001
+        logging.error("❌ Error generando película de datos demo: %s", exc)
+        raise HTTPException(status_code=500, detail=f"No se pudo generar la película demo: {exc}") from exc
+
+
+@app.get("/demo/compare")
+async def demo_compare(
+    scenario: str = "ventas_2024_vs_2025",
+    user_focus: str = "todo",
+    current_user=Depends(get_current_user),
+):
+    scenario_map = {
+        "ventas_2024_vs_2025": (
+            "ventas_comparativa_A.csv",
+            "ventas_comparativa_B.csv",
+        ),
+        "ventas_demo": ("ventas_demo.csv", "stock_demo.csv"),
+    }
+    file_a, file_b = scenario_map.get(scenario, (None, None))
+    if not file_a or not file_b:
+        raise HTTPException(status_code=404, detail="Escenario de comparativa demo no disponible")
+
+    df_a = _load_sample_dataframe(file_a)
+    df_b = _load_sample_dataframe(file_b)
+
+    try:
+        df_a, ai_schema_a, column_types_a = _normalize_dataset(df_a, user_focus)
+        df_b, ai_schema_b, column_types_b = _normalize_dataset(df_b, user_focus)
+
+        label_a = "Ventas 2024 (demo)"
+        label_b = "Ventas 2025 (demo)"
+
+        comparison = build_comparison(
+            df_a,
+            df_b,
+            ai_schema_a if isinstance(ai_schema_a, dict) else {},
+            ai_schema_b if isinstance(ai_schema_b, dict) else {},
+            column_types_a,
+            column_types_b,
+            label_a,
+            label_b,
+            user_focus,
+        )
+
+        return JSONResponse(
+            content=json_safe_deep(
+                {
+                    "label_a": label_a,
+                    "label_b": label_b,
+                    "ai_schema_a": ai_schema_a,
+                    "ai_schema_b": ai_schema_b,
+                    "comparison": comparison,
+                    "demo_metadata": {"is_demo": True, "scenario": scenario},
+                }
+            )
+        )
+    except HTTPException:
+        raise
+    except Exception as exc:  # noqa: BLE001
+        logging.error("❌ Error en comparativa demo: %s", exc)
+        raise HTTPException(status_code=500, detail=f"Error al generar la comparativa demo: {exc}") from exc
 
 
 # ==============================
