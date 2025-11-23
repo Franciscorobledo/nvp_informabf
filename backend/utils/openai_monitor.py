@@ -1,5 +1,7 @@
 import json
 import logging
+import json
+import logging
 import os
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -7,6 +9,8 @@ from typing import Any, Dict, Optional
 
 import requests
 
+from database import SessionLocal
+from models import ApiUsage, User
 from utils.openai_keys import get_openai_api_key
 
 # Archivo persistente para consolidar el uso de OpenAI
@@ -221,6 +225,7 @@ def record_openai_usage(
     user: str | None = None,
     source: str | None = None,
     files: list[str] | None = None,
+    action: str | None = None,
 ) -> Dict[str, Any]:
     """Actualiza el historial de uso de OpenAI y devuelve un snapshot."""
     usage = _load_usage()
@@ -268,7 +273,56 @@ def record_openai_usage(
         usage["total_cost_usd"],
     )
 
+    _persist_usage_event(
+        model=model,
+        prompt_tokens=prompt_tokens,
+        completion_tokens=completion_tokens,
+        total_tokens=total_tokens,
+        total_cost=total_cost,
+        user=user,
+        source=source,
+        files=files,
+        action=action,
+    )
+
     return get_usage_snapshot()
+
+
+def _persist_usage_event(
+    *,
+    model: str,
+    prompt_tokens: int,
+    completion_tokens: int,
+    total_tokens: int,
+    total_cost: float,
+    user: str | None,
+    source: str | None,
+    files: list[str] | None,
+    action: str | None,
+) -> None:
+    try:
+        with SessionLocal() as db:
+            db_user: User | None = None
+            if user:
+                db_user = db.query(User).filter(User.username == user).first()
+
+            usage_entry = ApiUsage(
+                user=db_user,
+                user_id=db_user.id if db_user else None,
+                username=db_user.username if db_user else user or "desconocido",
+                model=model,
+                action=action or source or "general",
+                prompt_tokens=prompt_tokens,
+                completion_tokens=completion_tokens,
+                total_tokens=total_tokens,
+                cost_usd=total_cost,
+                source=source,
+                files=files or [],
+            )
+            db.add(usage_entry)
+            db.commit()
+    except Exception as exc:  # noqa: BLE001
+        logging.warning("No se pudo registrar uso en base de datos: %s", exc)
 
 
 def get_usage_history() -> Dict[str, Any]:

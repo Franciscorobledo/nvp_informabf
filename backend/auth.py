@@ -1,17 +1,18 @@
 from datetime import datetime, timedelta, timezone
 import hashlib
-import json
 import logging
 import os
-from pathlib import Path
-from typing import Dict, Literal, Optional
-import shutil
+from typing import Literal, Optional
 
 import jwt
 from dotenv import load_dotenv
-from fastapi import APIRouter, Depends, Form, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, Field
+from sqlalchemy.orm import Session
+
+from database import get_db
+from models import DeletedUser, User
 
 # -----------------------------
 # CONFIGURACIÓN
@@ -25,59 +26,6 @@ ALGORITHM = os.getenv("ALGORITHM", "HS256")
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", 1440))
 DEFAULT_ADMIN_PASSWORD = os.getenv("DEFAULT_ADMIN_PASSWORD", "Francisco8")
 
-# Se usa una carpeta fuera del árbol del proyecto para evitar que despliegues
-# o actualizaciones del código sobreescriban las cuentas creadas. Se puede
-# personalizar con AUTH_STORAGE_DIR. En entornos como Render (p. ej. planes
-# gratuitos que hibernan), se intentará usar directorios persistentes si
-# existen (por ejemplo ``/data`` o variables proporcionadas por el proveedor).
-
-
-def _resolve_storage_dir() -> Path:
-    """Selecciona una ubicación de almacenamiento que sobreviva reinicios.
-
-    Prioriza rutas explícitas vía ``AUTH_STORAGE_DIR`` y directorios comunes en
-    servicios PaaS (``RENDER_DISK_PATH``, ``RENDER_DATA_DIR`` o ``/data``). Si
-    ninguno es utilizable, cae a una carpeta en el ``home``.
-    """
-
-    explicit_dir = os.getenv("AUTH_STORAGE_DIR")
-    if explicit_dir:
-        return Path(explicit_dir).expanduser()
-
-    candidates = [
-        os.getenv("RENDER_DISK_PATH"),
-        os.getenv("RENDER_DATA_DIR"),
-        "/data",
-        Path.home() / ".informabf",
-    ]
-
-    for candidate in candidates:
-        if not candidate:
-            continue
-        path = Path(candidate).expanduser()
-        try:
-            path.mkdir(parents=True, exist_ok=True)
-        except Exception as exc:
-            logging.warning("No se pudo preparar %s como almacenamiento: %s", path, exc)
-            continue
-        return path
-
-    # Como último recurso, usar la carpeta actual del proyecto.
-    fallback = Path.cwd() / "data"
-    fallback.mkdir(parents=True, exist_ok=True)
-    return fallback
-
-
-STORAGE_DIR = _resolve_storage_dir() / "auth_storage"
-
-# Archivos de compatibilidad con la ruta anterior. Si existen, se usarán como
-# base para inicializar el nuevo almacenamiento persistente en STORAGE_DIR.
-LEGACY_USERS_FILE = Path(__file__).with_name("users.json")
-LEGACY_DELETED_USERS_FILE = Path(__file__).with_name("deleted_users.json")
-
-USERS_FILE = STORAGE_DIR / "users.json"
-DELETED_USERS_FILE = STORAGE_DIR / "deleted_users.json"
-
 security = HTTPBearer()
 
 logging.basicConfig(
@@ -88,196 +36,108 @@ logging.basicConfig(
 # -----------------------------
 # UTILIDADES DE USUARIOS
 # -----------------------------
+
 def hash_password(password: str) -> str:
     return hashlib.sha256(password.encode()).hexdigest()
+
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     return hash_password(plain_password) == hashed_password
 
-def _normalize_record(username: str, record) -> dict:
-    """Normaliza un registro de usuario para soportar esquemas previos."""
-    if isinstance(record, dict):
-        normalized = {
-            "username": record.get("username", username),
-            "full_name": record.get("full_name") or username,
-            "hashed_password": record.get("hashed_password") or "",
-            "role": record.get("role", "user"),
-            "active": record.get("active", True),
-            "created_at": record.get("created_at") or datetime.utcnow().isoformat(),
-            "expires_at": record.get("expires_at"),
-        }
-        return normalized
 
-    if isinstance(record, str):
-        # Esquema anterior: {"username": "hashed_password"}
-        return {
-            "username": username,
-            "full_name": username,
-            "hashed_password": record,
-            "role": "admin" if username == "admin" else "user",
-            "active": True,
-            "created_at": datetime.utcnow().isoformat(),
-        }
-
-    raise ValueError(f"Formato de usuario no soportado para '{username}'")
-
-
-def _ensure_storage() -> None:
-    """Garantiza la existencia del archivo de usuarios con el admin inicial.
-
-    Los archivos se guardan en un directorio persistente (configurable por
-    ``AUTH_STORAGE_DIR``) para evitar que los despliegues sobrescriban las
-    cuentas creadas. Si existen los archivos originales junto al código, se
-    migran automáticamente a la nueva ubicación.
-    """
-    STORAGE_DIR.mkdir(parents=True, exist_ok=True)
-
-    if not USERS_FILE.exists():
-        if LEGACY_USERS_FILE.exists():
-            logging.info("Migrando usuarios desde el archivo legado")
-            shutil.copy2(LEGACY_USERS_FILE, USERS_FILE)
-        else:
-            logging.info("Creando archivo de usuarios con cuenta de administrador por defecto")
-            admin_record = {
-                "username": "admin",
-                "full_name": "Administrador del Sistema",
-                "hashed_password": hash_password(DEFAULT_ADMIN_PASSWORD),
-                "role": "admin",
-                "active": True,
-                "created_at": datetime.utcnow().isoformat(),
-            }
-            USERS_FILE.write_text(json.dumps({"admin": admin_record}, indent=2), encoding="utf-8")
+def ensure_default_admin(db: Session) -> None:
+    existing = db.query(User).count()
+    if existing:
         return
 
-    try:
-        data = json.loads(USERS_FILE.read_text(encoding="utf-8"))
-    except json.JSONDecodeError:
-        raise HTTPException(status_code=500, detail="No se pudo leer el archivo de usuarios")
-
-    admin_record = data.get("admin")
-    if not admin_record:
-        logging.warning("No se encontró el usuario admin, recreando entrada por defecto")
-        data["admin"] = {
-            "username": "admin",
-            "full_name": "Administrador del Sistema",
-            "hashed_password": hash_password(DEFAULT_ADMIN_PASSWORD),
-            "role": "admin",
-            "active": True,
-            "created_at": datetime.utcnow().isoformat(),
-        }
-    else:
-        normalized_admin = _normalize_record("admin", admin_record)
-        if not normalized_admin.get("hashed_password"):
-            normalized_admin["hashed_password"] = hash_password(DEFAULT_ADMIN_PASSWORD)
-        data["admin"] = normalized_admin
-
-    USERS_FILE.write_text(json.dumps(data, indent=2), encoding="utf-8")
+    logging.info("Creando usuario administrador por defecto")
+    admin = User(
+        username="admin",
+        full_name="Administrador del Sistema",
+        hashed_password=hash_password(DEFAULT_ADMIN_PASSWORD),
+        role="admin",
+        is_active=True,
+        created_at=datetime.utcnow(),
+    )
+    db.add(admin)
+    db.commit()
 
 
-def load_users() -> Dict[str, dict]:
-    _ensure_storage()
-    try:
-        data = json.loads(USERS_FILE.read_text(encoding="utf-8"))
-        return {username: _normalize_record(username, record) for username, record in data.items()}
-    except Exception as exc:
-        logging.error(f"Error al cargar usuarios: {exc}")
-        raise HTTPException(status_code=500, detail="No se pudieron cargar los usuarios")
+def get_user_by_username(db: Session, username: str) -> Optional[User]:
+    return db.query(User).filter(User.username == username).first()
 
 
-def save_users(users: Dict[str, dict]) -> None:
-    # Guardamos en la ubicación persistente principal.
-    STORAGE_DIR.mkdir(parents=True, exist_ok=True)
-    payload = json.dumps(users, indent=2)
-    USERS_FILE.write_text(payload, encoding="utf-8")
-
-    # Para evitar que una reinstalación o despliegue limpie las cuentas
-    # creadas, mantenemos sincronizado el archivo legado (ubicado junto
-    # al código). Así, si la carpeta ``backend/data`` se elimina entre
-    # arranques, la migración automática tomará el snapshot más reciente
-    # en lugar del estado inicial con solo los usuarios por defecto.
-    LEGACY_USERS_FILE.write_text(payload, encoding="utf-8")
+def get_user_by_id(db: Session, user_id: int) -> Optional[User]:
+    return db.query(User).filter(User.id == user_id).first()
 
 
-def _ensure_deleted_storage() -> None:
-    STORAGE_DIR.mkdir(parents=True, exist_ok=True)
-    if DELETED_USERS_FILE.exists():
-        return
-
-    if LEGACY_DELETED_USERS_FILE.exists():
-        logging.info("Migrando historial de eliminaciones desde el archivo legado")
-        shutil.copy2(LEGACY_DELETED_USERS_FILE, DELETED_USERS_FILE)
-    else:
-        DELETED_USERS_FILE.write_text("[]", encoding="utf-8")
+def list_users(db: Session) -> list[User]:
+    return db.query(User).order_by(User.username).all()
 
 
-def load_deleted_users() -> list[dict]:
-    _ensure_deleted_storage()
-    try:
-        data = json.loads(DELETED_USERS_FILE.read_text(encoding="utf-8"))
-        if not isinstance(data, list):
-            logging.warning("Formato de historial de eliminaciones inválido, reiniciando archivo")
-            data = []
-    except Exception as exc:
-        logging.error(f"Error al cargar historial de usuarios eliminados: {exc}")
-        raise HTTPException(status_code=500, detail="No se pudo cargar el historial de eliminaciones")
+def create_user(db: Session, user: "UserCreate") -> User:
+    if get_user_by_username(db, user.username):
+        raise HTTPException(status_code=400, detail="El usuario ya existe")
 
-    return data
-
-
-def save_deleted_users(deleted_users: list[dict]) -> None:
-    STORAGE_DIR.mkdir(parents=True, exist_ok=True)
-    payload = json.dumps(deleted_users, indent=2)
-    DELETED_USERS_FILE.write_text(payload, encoding="utf-8")
-    LEGACY_DELETED_USERS_FILE.write_text(payload, encoding="utf-8")
+    db_user = User(
+        username=user.username,
+        full_name=user.full_name or user.username,
+        hashed_password=hash_password(user.password),
+        role=user.role,
+        is_active=user.active,
+        expires_at=user.expires_at,
+        created_at=datetime.utcnow(),
+    )
+    db.add(db_user)
+    db.commit()
+    db.refresh(db_user)
+    return db_user
 
 
-def _get_user_status(username: str) -> dict:
-    """Devuelve un pequeño diagnóstico sobre el estado de un usuario.
+def update_user_record(db: Session, target: User, user_update: "UserUpdate", actor: User) -> User:
+    if target.username == "admin" and actor.username != "admin":
+        raise HTTPException(status_code=403, detail="Solo el administrador principal puede editar su cuenta")
 
-    Permite a los administradores responder rápidamente si una cuenta existe,
-    está expirada/inactiva o fue eliminada (y cuándo ocurrió la eliminación).
-    """
-    users = load_users()
-    if username in users:
-        user = users[username]
-        if _is_user_expired(user):
-            status = "expired"
-        elif not user.get("active", True):
-            status = "inactive"
-        else:
-            status = "active"
+    if user_update.role and target.username == "admin" and user_update.role != "admin":
+        raise HTTPException(status_code=400, detail="El rol del admin no puede modificarse")
 
-        return {
-            "status": status,
-            "username": user.get("username", username),
-            "full_name": user.get("full_name"),
-            "role": user.get("role", "user"),
-            "active": user.get("active", True),
-            "created_at": user.get("created_at"),
-            "expires_at": user.get("expires_at"),
-            "message": "Cuenta vigente" if status == "active" else "Cuenta no usable sin intervención",
-        }
+    if user_update.full_name is not None:
+        target.full_name = user_update.full_name
+    if user_update.role is not None:
+        target.role = user_update.role
+    if user_update.active is not None:
+        target.is_active = user_update.active
+    if user_update.expires_at is not None:
+        target.expires_at = user_update.expires_at
 
-    deleted_users = load_deleted_users()
-    deleted_entry = next((item for item in reversed(deleted_users) if item.get("username") == username), None)
-    if deleted_entry:
-        return {
-            "status": "deleted",
-            "username": deleted_entry.get("username", username),
-            "full_name": deleted_entry.get("full_name"),
-            "role": deleted_entry.get("role", "user"),
-            "deleted_at": deleted_entry.get("deleted_at"),
-            "deleted_by": deleted_entry.get("deleted_by"),
-            "created_at": deleted_entry.get("created_at"),
-            "expires_at": deleted_entry.get("expires_at"),
-            "message": "Registro encontrado en historial de eliminaciones",
-        }
+    db.add(target)
+    db.commit()
+    db.refresh(target)
+    return target
 
-    return {
-        "status": "missing",
-        "username": username,
-        "message": "No se encontró la cuenta ni historial de eliminación",
+
+def delete_user_record(db: Session, target: User, actor: User) -> None:
+    if target.username == "admin":
+        raise HTTPException(status_code=400, detail="No se puede eliminar al administrador principal")
+
+    snapshot = {
+        "username": target.username,
+        "full_name": target.full_name,
+        "role": target.role,
+        "created_at": target.created_at,
+        "expires_at": target.expires_at,
     }
+
+    db.delete(target)
+    db.commit()
+
+    deleted = DeletedUser(
+        **snapshot,
+        deleted_at=datetime.utcnow(),
+        deleted_by=actor.username,
+    )
+    db.add(deleted)
+    db.commit()
 
 
 def _parse_expiration(raw_value: str | None) -> datetime | None:
@@ -295,14 +155,11 @@ def _parse_expiration(raw_value: str | None) -> datetime | None:
     return None
 
 
-def _is_user_expired(user: dict) -> bool:
-    expires_at = _parse_expiration(user.get("expires_at"))
-    if not expires_at:
+def _is_user_expired(user: User) -> bool:
+    if not user.expires_at:
         return False
 
-    # Asegura que la comparación entre fechas sea coherente incluso cuando
-    # expires_at incluye información de zona horaria (p. ej. valores generados
-    # desde el frontend con toISOString()).
+    expires_at = user.expires_at
     if expires_at.tzinfo is None:
         expires_at = expires_at.replace(tzinfo=timezone.utc)
 
@@ -310,23 +167,70 @@ def _is_user_expired(user: dict) -> bool:
     return now > expires_at.astimezone(timezone.utc)
 
 
-def authenticate_user(username: str, password: str):
-    users = load_users()
-    user = users.get(username)
+def _get_user_status(db: Session, username: str) -> dict:
+    user = get_user_by_username(db, username)
+    if user:
+        if _is_user_expired(user):
+            status = "expired"
+        elif not user.is_active:
+            status = "inactive"
+        else:
+            status = "active"
+
+        return {
+            "status": status,
+            "username": user.username,
+            "full_name": user.full_name,
+            "role": user.role,
+            "active": user.is_active,
+            "created_at": user.created_at.isoformat() if user.created_at else None,
+            "expires_at": user.expires_at.isoformat() if user.expires_at else None,
+            "message": "Cuenta vigente" if status == "active" else "Cuenta no usable sin intervención",
+        }
+
+    deleted_entry = (
+        db.query(DeletedUser)
+        .filter(DeletedUser.username == username)
+        .order_by(DeletedUser.deleted_at.desc())
+        .first()
+    )
+    if deleted_entry:
+        return {
+            "status": "deleted",
+            "username": deleted_entry.username,
+            "full_name": deleted_entry.full_name,
+            "role": deleted_entry.role,
+            "deleted_at": deleted_entry.deleted_at.isoformat() if deleted_entry.deleted_at else None,
+            "deleted_by": deleted_entry.deleted_by,
+            "created_at": deleted_entry.created_at.isoformat() if deleted_entry.created_at else None,
+            "expires_at": deleted_entry.expires_at.isoformat() if deleted_entry.expires_at else None,
+            "message": "Registro encontrado en historial de eliminaciones",
+        }
+
+    return {
+        "status": "missing",
+        "username": username,
+        "message": "No se encontró la cuenta ni historial de eliminación",
+    }
+
+
+def authenticate_user(db: Session, username: str, password: str) -> Optional[User]:
+    user = get_user_by_username(db, username)
     if not user:
-        logging.warning(f"Intento de login fallido: usuario '{username}' no encontrado.")
+        logging.warning("Intento de login fallido: usuario '%s' no encontrado.", username)
         return None
-    if not user.get("active", True):
-        logging.warning(f"Intento de login fallido: cuenta desactivada para '{username}'.")
+    if not user.is_active:
+        logging.warning("Intento de login fallido: cuenta desactivada para '%s'.", username)
         raise HTTPException(status_code=403, detail="La cuenta está desactivada")
-    if not verify_password(password, user["hashed_password"]):
-        logging.warning(f"Intento de login fallido: contraseña incorrecta para '{username}'.")
+    if not verify_password(password, user.hashed_password):
+        logging.warning("Intento de login fallido: contraseña incorrecta para '%s'.", username)
         return None
     if _is_user_expired(user):
-        logging.warning(f"Intento de login con cuenta expirada: '{username}'.")
+        logging.warning("Intento de login con cuenta expirada: '%s'.", username)
         raise HTTPException(status_code=403, detail="La cuenta está expirada")
-    logging.info(f"✅ Usuario autenticado: {username}")
+    logging.info("✅ Usuario autenticado: %s", username)
     return user
+
 
 def create_access_token(data: dict, expires_delta: timedelta | None = None) -> str:
     to_encode = data.copy()
@@ -344,18 +248,20 @@ def decode_access_token(token: str) -> dict:
         raise HTTPException(status_code=401, detail="Token inválido")
 
 
-def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
+def get_current_user(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db: Session = Depends(get_db),
+):
     payload = decode_access_token(credentials.credentials)
     username = payload.get("sub")
     if not username:
         raise HTTPException(status_code=401, detail="Token sin usuario válido")
 
-    users = load_users()
-    user = users.get(username)
+    user = get_user_by_username(db, username)
     if not user:
         raise HTTPException(status_code=401, detail="Usuario no encontrado")
 
-    if not user.get("active", True):
+    if not user.is_active:
         raise HTTPException(status_code=403, detail="La cuenta está desactivada")
 
     if _is_user_expired(user):
@@ -365,7 +271,7 @@ def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(securit
 
 
 def admin_required(current_user=Depends(get_current_user)):
-    if current_user.get("role") != "admin":
+    if current_user.role != "admin":
         raise HTTPException(status_code=403, detail="Se requieren privilegios de administrador")
     return current_user
 
@@ -398,7 +304,7 @@ class PasswordUpdate(BaseModel):
 # ENDPOINT: LOGIN
 # -----------------------------
 @router.post("/login")
-async def login(request: Request):
+async def login(request: Request, db: Session = Depends(get_db)):
     """
     Este endpoint acepta tanto JSON como FormData.
     """
@@ -420,39 +326,38 @@ async def login(request: Request):
         if not username or not password:
             raise HTTPException(status_code=400, detail="Faltan credenciales (username o password)")
 
-        user = authenticate_user(username, password)
+        user = authenticate_user(db, username, password)
         if not user:
             raise HTTPException(status_code=401, detail="Usuario o contraseña incorrectos")
 
         access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
         access_token = create_access_token(
             data={
-                "sub": user["username"],
-                "user": user.get("full_name") or user["username"],
-                "role": user.get("role", "user"),
+                "sub": user.username,
+                "user": user.full_name or user.username,
+                "role": user.role,
             },
             expires_delta=access_token_expires,
         )
 
-        logging.info(f"🔐 Token generado para usuario: {username}")
+        logging.info("🔐 Token generado para usuario: %s", username)
 
         return {
             "access_token": access_token,
             "token": access_token,
             "token_type": "bearer",
-            "user": user.get("full_name") or user["username"],
-            "username": user["username"],
-            "role": user.get("role", "user"),
+            "user": user.full_name or user.username,
+            "username": user.username,
+            "role": user.role,
             "expires_in": ACCESS_TOKEN_EXPIRE_MINUTES * 60,
             "status": "success",
-            "message": f"Inicio de sesión exitoso para {user['username']}"
+            "message": f"Inicio de sesión exitoso para {user.username}",
         }
 
     except HTTPException:
-        # Reenvía las excepciones controladas (401, 400, etc.)
         raise
     except Exception as e:
-        logging.error(f"❌ Error inesperado en /auth/login: {e}")
+        logging.error("❌ Error inesperado en /auth/login: %s", e)
         raise HTTPException(status_code=500, detail="Error interno en el login")
 
 
@@ -460,134 +365,112 @@ async def login(request: Request):
 # ENDPOINTS DE USUARIOS
 # -----------------------------
 @router.get("/users", dependencies=[Depends(admin_required)])
-def list_users():
-    users = load_users()
+def list_users_endpoint(db: Session = Depends(get_db)):
+    users = list_users(db)
     sanitized = [
         {
-            "username": user["username"],
-            "full_name": user.get("full_name"),
-            "role": user.get("role", "user"),
-            "active": user.get("active", True),
-            "created_at": user.get("created_at"),
-            "expires_at": user.get("expires_at"),
+            "username": user.username,
+            "full_name": user.full_name,
+            "role": user.role,
+            "active": user.is_active,
+            "created_at": user.created_at.isoformat() if user.created_at else None,
+            "expires_at": user.expires_at.isoformat() if user.expires_at else None,
         }
-        for user in users.values()
+        for user in users
     ]
     return {"users": sanitized}
 
 
 @router.get("/users/{username}/status", dependencies=[Depends(admin_required)])
-def get_user_status(username: str):
+def get_user_status(username: str, db: Session = Depends(get_db)):
     """Permite validar rápidamente si un usuario fue eliminado o solo está inactivo."""
-    return _get_user_status(username)
+    return _get_user_status(db, username)
 
 
 @router.post("/users", dependencies=[Depends(admin_required)])
-def create_user(user: UserCreate):
-    users = load_users()
-    if user.username in users:
-        raise HTTPException(status_code=400, detail="El usuario ya existe")
-
-    users[user.username] = {
-        "username": user.username,
-        "full_name": user.full_name or user.username,
-        "hashed_password": hash_password(user.password),
-        "role": user.role,
-        "active": user.active,
-        "created_at": datetime.utcnow().isoformat(),
-        "expires_at": user.expires_at.isoformat() if user.expires_at else None,
-    }
-    save_users(users)
-    return {"status": "success", "message": f"Usuario {user.username} creado"}
+def create_user_endpoint(user: UserCreate, db: Session = Depends(get_db)):
+    created = create_user(db, user)
+    return {"status": "success", "message": f"Usuario {created.username} creado"}
 
 
 @router.put("/users/{username}", dependencies=[Depends(admin_required)])
-def update_user(username: str, user_update: UserUpdate, current_user=Depends(get_current_user)):
-    users = load_users()
-    user = users.get(username)
+def update_user_endpoint(
+    username: str,
+    user_update: UserUpdate,
+    current_user=Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    user = get_user_by_username(db, username)
     if not user:
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
 
-    if username == "admin" and current_user["username"] != "admin":
-        raise HTTPException(status_code=403, detail="Solo el administrador principal puede editar su cuenta")
-
-    if user_update.role and username == "admin" and user_update.role != "admin":
-        raise HTTPException(status_code=400, detail="El rol del admin no puede modificarse")
-
-    if user_update.full_name is not None:
-        user["full_name"] = user_update.full_name
-    if user_update.role is not None:
-        user["role"] = user_update.role
-    if user_update.active is not None:
-        user["active"] = user_update.active
-    if user_update.expires_at is not None:
-        user["expires_at"] = user_update.expires_at.isoformat()
-
-    users[username] = user
-    save_users(users)
+    update_user_record(db, user, user_update, current_user)
     return {"status": "success", "message": f"Usuario {username} actualizado"}
 
 
 @router.post("/users/{username}/password", dependencies=[Depends(admin_required)])
-def update_user_password(username: str, password_update: PasswordUpdate, current_user=Depends(get_current_user)):
-    users = load_users()
-    user = users.get(username)
+def update_user_password(
+    username: str,
+    password_update: PasswordUpdate,
+    current_user=Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    user = get_user_by_username(db, username)
     if not user:
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
 
-    if username == "admin" and current_user["username"] != "admin":
+    if username == "admin" and current_user.username != "admin":
         raise HTTPException(status_code=403, detail="Solo el administrador principal puede cambiar su contraseña")
 
-    if not user.get("active", True):
+    if not user.is_active:
         raise HTTPException(status_code=400, detail="No se puede cambiar contraseña de un usuario desactivado")
 
-    user["hashed_password"] = hash_password(password_update.password)
-    users[username] = user
-    save_users(users)
+    user.hashed_password = hash_password(password_update.password)
+    db.add(user)
+    db.commit()
     return {"status": "success", "message": f"Contraseña de {username} actualizada"}
 
 
 @router.delete("/users/{username}", dependencies=[Depends(admin_required)])
-def delete_user(username: str, current_user=Depends(admin_required)):
-    users = load_users()
-    if username == "admin":
-        raise HTTPException(status_code=400, detail="No se puede eliminar al administrador principal")
-
-    if username not in users:
+def delete_user(username: str, current_user=Depends(admin_required), db: Session = Depends(get_db)):
+    user = get_user_by_username(db, username)
+    if not user:
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
 
-    removed_user = users.pop(username)
-    save_users(users)
-
-    deleted_users_history = load_deleted_users()
-    deleted_users_history.append(
-        {
-            "username": removed_user.get("username", username),
-            "full_name": removed_user.get("full_name"),
-            "role": removed_user.get("role", "user"),
-            "active": removed_user.get("active", True),
-            "created_at": removed_user.get("created_at"),
-            "expires_at": removed_user.get("expires_at"),
-            "deleted_at": datetime.utcnow().isoformat(),
-            "deleted_by": current_user["username"],
-        }
-    )
-    save_deleted_users(deleted_users_history)
-
+    delete_user_record(db, user, current_user)
     return {"status": "success", "message": f"Usuario {username} eliminado"}
 
 
 @router.get("/users/deleted", dependencies=[Depends(admin_required)])
-def list_deleted_users():
-    return {"deleted_users": load_deleted_users()}
+def list_deleted_users(db: Session = Depends(get_db)):
+    deleted_users = (
+        db.query(DeletedUser)
+        .order_by(DeletedUser.deleted_at.desc())
+        .all()
+    )
+    return {
+        "deleted_users": [
+            {
+                "username": entry.username,
+                "full_name": entry.full_name,
+                "role": entry.role,
+                "active": False,
+                "created_at": entry.created_at.isoformat() if entry.created_at else None,
+                "expires_at": entry.expires_at.isoformat() if entry.expires_at else None,
+                "deleted_at": entry.deleted_at.isoformat() if entry.deleted_at else None,
+                "deleted_by": entry.deleted_by,
+            }
+            for entry in deleted_users
+        ]
+    }
 
 
 @router.get("/me")
 def get_profile(current_user=Depends(get_current_user)):
     return {
-        "username": current_user["username"],
-        "full_name": current_user.get("full_name"),
-        "role": current_user.get("role", "user"),
+        "username": current_user.username,
+        "full_name": current_user.full_name,
+        "role": current_user.role,
     }
 
 
