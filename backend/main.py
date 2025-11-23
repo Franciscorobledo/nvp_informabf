@@ -1,3 +1,4 @@
+from collections import defaultdict
 from fastapi import (
     BackgroundTasks,
     Depends,
@@ -221,7 +222,7 @@ def _save_uploaded_file(upload: UploadFile, content: bytes, job_id: str, prefix:
     return path
 
 
-def _read_preview_dataframe(upload: UploadFile, content: bytes, nrows: int = 200) -> pd.DataFrame:
+def _read_preview_dataframe(upload: UploadFile, content: bytes, nrows: int = 2000) -> pd.DataFrame:
     ext = os.path.splitext(upload.filename)[1].lower()
     buffer = io.BytesIO(content)
 
@@ -250,6 +251,121 @@ def _prepare_preview(upload: UploadFile, content: bytes) -> dict:
         "rows_est": int(len(preview_df)),
         "columns_count": int(preview_df.shape[1]),
         "columns": list(preview_df.columns),
+    }
+
+
+def _read_schema_sample(path: str, filename: str, nrows: int = 2000) -> pd.DataFrame:
+    ext = os.path.splitext(filename)[1].lower()
+
+    if ext == ".csv":
+        return pd.read_csv(path, nrows=nrows)
+    if ext == ".xlsx":
+        return pd.read_excel(path, nrows=nrows, engine="openpyxl")
+    if ext == ".zip":
+        with zipfile.ZipFile(path) as archive:
+            for name in archive.namelist():
+                lower = name.lower()
+                if lower.endswith("/"):
+                    continue
+                if lower.endswith(".csv"):
+                    with archive.open(name) as f:
+                        return pd.read_csv(f, nrows=nrows)
+                if lower.endswith(".xlsx"):
+                    with archive.open(name) as f:
+                        return pd.read_excel(f, nrows=nrows, engine="openpyxl")
+    raise HTTPException(status_code=400, detail="No se pudieron leer los archivos para la comparativa.")
+
+
+def _aggregate_dataset_from_path(
+    path: str,
+    filename: str,
+    main_metric: str,
+    entity_column: str | None,
+    date_column: str | None,
+    timeline_granularity: str,
+    available_columns: list[str] | None = None,
+    chunksize: int = 50_000,
+) -> dict:
+    required_columns = [col for col in {main_metric, entity_column, date_column} if col]
+    usecols = [col for col in required_columns if not available_columns or col in available_columns]
+    freq = {"day": "D", "week": "W", "month": "M"}.get(timeline_granularity, "M")
+
+    totals = defaultdict(float)
+    entity_totals: defaultdict[str, float] = defaultdict(float)
+    timeline_totals: defaultdict[str, float] = defaultdict(float)
+    row_count = 0
+    columns_count = len(available_columns) if available_columns else len(required_columns)
+
+    def process_chunk(chunk: pd.DataFrame):
+        nonlocal row_count
+        row_count += len(chunk)
+        if main_metric not in chunk.columns:
+            return
+
+        numeric_metric = pd.to_numeric(chunk[main_metric], errors="coerce")
+        totals["total"] += float(numeric_metric.sum(skipna=True))
+
+        if entity_column and entity_column in chunk.columns:
+            grouped_entities = (
+                chunk.groupby(entity_column)[main_metric]
+                .apply(lambda s: pd.to_numeric(s, errors="coerce").sum())
+                .rename("value")
+            )
+            for entity, value in grouped_entities.items():
+                entity_totals[str(entity)] += float(value)
+
+        if date_column and date_column in chunk.columns:
+            chunk_dates = pd.to_datetime(chunk[date_column], errors="coerce")
+            metric_values = pd.to_numeric(chunk[main_metric], errors="coerce")
+            valid_mask = chunk_dates.notna() & metric_values.notna()
+            if valid_mask.any():
+                grouped_time = (
+                    pd.DataFrame({date_column: chunk_dates[valid_mask], main_metric: metric_values[valid_mask]})
+                    .groupby(pd.Grouper(key=date_column, freq=freq))[main_metric]
+                    .sum()
+                )
+                for dt, value in grouped_time.items():
+                    if pd.isna(dt):
+                        continue
+                    timeline_totals[dt.strftime("%Y-%m-%d")] += float(value)
+
+    ext = os.path.splitext(filename)[1].lower()
+    csv_kwargs = {
+        "usecols": usecols or None,
+        "dtype_backend": "numpy_nullable",
+        "on_bad_lines": "skip",
+        "low_memory": True,
+    }
+
+    if ext == ".csv":
+        reader = pd.read_csv(path, chunksize=chunksize, **csv_kwargs)
+        for chunk in reader:
+            process_chunk(chunk)
+    elif ext == ".xlsx":
+        df = pd.read_excel(path, usecols=usecols or None, engine="openpyxl")
+        process_chunk(df)
+    elif ext == ".zip":
+        with zipfile.ZipFile(path) as archive:
+            for name in archive.namelist():
+                lower_name = name.lower()
+                if lower_name.endswith("/"):
+                    continue
+                if lower_name.endswith(".csv"):
+                    with archive.open(name) as f:
+                        reader = pd.read_csv(f, chunksize=chunksize, **csv_kwargs)
+                        for chunk in reader:
+                            process_chunk(chunk)
+                elif lower_name.endswith(".xlsx"):
+                    with archive.open(name) as f:
+                        df = pd.read_excel(f, usecols=usecols or None, engine="openpyxl")
+                        process_chunk(df)
+
+    return {
+        "rows": int(row_count),
+        "columns": int(columns_count),
+        "total": float(totals.get("total", 0.0)),
+        "entities": dict(entity_totals),
+        "timeline": dict(timeline_totals),
     }
 
 
@@ -388,6 +504,10 @@ def build_comparison(
     label_a: str,
     label_b: str,
     user_focus: str,
+    *,
+    aggregated_a: dict | None = None,
+    aggregated_b: dict | None = None,
+    rows_meta: dict | None = None,
 ) -> dict:
     dataset_purpose = _select_dataset_purpose(user_focus, schema_a, schema_b)
     main_metric = _select_main_metric(schema_a, schema_b, column_types_a, column_types_b)
@@ -424,6 +544,9 @@ def build_comparison(
 
     total_a = float(metric_a.sum(skipna=True)) if main_metric in df_a.columns else 0.0
     total_b = float(metric_b.sum(skipna=True)) if main_metric in df_b.columns else 0.0
+    if aggregated_a is not None and aggregated_b is not None:
+        total_a = float(aggregated_a.get("total", total_a))
+        total_b = float(aggregated_b.get("total", total_b))
     diff_abs = total_b - total_a
     diff_percent = (diff_abs / total_a) if total_a else None
 
@@ -436,7 +559,38 @@ def build_comparison(
         "new_entities": [],
         "lost_entities": [],
     }
-    if entity_column and main_metric in df_a_reduced.columns and main_metric in df_b_reduced.columns:
+    if (
+        entity_column
+        and aggregated_a is not None
+        and aggregated_b is not None
+        and aggregated_a.get("entities") is not None
+        and aggregated_b.get("entities") is not None
+    ):
+        series_a = pd.Series(aggregated_a.get("entities", {}), name="value_a")
+        series_b = pd.Series(aggregated_b.get("entities", {}), name="value_b")
+        merged = pd.concat([series_a, series_b], axis=1).fillna(0)
+        merged["diff_abs"] = merged["value_b"] - merged["value_a"]
+        merged["diff_percent"] = merged.apply(
+            lambda r: (r["diff_abs"] / r["value_a"]) if r["value_a"] else None, axis=1
+        )
+
+        def status_row(row):
+            if row["value_a"] == 0 and row["value_b"] > 0:
+                return "new"
+            if row["value_a"] > 0 and row["value_b"] == 0:
+                return "lost"
+            return "up" if row["diff_abs"] > 0 else "down"
+
+        merged["status"] = merged.apply(status_row, axis=1)
+        merged_reset = merged.reset_index().rename(columns={"index": "entity"})
+
+        rows = merged_reset.to_dict(orient="records")
+        by_entity["rows"] = rows
+        by_entity["top_increases"] = sorted(rows, key=lambda r: r.get("diff_abs", 0), reverse=True)[:5]
+        by_entity["top_decreases"] = sorted(rows, key=lambda r: r.get("diff_abs", 0))[:5]
+        by_entity["new_entities"] = [r for r in rows if r.get("status") == "new"]
+        by_entity["lost_entities"] = [r for r in rows if r.get("status") == "lost"]
+    elif entity_column and main_metric in df_a_reduced.columns and main_metric in df_b_reduced.columns:
         group_a = (
             df_a_reduced.groupby(entity_column)[main_metric]
             .apply(lambda s: pd.to_numeric(s, errors="coerce").sum())
@@ -478,7 +632,38 @@ def build_comparison(
         "timeline_granularity": timeline_granularity,
         "max_gap": None,
     }
-    if date_column and main_metric in df_a_reduced.columns and main_metric in df_b_reduced.columns:
+    if (
+        date_column
+        and aggregated_a is not None
+        and aggregated_b is not None
+        and aggregated_a.get("timeline") is not None
+        and aggregated_b.get("timeline") is not None
+    ):
+        series_a = pd.Series(aggregated_a.get("timeline", {}), name="metric_a")
+        series_b = pd.Series(aggregated_b.get("timeline", {}), name="metric_b")
+
+        series_a.index = pd.to_datetime(series_a.index, errors="coerce")
+        series_b.index = pd.to_datetime(series_b.index, errors="coerce")
+
+        merged = pd.concat([series_a, series_b], axis=1).fillna(0)
+        merged["diff_abs"] = merged["metric_b"] - merged["metric_a"]
+        merged["diff_percent"] = merged.apply(
+            lambda r: (r["diff_abs"] / r["metric_a"]) if r["metric_a"] else None, axis=1
+        )
+        merged_reset = merged.reset_index().rename(columns={"index": "period"})
+        merged_reset["period"] = merged_reset["period"].dt.strftime("%Y-%m-%d")
+        by_time["rows"] = merged_reset.to_dict(orient="records")
+        by_time["has_time"] = True
+
+        if not merged_reset.empty:
+            max_idx = merged_reset["diff_abs"].abs().idxmax()
+            max_row = merged_reset.loc[max_idx]
+            by_time["max_gap"] = {
+                "period": max_row.get("period"),
+                "diff_abs": max_row.get("diff_abs"),
+                "diff_percent": max_row.get("diff_percent"),
+            }
+    elif date_column and main_metric in df_a_reduced.columns and main_metric in df_b_reduced.columns:
         freq_map = {"day": "D", "week": "W", "month": "M"}
         freq = freq_map.get(timeline_granularity, "M")
         by_time["has_time"] = True
@@ -538,10 +723,10 @@ def build_comparison(
         "summary": {
             "label_a": label_a,
             "label_b": label_b,
-            "rows_a": int(len(df_a)),
-            "rows_b": int(len(df_b)),
-            "columns_a": int(df_a.shape[1]),
-            "columns_b": int(df_b.shape[1]),
+            "rows_a": int(rows_meta.get("rows_a", len(df_a))) if rows_meta else int(len(df_a)),
+            "rows_b": int(rows_meta.get("rows_b", len(df_b))) if rows_meta else int(len(df_b)),
+            "columns_a": int(rows_meta.get("columns_a", df_a.shape[1])) if rows_meta else int(df_a.shape[1]),
+            "columns_b": int(rows_meta.get("columns_b", df_b.shape[1])) if rows_meta else int(df_b.shape[1]),
             "dataset_purpose": dataset_purpose,
             "main_metric": main_metric,
             "main_metric_label": main_metric_label,
@@ -1367,12 +1552,8 @@ def run_compare_job(job_id: str, user_focus: str, label_a: str, label_b: str):
         logging.warning("⚠️ Job de comparativa no encontrado: %s", job_id)
         return
 
-    class _StoredUpload:
-        def __init__(self, filename: str):
-            self.filename = filename
-
     try:
-        compare_job_store.update_job(job_id, step="leyendo_archivos", progress=25, error=None)
+        compare_job_store.update_job(job_id, step="leyendo_archivos", progress=30, error=None)
         file_a_path = job.get("file_a_path")
         file_b_path = job.get("file_b_path")
         file_a_name = job.get("file_a_name")
@@ -1381,31 +1562,62 @@ def run_compare_job(job_id: str, user_focus: str, label_a: str, label_b: str):
         if not file_a_path or not file_b_path:
             raise ValueError("No se encontraron las rutas temporales de los archivos")
 
-        with open(file_a_path, "rb") as f:
-            content_a = f.read()
-        with open(file_b_path, "rb") as f:
-            content_b = f.read()
+        sample_a = _read_schema_sample(file_a_path, file_a_name)
+        sample_b = _read_schema_sample(file_b_path, file_b_name)
 
-        dataframes_a = read_dataframes(_StoredUpload(file_a_name), content_a)
-        dataframes_b = read_dataframes(_StoredUpload(file_b_name), content_b)
+        df_a_sample, ai_schema_a, column_types_a = _normalize_dataset(sample_a, user_focus)
+        df_b_sample, ai_schema_b, column_types_b = _normalize_dataset(sample_b, user_focus)
 
-        if not dataframes_a or not dataframes_b:
-            raise ValueError("No se pudieron leer ambos archivos para la comparativa.")
+        main_metric = _select_main_metric(
+            ai_schema_a if isinstance(ai_schema_a, dict) else {},
+            ai_schema_b if isinstance(ai_schema_b, dict) else {},
+            column_types_a,
+            column_types_b,
+        )
+        entity_column = _select_entity_column(
+            ai_schema_a if isinstance(ai_schema_a, dict) else {},
+            ai_schema_b if isinstance(ai_schema_b, dict) else {},
+            df_a_sample,
+            df_b_sample,
+        )
+        date_column = _select_date_column(
+            ai_schema_a if isinstance(ai_schema_a, dict) else {},
+            ai_schema_b if isinstance(ai_schema_b, dict) else {},
+            df_a_sample,
+            df_b_sample,
+        )
+        timeline_granularity = _select_timeline_granularity(
+            ai_schema_a if isinstance(ai_schema_a, dict) else {},
+            ai_schema_b if isinstance(ai_schema_b, dict) else {},
+        )
 
-        try:
-            df_a = pd.concat(dataframes_a, ignore_index=True)
-            df_b = pd.concat(dataframes_b, ignore_index=True)
-        except Exception as exc:
-            raise ValueError(f"No se pudieron combinar los archivos: {exc}")
+        if not main_metric:
+            raise ValueError("No se encontró una métrica principal para comparar.")
 
-        compare_job_store.update_job(job_id, step="comparando_datasets", progress=50)
+        compare_job_store.update_job(job_id, step="comparando_datasets", progress=60)
 
-        df_a, ai_schema_a, column_types_a = _normalize_dataset(df_a, user_focus)
-        df_b, ai_schema_b, column_types_b = _normalize_dataset(df_b, user_focus)
+        aggregates_a = _aggregate_dataset_from_path(
+            file_a_path,
+            file_a_name,
+            main_metric,
+            entity_column,
+            date_column,
+            timeline_granularity,
+            available_columns=list(sample_a.columns),
+        )
+        aggregates_b = _aggregate_dataset_from_path(
+            file_b_path,
+            file_b_name,
+            main_metric,
+            entity_column,
+            date_column,
+            timeline_granularity,
+            available_columns=list(sample_b.columns),
+        )
 
         comparison = build_comparison(
-            df_a,
-            df_b,
+            df_a_sample,
+            df_b_sample,
             ai_schema_a if isinstance(ai_schema_a, dict) else {},
             ai_schema_b if isinstance(ai_schema_b, dict) else {},
             column_types_a,
@@ -1413,9 +1625,17 @@ def run_compare_job(job_id: str, user_focus: str, label_a: str, label_b: str):
             label_a,
             label_b,
             user_focus,
+            aggregated_a=aggregates_a,
+            aggregated_b=aggregates_b,
+            rows_meta={
+                "rows_a": aggregates_a.get("rows", len(df_a_sample)),
+                "rows_b": aggregates_b.get("rows", len(df_b_sample)),
+                "columns_a": aggregates_a.get("columns", df_a_sample.shape[1]),
+                "columns_b": aggregates_b.get("columns", df_b_sample.shape[1]),
+            },
         )
 
-        compare_job_store.update_job(job_id, step="generando_insights", progress=75)
+        compare_job_store.update_job(job_id, step="generando_insights", progress=90)
 
         result = {
             "label_a": label_a,
@@ -1436,7 +1656,7 @@ def run_compare_job(job_id: str, user_focus: str, label_a: str, label_b: str):
     except Exception as exc:  # noqa: BLE001
         logging.exception("❌ Error en job de comparativa %s: %s", job_id, exc)
         current_state = compare_job_store.get_job(job_id) or {}
-        fallback_progress = current_state.get("progress", 50) or 50
+        fallback_progress = current_state.get("progress", 60) or 60
         compare_job_store.update_job(
             job_id,
             done=True,
@@ -1471,7 +1691,7 @@ async def start_compare_job(
     job_id = compare_job_store.create_job(
         {
             "step": "preparando_datos",
-            "progress": 15,
+            "progress": 10,
             "done": False,
             "error": None,
         }
@@ -1500,7 +1720,7 @@ async def start_compare_job(
             "label_a": label_a,
             "label_b": label_b,
         },
-        "progress": 15,
+        "progress": 10,
         "step": "preparando_datos",
     }
 
