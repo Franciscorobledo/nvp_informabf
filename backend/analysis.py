@@ -584,7 +584,7 @@ def generate_data_movie_payload(
     if focus_normalized and focus_normalized not in {"todo", "todos", "all"}:
         ai_schema["dataset_purpose"] = focus_normalized
 
-    ai_notes = infer_dataset_schema_with_ai(cleaned.head(5_000), focus=focus)
+    ai_notes = infer_dataset_schema_with_ai(cleaned.head(1_000), focus=focus)
     if isinstance(ai_schema, dict) and ai_notes:
         ai_schema["ai_notes"] = ai_notes
 
