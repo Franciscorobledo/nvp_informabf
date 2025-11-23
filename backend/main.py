@@ -1,4 +1,13 @@
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Depends, Request
+from fastapi import (
+    BackgroundTasks,
+    Depends,
+    FastAPI,
+    File,
+    Form,
+    HTTPException,
+    Request,
+    UploadFile,
+)
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 import pandas as pd
@@ -11,6 +20,7 @@ import os
 import numpy as np
 import uvicorn
 from datetime import datetime
+import zipfile
 import base64
 import textwrap
 from typing import List
@@ -33,6 +43,7 @@ from utils.openai_keys import get_openai_api_key, persist_openai_api_key
 from utils.openai_monitor import get_usage_snapshot
 from usage_api import router as usage_router
 from utils.job_store import JobStore
+from utils.compare_job_store import CompareJobStore
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
@@ -43,6 +54,7 @@ from reportlab.lib.utils import ImageReader
 # ==============================
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DOTENV_PATH = os.path.join(BASE_DIR, ".env")
+TMP_DIR = os.path.join(BASE_DIR, "tmp")
 load_dotenv(dotenv_path=DOTENV_PATH, override=False)
 
 SECRET_KEY = os.getenv("SECRET_KEY", "DEV_SECRET_KEY")
@@ -69,6 +81,7 @@ logging.info("🔐 OPENAI_API_KEY presente: %s", "sí" if get_openai_api_key() e
 
 app = FastAPI(title="InformeBF - Intelligent Data Visualizer")
 job_store = JobStore()
+compare_job_store = CompareJobStore()
 
 
 class OpenAITokenPayload(BaseModel):
@@ -175,6 +188,54 @@ def clean_base64_image(image_data: str):
         return base64.b64decode(image_data)
     except Exception:
         return None
+
+
+def _ensure_job_dir(job_id: str) -> str:
+    base = os.path.join(TMP_DIR, "jobs", job_id)
+    os.makedirs(base, exist_ok=True)
+    return base
+
+
+def _save_uploaded_file(upload: UploadFile, content: bytes, job_id: str, prefix: str) -> str:
+    job_dir = _ensure_job_dir(job_id)
+    ext = os.path.splitext(upload.filename)[1]
+    filename = f"{prefix}{ext}"
+    path = os.path.join(job_dir, filename)
+    with open(path, "wb") as f:
+        f.write(content)
+    return path
+
+
+def _read_preview_dataframe(upload: UploadFile, content: bytes, nrows: int = 200) -> pd.DataFrame:
+    ext = os.path.splitext(upload.filename)[1].lower()
+    buffer = io.BytesIO(content)
+
+    if ext == ".csv":
+        return pd.read_csv(buffer, nrows=nrows)
+    if ext == ".xlsx":
+        return pd.read_excel(buffer, nrows=nrows)
+    if ext == ".zip":
+        with zipfile.ZipFile(buffer) as archive:
+            for name in archive.namelist():
+                lower = name.lower()
+                if lower.endswith("/"):
+                    continue
+                if lower.endswith(".csv"):
+                    with archive.open(name) as f:
+                        return pd.read_csv(f, nrows=nrows)
+                if lower.endswith(".xlsx"):
+                    with archive.open(name) as f:
+                        return pd.read_excel(f, nrows=nrows)
+    raise HTTPException(status_code=400, detail="No se pudieron leer los archivos para la comparativa.")
+
+
+def _prepare_preview(upload: UploadFile, content: bytes) -> dict:
+    preview_df = _read_preview_dataframe(upload, content)
+    return {
+        "rows_est": int(len(preview_df)),
+        "columns_count": int(preview_df.shape[1]),
+        "columns": list(preview_df.columns),
+    }
 
 
 def add_wrapped_text(canvas_obj, text, x, y, width, line_height=12, font_name="Helvetica", font_size=10):
@@ -1067,6 +1128,172 @@ async def compare_datasets(
     except Exception as exc:
         logging.error("❌ Error en comparativa: %s", exc)
         raise HTTPException(status_code=500, detail=f"Error al generar la comparativa: {exc}")
+
+
+def run_compare_job(job_id: str, user_focus: str, label_a: str, label_b: str):
+    job = compare_job_store.get_job(job_id)
+    if not job:
+        logging.warning("⚠️ Job de comparativa no encontrado: %s", job_id)
+        return
+
+    class _StoredUpload:
+        def __init__(self, filename: str):
+            self.filename = filename
+
+    try:
+        compare_job_store.update_job(job_id, step="leyendo_archivos", progress=25, error=None)
+        file_a_path = job.get("file_a_path")
+        file_b_path = job.get("file_b_path")
+        file_a_name = job.get("file_a_name")
+        file_b_name = job.get("file_b_name")
+
+        if not file_a_path or not file_b_path:
+            raise ValueError("No se encontraron las rutas temporales de los archivos")
+
+        with open(file_a_path, "rb") as f:
+            content_a = f.read()
+        with open(file_b_path, "rb") as f:
+            content_b = f.read()
+
+        dataframes_a = read_dataframes(_StoredUpload(file_a_name), content_a)
+        dataframes_b = read_dataframes(_StoredUpload(file_b_name), content_b)
+
+        if not dataframes_a or not dataframes_b:
+            raise ValueError("No se pudieron leer ambos archivos para la comparativa.")
+
+        try:
+            df_a = pd.concat(dataframes_a, ignore_index=True)
+            df_b = pd.concat(dataframes_b, ignore_index=True)
+        except Exception as exc:
+            raise ValueError(f"No se pudieron combinar los archivos: {exc}")
+
+        compare_job_store.update_job(job_id, step="comparando_datasets", progress=50)
+
+        df_a, ai_schema_a, column_types_a = _normalize_dataset(df_a, user_focus)
+        df_b, ai_schema_b, column_types_b = _normalize_dataset(df_b, user_focus)
+
+        comparison = build_comparison(
+            df_a,
+            df_b,
+            ai_schema_a if isinstance(ai_schema_a, dict) else {},
+            ai_schema_b if isinstance(ai_schema_b, dict) else {},
+            column_types_a,
+            column_types_b,
+            label_a,
+            label_b,
+            user_focus,
+        )
+
+        compare_job_store.update_job(job_id, step="generando_insights", progress=75)
+
+        result = {
+            "label_a": label_a,
+            "label_b": label_b,
+            "ai_schema_a": ai_schema_a,
+            "ai_schema_b": ai_schema_b,
+            "comparison": comparison,
+        }
+
+        compare_job_store.update_job(
+            job_id,
+            step="completo",
+            progress=100,
+            done=True,
+            error=None,
+            result=json_safe_deep(result),
+        )
+    except Exception as exc:  # noqa: BLE001
+        logging.exception("❌ Error en job de comparativa %s: %s", job_id, exc)
+        current_state = compare_job_store.get_job(job_id) or {}
+        fallback_progress = current_state.get("progress", 50) or 50
+        compare_job_store.update_job(
+            job_id,
+            done=True,
+            error=str(exc),
+            step="error",
+            progress=min(fallback_progress, 90),
+        )
+
+
+@app.post("/compare/start")
+async def start_compare_job(
+    background_tasks: BackgroundTasks,
+    file_a: UploadFile = File(...),
+    file_b: UploadFile = File(...),
+    user_focus: str = Form("todo"),
+    label_a: str = Form("Dataset A"),
+    label_b: str = Form("Dataset B"),
+    current_user=Depends(get_current_user),
+):
+    if not file_a or not file_b:
+        raise HTTPException(status_code=400, detail="Debes enviar ambos archivos para comparar.")
+
+    for upload in (file_a, file_b):
+        if not validate_file(upload.filename):
+            raise HTTPException(status_code=400, detail="Formato no soportado (.csv, .xlsx o .zip)")
+
+    content_a, content_b = await file_a.read(), await file_b.read()
+
+    preview_a = _prepare_preview(file_a, content_a)
+    preview_b = _prepare_preview(file_b, content_b)
+
+    job_id = compare_job_store.create_job(
+        {
+            "step": "preparando_datos",
+            "progress": 15,
+            "done": False,
+            "error": None,
+        }
+    )
+
+    path_a = _save_uploaded_file(file_a, content_a, job_id, "file_a")
+    path_b = _save_uploaded_file(file_b, content_b, job_id, "file_b")
+
+    compare_job_store.update_job(
+        job_id,
+        file_a_path=path_a,
+        file_b_path=path_b,
+        file_a_name=file_a.filename,
+        file_b_name=file_b.filename,
+    )
+
+    background_tasks.add_task(run_compare_job, job_id, user_focus, label_a, label_b)
+
+    response = {
+        "job_id": job_id,
+        "pre_summary": {
+            "rows_a_est": preview_a["rows_est"],
+            "rows_b_est": preview_b["rows_est"],
+            "columns_a": preview_a["columns"],
+            "columns_b": preview_b["columns"],
+            "label_a": label_a,
+            "label_b": label_b,
+        },
+        "progress": 15,
+        "step": "preparando_datos",
+    }
+
+    return JSONResponse(content=json_safe_deep(response))
+
+
+@app.get("/compare/status/{job_id}")
+def get_compare_status(job_id: str, current_user=Depends(get_current_user)):
+    job = compare_job_store.get_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="No se encontró el job solicitado.")
+
+    payload = {
+        "job_id": job_id,
+        "step": job.get("step"),
+        "progress": job.get("progress", 0),
+        "done": job.get("done", False),
+        "error": job.get("error"),
+    }
+
+    if job.get("done") and not job.get("error"):
+        payload["result"] = job.get("result")
+
+    return JSONResponse(content=json_safe_deep(payload))
 
 
 @app.post("/report", dependencies=[Depends(get_current_user)])

@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   Bar,
   BarChart,
@@ -28,22 +28,55 @@ const SummaryStat = ({ label, value, accent }) => (
   </div>
 );
 
+const ProgressBar = ({ progress, step }) => {
+  const stepMessages = {
+    preparando_datos: "Preparando archivos…",
+    leyendo_archivos: "Leyendo datasets…",
+    comparando_datasets: "Comparando métricas…",
+    generando_insights: "Generando insights…",
+    completo: "Comparativa lista.",
+    error: "Ocurrió un error en la comparación.",
+  };
+
+  return (
+    <div className="space-y-2 rounded-xl border border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4">
+      <div className="flex items-center justify-between text-sm font-semibold text-gray-700 dark:text-slate-200">
+        <span>{stepMessages[step] || "Procesando…"}</span>
+        <span>{Math.round(progress)}%</span>
+      </div>
+      <div className="h-3 overflow-hidden rounded-full bg-gray-100 dark:bg-slate-800">
+        <div
+          className="h-full rounded-full bg-blue-600 transition-all duration-500"
+          style={{ width: `${Math.min(progress, 100)}%` }}
+          aria-valuenow={progress}
+          aria-valuemin={0}
+          aria-valuemax={100}
+        />
+      </div>
+    </div>
+  );
+};
+
 const DataComparisonModule = ({ onUnauthorized }) => {
   const [fileA, setFileA] = useState(null);
   const [fileB, setFileB] = useState(null);
   const [labelA, setLabelA] = useState("Dataset A");
   const [labelB, setLabelB] = useState("Dataset B");
   const [focus, setFocus] = useState("todo");
-  const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState(null);
-  const [error, setError] = useState("");
+  const [compareJobId, setCompareJobId] = useState(null);
+  const [compareProgress, setCompareProgress] = useState(0);
+  const [compareStep, setCompareStep] = useState("");
+  const [isComparing, setIsComparing] = useState(false);
+  const [compareError, setCompareError] = useState("");
+  const [compareResult, setCompareResult] = useState(null);
+  const [preSummary, setPreSummary] = useState(null);
 
   const handleSubmit = async (event) => {
     event.preventDefault();
-    setError("");
+    setCompareError("");
 
     if (!fileA || !fileB) {
-      setError("Debes seleccionar ambos archivos para comparar.");
+      setCompareError("Debes seleccionar ambos archivos para comparar.");
       return;
     }
 
@@ -61,8 +94,9 @@ const DataComparisonModule = ({ onUnauthorized }) => {
     formData.append("label_b", labelB || "Dataset B");
 
     try {
-      setLoading(true);
-      const response = await fetch(`${API_URL}/analyze/compare`, {
+      setIsComparing(true);
+      setCompareResult(null);
+      const response = await fetch(`${API_URL}/compare/start`, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` },
         body: formData,
@@ -74,22 +108,75 @@ const DataComparisonModule = ({ onUnauthorized }) => {
           return;
         }
         const msg = await response.text();
-        throw new Error(msg || "No se pudo generar la comparativa.");
+        throw new Error(msg || "No se pudo iniciar la comparativa.");
       }
 
       const data = await response.json();
-      setResult(data);
+      setCompareJobId(data.job_id);
+      setPreSummary(data.pre_summary);
+      setCompareProgress(data.progress ?? 0);
+      setCompareStep(data.step || "preparando_datos");
     } catch (err) {
       console.error("Error en comparativa:", err);
-      setError(err.message);
-    } finally {
-      setLoading(false);
+      setCompareError(err.message);
+      setIsComparing(false);
     }
   };
 
-  const summary = result?.comparison?.summary;
-  const byEntity = result?.comparison?.by_entity;
-  const byTime = result?.comparison?.by_time;
+  useEffect(() => {
+    if (!isComparing || !compareJobId) return undefined;
+
+    const interval = setInterval(async () => {
+      const token = localStorage.getItem("token");
+      if (!token) {
+        onUnauthorized?.("Tu sesión expiró. Inicia sesión nuevamente.");
+        clearInterval(interval);
+        return;
+      }
+
+      try {
+        const statusResponse = await fetch(`${API_URL}/compare/status/${compareJobId}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+
+        if (!statusResponse.ok) {
+          if ([401, 403].includes(statusResponse.status)) {
+            onUnauthorized?.("Tu sesión expiró. Inicia sesión nuevamente.");
+            clearInterval(interval);
+            return;
+          }
+          const msg = await statusResponse.text();
+          throw new Error(msg || "No se pudo obtener el estado de la comparativa.");
+        }
+
+        const statusData = await statusResponse.json();
+        setCompareProgress(statusData.progress ?? 0);
+        setCompareStep(statusData.step || "comparando_datasets");
+        setCompareError(statusData.error || "");
+
+        if (statusData.done) {
+          setIsComparing(false);
+          if (statusData.error) {
+            setCompareResult(null);
+          } else {
+            setCompareResult(statusData.result || null);
+          }
+          clearInterval(interval);
+        }
+      } catch (err) {
+        console.error("Error en polling de comparativa:", err);
+        setCompareError(err.message);
+        setIsComparing(false);
+        clearInterval(interval);
+      }
+    }, 1800);
+
+    return () => clearInterval(interval);
+  }, [compareJobId, isComparing, onUnauthorized]);
+
+  const summary = compareResult?.comparison?.summary;
+  const byEntity = compareResult?.comparison?.by_entity;
+  const byTime = compareResult?.comparison?.by_time;
 
   const diffPercentLabel = useMemo(() => {
     if (!summary?.diff_percent && summary?.diff_percent !== 0) return "-";
@@ -205,17 +292,39 @@ const DataComparisonModule = ({ onUnauthorized }) => {
 
           <button
             type="submit"
-            disabled={loading}
+            disabled={isComparing}
             className="inline-flex items-center gap-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 text-sm font-semibold shadow-md disabled:opacity-60"
           >
-            {loading ? "Procesando..." : "Comparar"}
+            {isComparing ? "Procesando comparativa..." : "Comparar"}
           </button>
         </div>
       </form>
 
-      {error && (
+      {isComparing && (
+        <ProgressBar progress={compareProgress} step={compareStep} />
+      )}
+
+      {preSummary && (
+        <div className="rounded-xl border border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 space-y-3">
+          <p className="text-sm font-semibold text-gray-800 dark:text-white">Resumen preliminar</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm text-gray-700 dark:text-slate-200">
+            <div>
+              <p className="font-semibold">{preSummary.label_a}</p>
+              <p>Filas (estimado): {preSummary.rows_a_est?.toLocaleString?.() ?? preSummary.rows_a_est}</p>
+              <p>Columnas: {preSummary.columns_a?.length ?? preSummary.columns_a}</p>
+            </div>
+            <div>
+              <p className="font-semibold">{preSummary.label_b}</p>
+              <p>Filas (estimado): {preSummary.rows_b_est?.toLocaleString?.() ?? preSummary.rows_b_est}</p>
+              <p>Columnas: {preSummary.columns_b?.length ?? preSummary.columns_b}</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {compareError && (
         <div className="rounded-xl border border-red-200 bg-red-50 text-red-700 px-4 py-3 text-sm">
-          {error}
+          {compareError}
         </div>
       )}
 
