@@ -1,4 +1,5 @@
 export const hasPlayableDataMovie = (dataMovie) => {
-  if (!dataMovie || !Array.isArray(dataMovie.frames)) return false;
-  return dataMovie.frames.length > 0;
+  const scenes = dataMovie?.scenes || dataMovie?.frames;
+  if (!Array.isArray(scenes)) return false;
+  return scenes.length > 0;
 };

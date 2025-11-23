@@ -6,11 +6,11 @@ test("retorna falso cuando no hay dataMovie", () => {
   assert.strictEqual(hasPlayableDataMovie(null), false);
 });
 
-test("retorna falso cuando la lista de frames está vacía", () => {
-  assert.strictEqual(hasPlayableDataMovie({ frames: [] }), false);
+test("retorna falso cuando la lista de escenas está vacía", () => {
+  assert.strictEqual(hasPlayableDataMovie({ scenes: [] }), false);
 });
 
-test("retorna verdadero cuando hay frames disponibles", () => {
-  const movie = { frames: [{ id: "frame_1" }] };
+test("retorna verdadero cuando hay escenas disponibles", () => {
+  const movie = { scenes: [{ id: "scene_1" }] };
   assert.strictEqual(hasPlayableDataMovie(movie), true);
 });

@@ -144,7 +144,7 @@ const DataMovieModule = ({ onUnauthorized }) => {
 
       {response && (
         <div className="space-y-4">
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid gap-4 sm:grid-cols-3">
             <div className="rounded-2xl border border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 shadow-sm">
               <p className="text-xs uppercase tracking-wide text-gray-500 dark:text-slate-400">Filas</p>
               <p className="text-2xl font-bold text-gray-900 dark:text-white">
@@ -157,20 +157,25 @@ const DataMovieModule = ({ onUnauthorized }) => {
                 {response.basic_summary?.columns?.toLocaleString?.() || "-"}
               </p>
             </div>
-            <div className="rounded-2xl border border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 shadow-sm sm:col-span-2">
+            <div className="rounded-2xl border border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 shadow-sm">
               <p className="text-xs uppercase tracking-wide text-gray-500 dark:text-slate-400">Tipo de dataset</p>
               <p className="text-base font-semibold text-gray-800 dark:text-white">
                 {response.basic_summary?.dataset_purpose || "No identificado"}
               </p>
               {response.ai_schema?.ai_notes && (
-                <p className="mt-2 text-sm text-gray-600 dark:text-slate-300">
+                <p className="mt-1 text-sm text-gray-600 dark:text-slate-300 overflow-hidden text-ellipsis">
                   {response.ai_schema.ai_notes}
                 </p>
               )}
             </div>
           </div>
 
-          <DataMoviePlayer dataMovie={response.data_movie} />
+          <div className="rounded-3xl border border-slate-800 bg-slate-950/80 p-4">
+            <p className="text-sm text-slate-200 mb-2">
+              Presentación automática con escenas animadas y avatar. Usa las flechas o espera a que el reproductor avance según la duración de cada escena.
+            </p>
+            <DataMoviePlayer dataMovie={response.data_movie} />
+          </div>
         </div>
       )}
     </div>

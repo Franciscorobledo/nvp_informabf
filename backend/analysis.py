@@ -318,135 +318,68 @@ def _build_frame_title(idx: int, total: int, primary_label: str, is_peak: bool, 
 
 
 def build_data_movie(df: pd.DataFrame, ai_schema: dict | None) -> dict | None:
-    """Construye la estructura de película de datos a partir del esquema AI.
-
-    Retorna ``None`` cuando no hay suficientes datos para generar frames.
-    """
+    """Construye una presentación guiada (escenas + avatar) a partir del esquema AI."""
 
     if ai_schema is None or df is None or df.empty:
         return None
 
     schema = ai_schema or {}
-    date_col = schema.get("date_column")
-    granularity = schema.get("timeline_granularity") or "none"
-    dataset_purpose = schema.get("dataset_purpose") or "generico"
-
     column_types = detect_column_types(df)
+
+    date_col = schema.get("date_column") if schema.get("date_column") in df.columns else None
+    if not date_col:
+        date_candidates = [c for c, t in column_types.items() if t == "date"]
+        date_col = date_candidates[0] if date_candidates else None
+
+    granularity = schema.get("timeline_granularity") or "month"
+    dataset_purpose = schema.get("dataset_purpose") or _infer_dataset_purpose(df)
+
     numeric_candidates = [
         col for col in (schema.get("main_numeric_metrics") or []) if col in df.columns
+    ] or [c for c, t in column_types.items() if t == "numeric"]
+    entity_candidates = [
+        col for col in (schema.get("main_entity_columns") or []) if col in df.columns
+    ] or [c for c, t in column_types.items() if t == "categorical"]
+
+    metric_col = numeric_candidates[0] if numeric_candidates else None
+    entity_col = entity_candidates[0] if entity_candidates else None
+
+    def _safe_numeric(series: pd.Series | None) -> pd.Series:
+        if series is None:
+            return pd.Series(dtype=float)
+        return pd.to_numeric(series, errors="coerce")
+
+    total_rows = int(len(df))
+    metric_series = _safe_numeric(df[metric_col]) if metric_col else pd.Series(dtype=float)
+    metric_total = float(metric_series.sum()) if metric_series.notna().any() else float(total_rows)
+    unique_entities = int(df[entity_col].nunique(dropna=True)) if entity_col else 0
+
+    date_range = None
+    if date_col:
+        parsed_dates = pd.to_datetime(df[date_col], errors="coerce")
+        parsed_dates = parsed_dates.dropna()
+        if not parsed_dates.empty:
+            date_range = f"{parsed_dates.min().date()} → {parsed_dates.max().date()}"
+
+    main_metric_label = None
+    if metric_col:
+        main_metric_label = schema.get("main_metric_label") or metric_col.replace("_", " ")
+    elif dataset_purpose == "ventas":
+        main_metric_label = "Total ventas"
+    elif dataset_purpose == "stock":
+        main_metric_label = "Stock disponible"
+
+    intro_narration_parts = [
+        "Hola, soy tu analista virtual.",
+        f"Este archivo tiene {total_rows} registros",
     ]
-    if not numeric_candidates:
-        numeric_candidates = [c for c, t in column_types.items() if t == "numeric"]
-
-    has_timeline = False
-
-    def _build_block_frames() -> list[dict]:
-        block_frames: list[dict] = []
-        total_rows = len(df)
-        chunk_count = min(12, max(6, int(np.sqrt(total_rows)) or 1))
-        chunk_size = max(1, int(np.ceil(total_rows / chunk_count)))
-
-        for idx in range(0, total_rows, chunk_size):
-            block = df.iloc[idx : idx + chunk_size]
-            metrics: dict[str, float] = {}
-            for metric in numeric_candidates:
-                if metric not in block.columns:
-                    continue
-                numeric_series = pd.to_numeric(block[metric], errors="coerce")
-                if numeric_series.notna().any():
-                    metrics[metric] = float(numeric_series.mean())
-            metrics["count_registros"] = int(len(block))
-            block_frames.append(
-                {
-                    "time_label": f"Bloque {len(block_frames) + 1}",
-                    "metrics": metrics,
-                }
-            )
-
-        return block_frames
-
-    frames_data: list[dict] = []
-
-    if date_col and date_col in df.columns:
-        working = df.copy()
-        working[date_col] = pd.to_datetime(working[date_col], errors="coerce")
-        working = working.dropna(subset=[date_col])
-        if working.empty:
-            return None
-
-        freq_map = {"day": "D", "week": "W", "month": "M"}
-        freq = freq_map.get(granularity or "", "M")
-
-        grouped = working.groupby(pd.Grouper(key=date_col, freq=freq))
-        for ts, group in grouped:
-            if pd.isna(ts) or group.empty:
-                continue
-            metrics: dict[str, float] = {}
-            for metric in numeric_candidates:
-                if metric not in group.columns:
-                    continue
-                numeric_series = pd.to_numeric(group[metric], errors="coerce")
-                if numeric_series.notna().any():
-                    metrics[metric] = float(numeric_series.sum())
-            metrics["count_registros"] = int(len(group))
-
-            frames_data.append(
-                {
-                    "time_label": _format_time_label(ts, granularity or "month"),
-                    "metrics": metrics,
-                }
-            )
-        has_timeline = True
-    else:
-        frames_data = _build_block_frames()
-
-    if len(frames_data) < 2:
-        frames_data = _build_block_frames()
-        has_timeline = False
-
-    if len(frames_data) < 2:
-        return None
-
-    primary_metric = (numeric_candidates or ["count_registros"])[0]
-    primary_label = primary_metric.replace("_", " ")
-
-    primary_values = [frame["metrics"].get(primary_metric, 0) for frame in frames_data]
-    selected_indices = _select_frame_indices(primary_values)
-    if not selected_indices:
-        return None
-
-    peak_idx = int(np.nanargmax(primary_values)) if primary_values else 0
-    trough_idx = int(np.nanargmin(primary_values)) if primary_values else 0
-
-    frames: list[dict] = []
-    for order, idx in enumerate(selected_indices):
-        frame_data = frames_data[idx]
-        time_label = frame_data["time_label"]
-        metrics = {k: json_safe(v) for k, v in frame_data["metrics"].items()}
-
-        is_peak = idx == peak_idx
-        is_trough = idx == trough_idx
-
-        frame_title = _build_frame_title(idx, len(frames_data), primary_label, is_peak, is_trough)
-        subtitle_value = metrics.get(primary_metric, metrics.get("count_registros"))
-        subtitle = (
-            f"{primary_label.title()}: {subtitle_value:,.2f}" if isinstance(subtitle_value, (int, float)) else "Momento destacado"
+    if unique_entities:
+        intro_narration_parts.append(f"{unique_entities} {entity_col or 'entidades'}")
+    if metric_col:
+        intro_narration_parts.append(
+            f"un total de {metric_total:,.0f} en {main_metric_label or metric_col}"
         )
-
-        frames.append(
-            {
-                "id": f"frame_{order + 1}",
-                "order": order,
-                "time_label": time_label,
-                "title": frame_title,
-                "subtitle": subtitle,
-                "metrics": metrics,
-                "context": {
-                    "dataset_purpose": dataset_purpose,
-                    "granularity": granularity or "none",
-                },
-            }
-        )
+    intro_narration = ", ".join(intro_narration_parts) + "."
 
     friendly_purpose = {
         "ventas": "ventas",
@@ -456,11 +389,176 @@ def build_data_movie(df: pd.DataFrame, ai_schema: dict | None) -> dict | None:
         "financiero": "finanzas",
     }.get(dataset_purpose, "tus datos")
 
+    scenes: list[dict] = [
+        {
+            "id": "intro",
+            "type": "intro",
+            "duration_sec": 6,
+            "avatar_mood": "neutral",
+            "kpis": {
+                "rows": total_rows,
+                "entities": unique_entities or None,
+                "main_metric_label": main_metric_label,
+                "main_metric_value": metric_total if metric_col else None,
+            },
+            "narration": intro_narration,
+            "extra": {"date_range": date_range} if date_range else None,
+        }
+    ]
+
+    # Timeline scene
+    timeline_points: list[dict] = []
+    if date_col:
+        working = df.copy()
+        working[date_col] = pd.to_datetime(working[date_col], errors="coerce")
+        working = working.dropna(subset=[date_col])
+
+        if not working.empty:
+            freq_map = {"day": "D", "week": "W", "month": "M"}
+            freq = freq_map.get(granularity, "M")
+            grouped = working.groupby(pd.Grouper(key=date_col, freq=freq))
+
+            for ts, group in grouped:
+                if pd.isna(ts) or group.empty:
+                    continue
+
+                value: float
+                if metric_col:
+                    series = _safe_numeric(group[metric_col])
+                    value = float(series.sum()) if series.notna().any() else float(len(group))
+                else:
+                    value = float(len(group))
+
+                timeline_points.append({"x": ts.strftime("%Y-%m-%d"), "y": value})
+
+    if len(timeline_points) >= 2:
+        peak_point = max(timeline_points, key=lambda item: item["y"])
+        trough_point = min(timeline_points, key=lambda item: item["y"])
+        timeline_narration = (
+            f"Aquí ves la evolución. El pico fue el {peak_point['x']} y la caída más fuerte el {trough_point['x']}."
+        )
+
+        scenes.append(
+            {
+                "id": "timeline",
+                "type": "timeline",
+                "duration_sec": 7,
+                "avatar_mood": "focused",
+                "chart_data": timeline_points,
+                "narration": timeline_narration,
+            }
+        )
+
+    # Ranking scene
+    ranking_entities: list[dict] = []
+    if entity_col:
+        if metric_col:
+            ranking_series = (
+                df.groupby(entity_col)[metric_col]
+                .apply(lambda series: _safe_numeric(series).sum())
+                .sort_values(ascending=False)
+            )
+        else:
+            ranking_series = df[entity_col].value_counts()
+
+        for name, value in ranking_series.head(5).items():
+            ranking_entities.append({"name": str(name), "value": float(json_safe(value))})
+
+    if ranking_entities:
+        total_ranking = sum(entity["value"] for entity in ranking_entities) or 1
+        top_entity = ranking_entities[0]["name"]
+        top_share = ranking_entities[0]["value"] / total_ranking if total_ranking else 0
+        ranking_narration = (
+            f"Estos son los principales {entity_col or 'elementos'}. "
+            f"{top_entity} concentra un {top_share:.0%} del total."
+        )
+        scenes.append(
+            {
+                "id": "ranking",
+                "type": "ranking",
+                "duration_sec": 7,
+                "avatar_mood": "happy",
+                "entity_label": entity_col or "Entidad",
+                "entities": [
+                    {
+                        "name": item["name"],
+                        "value": item["value"],
+                        "share": (item["value"] / total_ranking) if total_ranking else None,
+                    }
+                    for item in ranking_entities
+                ],
+                "narration": ranking_narration,
+            }
+        )
+
+    # Risks scene
+    alerts: list[str] = []
+    if timeline_points:
+        if len(timeline_points) >= 2:
+            last, prev = timeline_points[-1], timeline_points[-2]
+            prev_val = prev.get("y") or 0
+            if prev_val:
+                variation = (last["y"] - prev_val) / prev_val
+                if variation <= -0.2:
+                    alerts.append(f"Caída de {abs(variation)*100:.0f}% al final del periodo.")
+                elif variation >= 0.25:
+                    alerts.append("Crecimiento acelerado en los datos recientes.")
+
+        if not alerts and len(timeline_points) >= 3:
+            mid_values = [point["y"] for point in timeline_points]
+            if np.std(mid_values) > 0.3 * (np.mean(mid_values) or 1):
+                alerts.append("Alta volatilidad detectada en la serie temporal.")
+
+    if ranking_entities:
+        concentration = ranking_entities[0]["value"] / total_ranking if total_ranking else 0
+        if concentration > 0.55:
+            alerts.append("Alta concentración en el principal actor del ranking.")
+
+    stock_col = _find_best_column(
+        df, [["stock"], ["inventario"], ["existencia"], ["almacen"], ["bodega"], ["inventory"]]
+    )
+    if stock_col:
+        stock_series = pd.to_numeric(df[stock_col], errors="coerce")
+        if stock_series.notna().any() and (stock_series <= 0).mean() > 0.1:
+            alerts.append("Varios registros muestran stock en cero o negativo.")
+
+    if not alerts:
+        alerts.append("Sin riesgos críticos detectados, continúa monitoreando.")
+
+    scenes.append(
+        {
+            "id": "risks",
+            "type": "risks",
+            "duration_sec": 6,
+            "avatar_mood": "warning",
+            "alerts": alerts[:3],
+            "narration": "Hay algunos puntos a vigilar. Te muestro las alertas más relevantes.",
+        }
+    )
+
+    # Outro scene
+    recommendations = [
+        "Revisa la reposición de los puntos con riesgo de quiebre.",
+        "Potencia las entidades con mejor rotación.",
+        "Diversifica para disminuir la concentración.",
+    ]
+    outro_narration = "Para cerrar, aquí tienes acciones recomendadas basadas en este archivo."
+
+    scenes.append(
+        {
+            "id": "outro",
+            "type": "outro",
+            "duration_sec": 7,
+            "avatar_mood": "positive",
+            "recommendations": recommendations,
+            "narration": outro_narration,
+        }
+    )
+
     return {
-        "frames": frames,
-        "has_timeline": has_timeline,
         "movie_title": f"Película de datos: {friendly_purpose}",
-        "movie_subtitle": "Resumen visual de la evolución de tus datos",
+        "movie_subtitle": "Presentación guiada de tu archivo",
+        "scenes": [scene for scene in scenes if scene],
     }
 
 
