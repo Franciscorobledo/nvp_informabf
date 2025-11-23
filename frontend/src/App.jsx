@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from "react";
 import Login from "./Login";
 import HomeModules from "../components/HomeModules";
+import ConfigurationPage from "./ConfigurationPage";
 
 const App = () => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [theme, setTheme] = useState("light");
   const [menuOpen, setMenuOpen] = useState(false);
+  const [activePage, setActivePage] = useState("home");
 
   // 🧠 Verifica si existe sesión al iniciar
   useEffect(() => {
@@ -80,6 +82,11 @@ const App = () => {
     setMenuOpen(false);
   };
 
+  const navigateTo = (page) => {
+    setActivePage(page);
+    setMenuOpen(false);
+  };
+
   // ⏳ Pantalla de carga inicial
   if (loading) {
     return (
@@ -120,7 +127,30 @@ const App = () => {
                 </p>
               </div>
 
-              <div className="hidden sm:flex flex-wrap items-center justify-end gap-3">
+              <nav className="hidden sm:flex flex-wrap items-center justify-end gap-3">
+                <div className="flex items-center gap-2 rounded-lg border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 p-1">
+                  <button
+                    onClick={() => navigateTo("home")}
+                    className={`px-4 py-2 rounded-md text-sm font-semibold transition ${
+                      activePage === "home"
+                        ? "bg-blue-600 text-white shadow"
+                        : "text-gray-700 dark:text-slate-100 hover:bg-gray-100 dark:hover:bg-slate-700"
+                    }`}
+                  >
+                    Inicio
+                  </button>
+                  <button
+                    onClick={() => navigateTo("config")}
+                    className={`px-4 py-2 rounded-md text-sm font-semibold transition ${
+                      activePage === "config"
+                        ? "bg-blue-600 text-white shadow"
+                        : "text-gray-700 dark:text-slate-100 hover:bg-gray-100 dark:hover:bg-slate-700"
+                    }`}
+                  >
+                    Configuración
+                  </button>
+                </div>
+
                 <button
                   onClick={toggleTheme}
                   className="flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 text-gray-700 dark:text-slate-100 shadow-sm hover:shadow-md transition"
@@ -140,7 +170,7 @@ const App = () => {
                 >
                   Cerrar sesión
                 </button>
-              </div>
+              </nav>
 
               <button
                 className="sm:hidden inline-flex items-center justify-center rounded-lg border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 text-gray-700 dark:text-slate-100 p-2 shadow-sm hover:shadow-md transition"
@@ -157,6 +187,29 @@ const App = () => {
             {menuOpen && (
               <div className="sm:hidden absolute top-full right-0 mt-3 w-full rounded-xl border border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xl p-4 z-10">
                 <div className="flex flex-col gap-3">
+                  <div className="flex items-center gap-2 rounded-lg border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 p-2">
+                    <button
+                      onClick={() => navigateTo("home")}
+                      className={`flex-1 px-4 py-2 rounded-md text-sm font-semibold transition ${
+                        activePage === "home"
+                          ? "bg-blue-600 text-white shadow"
+                          : "text-gray-700 dark:text-slate-100 hover:bg-gray-100 dark:hover:bg-slate-700"
+                      }`}
+                    >
+                      Inicio
+                    </button>
+                    <button
+                      onClick={() => navigateTo("config")}
+                      className={`flex-1 px-4 py-2 rounded-md text-sm font-semibold transition ${
+                        activePage === "config"
+                          ? "bg-blue-600 text-white shadow"
+                          : "text-gray-700 dark:text-slate-100 hover:bg-gray-100 dark:hover:bg-slate-700"
+                      }`}
+                    >
+                      Configuración
+                    </button>
+                  </div>
+
                   <button
                     onClick={toggleTheme}
                     className="flex items-center justify-between px-4 py-2 rounded-lg border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 text-gray-700 dark:text-slate-100 shadow-sm hover:shadow-md transition"
@@ -189,13 +242,20 @@ const App = () => {
 
           {/* MAIN */}
           <main>
-            <HomeModules
-              user={user}
-              onUnauthorized={handleUnauthorized}
-              onDataReceived={(data) =>
-                console.log("📈 Resultado del análisis:", data)
-              }
-            />
+            {activePage === "home" ? (
+              <HomeModules
+                user={user}
+                onUnauthorized={handleUnauthorized}
+                onDataReceived={(data) =>
+                  console.log("📈 Resultado del análisis:", data)
+                }
+              />
+            ) : (
+              <ConfigurationPage
+                user={user}
+                onUnauthorized={handleUnauthorized}
+              />
+            )}
           </main>
 
           {/* FOOTER */}
