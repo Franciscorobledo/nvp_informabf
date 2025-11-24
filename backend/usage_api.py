@@ -1,17 +1,35 @@
 import calendar
 from collections import defaultdict
-from datetime import date, datetime
-from typing import Any, Dict, Iterable, List
+from datetime import date, datetime, timedelta
+from typing import Any, Dict, Iterable, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel
+from sqlalchemy import func
+from sqlalchemy.orm import Session
 
 from auth import admin_required
+from database import get_db
+from models import ApiUsage, User
 from utils.openai_keys import get_openai_api_key
 from utils.openai_monitor import get_billing_usage, get_usage_history
 
 router = APIRouter(
     prefix="/usage", tags=["Consumo OpenAI"], dependencies=[Depends(admin_required)]
 )
+
+
+class UserUsageSummary(BaseModel):
+    user_id: Optional[int]
+    username: str
+    total_tokens: int
+    total_cost_usd: float
+
+
+class UsageSummaryResponse(BaseModel):
+    total_tokens: int
+    total_cost_usd: float
+    per_user: list[UserUsageSummary]
 
 
 def _parse_event_date(event: Dict[str, Any]) -> date | None:
@@ -68,6 +86,79 @@ def _group_by_key(
         grouped[key].append(event)
 
     return {group: _aggregate_events(values) for group, values in grouped.items()}
+
+
+@router.get("/summary", response_model=UsageSummaryResponse)
+def get_usage_summary(
+    from_date: str | None = Query(None, description="Fecha inicial (ISO 8601)"),
+    to_date: str | None = Query(None, description="Fecha final (ISO 8601)"),
+    db: Session = Depends(get_db),
+):
+    """Devuelve un resumen agregado de consumo y costos de OpenAI."""
+
+    parsed_to = _parse_iso_datetime(to_date) or datetime.utcnow()
+    parsed_from = _parse_iso_datetime(from_date) or (parsed_to - timedelta(days=30))
+
+    if parsed_from > parsed_to:
+        raise HTTPException(
+            status_code=400,
+            detail="La fecha inicial no puede ser posterior a la fecha final.",
+        )
+
+    base_filters = [ApiUsage.created_at >= parsed_from, ApiUsage.created_at <= parsed_to]
+
+    total_tokens, total_cost = (
+        db.query(
+            func.coalesce(func.sum(ApiUsage.total_tokens), 0),
+            func.coalesce(func.sum(ApiUsage.cost_usd), 0.0),
+        )
+        .filter(*base_filters)
+        .one()
+    )
+
+    per_user_rows = (
+        db.query(
+            ApiUsage.user_id,
+            func.coalesce(User.username, ApiUsage.username, "desconocido").label("username"),
+            func.coalesce(func.sum(ApiUsage.total_tokens), 0).label("total_tokens"),
+            func.coalesce(func.sum(ApiUsage.cost_usd), 0.0).label("total_cost_usd"),
+        )
+        .outerjoin(User, ApiUsage.user_id == User.id)
+        .filter(*base_filters)
+        .group_by(ApiUsage.user_id, User.username, ApiUsage.username)
+        .order_by(func.coalesce(func.sum(ApiUsage.cost_usd), 0.0).desc())
+        .all()
+    )
+
+    per_user = [
+        UserUsageSummary(
+            user_id=row.user_id,
+            username=row.username,
+            total_tokens=int(row.total_tokens or 0),
+            total_cost_usd=float(row.total_cost_usd or 0.0),
+        )
+        for row in per_user_rows
+    ]
+
+    return UsageSummaryResponse(
+        total_tokens=int(total_tokens or 0),
+        total_cost_usd=float(total_cost or 0.0),
+        per_user=per_user,
+    )
+
+
+def _parse_iso_datetime(raw_value: str | None) -> datetime | None:
+    if not raw_value:
+        return None
+
+    try:
+        safe_value = raw_value.replace("Z", "+00:00")
+        return datetime.fromisoformat(safe_value)
+    except ValueError:
+        raise HTTPException(
+            status_code=400,
+            detail="Formato de fecha inválido. Usa ISO 8601 (ej: 2024-01-31T00:00:00).",
+        )
 
 
 @router.get("/total-mes")
