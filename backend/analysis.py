@@ -749,6 +749,14 @@ def detect_date_candidates(
     for col in sample.columns:
         series = sample[col]
         is_declared_date = column_types.get(col) == "date" or is_datetime64_any_dtype(series)
+
+        # Evita que métricas numéricas (ej. "venta_neta") se interpreten como
+        # fechas válidas solo porque pandas puede convertirlas a timestamps.
+        # Si la columna es numérica y no fue declarada como fecha, la omitimos
+        # antes de calcular el puntaje.
+        if column_types.get(col) == "numeric" and not is_declared_date:
+            continue
+
         parsed = pd.to_datetime(series, errors="coerce", dayfirst=True, infer_datetime_format=True)
         parse_ratio = parsed.notna().mean()
 
