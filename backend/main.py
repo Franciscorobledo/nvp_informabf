@@ -187,19 +187,10 @@ def _load_sample_dataframe(file_name: str) -> pd.DataFrame:
 def quick_date_detection(df: pd.DataFrame) -> list[str]:
     """Intenta detectar columnas de fecha de manera heurística en una muestra."""
 
-    date_columns: list[str] = []
-    sample = df.head(5000)
-    for col in sample.columns:
-        series = sample[col]
-        if pd.api.types.is_datetime64_any_dtype(series):
-            date_columns.append(col)
-            continue
+    from analysis import detect_date_candidates  # Import local para evitar dependencias circulares
 
-        parsed = pd.to_datetime(series, errors="coerce", dayfirst=True)
-        if parsed.notna().mean() > 0.65:
-            date_columns.append(col)
-
-    return date_columns
+    candidates = detect_date_candidates(df.head(5_000))
+    return [candidate["column"] for candidate in candidates]
 
 
 def clean_base64_image(image_data: str):
@@ -1466,6 +1457,7 @@ async def upload_file(
 async def analyze_data_movie(
     file: UploadFile = File(...),
     user_focus: str = Form(None),
+    date_field: str | None = Form(None),
     current_user=Depends(get_current_user),
 ):
     if not file:
@@ -1485,7 +1477,7 @@ async def analyze_data_movie(
         raise HTTPException(status_code=400, detail=f"No se pudo combinar la información: {exc}")
 
     try:
-        payload = generate_data_movie_payload(df, focus=user_focus)
+        payload = generate_data_movie_payload(df, focus=user_focus, date_field=date_field)
         return JSONResponse(content=json_safe_deep(payload))
     except Exception as exc:
         logging.error("❌ Error generando película de datos: %s", exc)
