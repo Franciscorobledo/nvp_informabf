@@ -1,12 +1,47 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap");
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-/* -----------------------------
-   🌐 Estilos globales
------------------------------- */
-body {
-  @apply bg-gray-50 text-gray-900 font-sans antialiased dark:bg-slate-950 dark:text-slate-100 transition-colors duration-300;
+@layer base {
+  body {
+    @apply bg-slate-100 text-slate-900 font-sans antialiased min-h-screen transition-colors duration-300 px-4 md:px-8 dark:bg-slate-950 dark:text-slate-100;
+  }
+
+  h1 {
+    @apply text-3xl md:text-4xl font-bold text-slate-900 dark:text-slate-50;
+  }
+
+  h2 {
+    @apply text-2xl md:text-3xl font-semibold text-slate-900 dark:text-slate-100;
+  }
+
+  h3 {
+    @apply text-xl font-semibold text-slate-900 dark:text-slate-100;
+  }
+
+  p,
+  span,
+  label {
+    @apply text-slate-600 dark:text-slate-300;
+  }
+
+  input,
+  select,
+  textarea {
+    @apply bg-white border border-slate-200 text-slate-900 placeholder-slate-400 rounded-xl px-4 py-3 shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/60 focus:border-indigo-400 dark:bg-slate-900 dark:border-slate-800 dark:text-slate-100 dark:placeholder-slate-500;
+  }
+}
+
+@layer components {
+  .app-surface {
+    @apply bg-white/80 border border-slate-200 rounded-2xl shadow-xl shadow-black/10 dark:bg-slate-900/60 dark:border-slate-800 dark:shadow-black/30;
+  }
+
+  .accent-pill {
+    @apply inline-flex items-center gap-2 px-3 py-1 text-xs font-semibold rounded-full bg-indigo-500/10 text-indigo-200 border border-indigo-500/30;
+  }
 }
 
 /* -----------------------------
@@ -28,7 +63,7 @@ body {
 }
 
 /* -----------------------------
-   🔹 Scrollbar elegante (opcional)
+   🔹 Scrollbar elegante
 ------------------------------ */
 ::-webkit-scrollbar {
   width: 8px;
@@ -36,44 +71,14 @@ body {
 }
 
 ::-webkit-scrollbar-track {
-  background: #f1f1f1;
+  background: #0f172a;
 }
 
 ::-webkit-scrollbar-thumb {
-  background-color: #94a3b8;
-  border-radius: 6px;
+  background: #1e293b;
+  border-radius: 10px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background-color: #64748b;
-}
-
-/* -----------------------------
-   🔹 Clases auxiliares
------------------------------- */
-.container-center {
-  @apply flex items-center justify-center min-h-screen;
-}
-
-.card {
-  @apply bg-white p-6 rounded-2xl shadow-lg border border-gray-200 dark:bg-slate-900 dark:border-slate-800;
-}
-
-.btn-primary {
-  @apply bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg transition-all duration-300;
-}
-
-.btn-danger {
-  @apply bg-red-500 hover:bg-red-600 text-white font-semibold py-2 px-4 rounded-lg transition-all duration-300;
-}
-
-/* -----------------------------
-   🔐 Layout de login
------------------------------- */
-.login-layout {
-  @apply flex items-center justify-center min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-slate-800 text-white px-4 py-12;
-}
-
-.login-card {
-  @apply bg-slate-800/75 backdrop-blur-2xl p-10 md:p-12 rounded-3xl shadow-[0_20px_60px_rgba(0,0,0,0.45)] w-full max-w-xl border border-slate-700 animate-fade-in;
+  background: #334155;
 }

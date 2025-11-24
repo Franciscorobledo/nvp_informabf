@@ -1,5 +1,7 @@
 import React, { useState } from "react";
 import API_URL from "./api";
+import AppCard from "../components/ui/AppCard";
+import { PrimaryButton } from "../components/ui/Button";
 
 const Login = ({ onLogin }) => {
   const [username, setUsername] = useState("");
@@ -62,45 +64,46 @@ const Login = ({ onLogin }) => {
   };
 
   return (
-    <div className="login-layout">
-      <div className="login-card">
-        <div className="flex flex-col items-center mb-8 space-y-1 text-center">
-          <img src="/logo.png" alt="Logo" className="w-28 mb-2 drop-shadow-xl" />
-          <h2 className="text-3xl font-bold tracking-wide text-blue-300">
-            InformeBF
-          </h2>
-          <p className="text-gray-300 text-base">
-            AI Data Visualizer — Inicio de sesión
-          </p>
-        </div>
+    <div className="w-full max-w-xl">
+      <AppCard
+        title="InformeBF"
+        subtitle="AI Data Visualizer — Accede a tu panel de análisis"
+        className="backdrop-blur bg-slate-900/70"
+      >
+        <form onSubmit={handleLogin} className="flex flex-col gap-4">
+          <div className="space-y-2">
+            <label htmlFor="username" className="text-sm font-semibold text-slate-200">
+              Usuario
+            </label>
+            <input
+              id="username"
+              type="text"
+              placeholder="Ingresa tu usuario"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              className="w-full"
+            />
+          </div>
 
-        <form onSubmit={handleLogin} className="flex flex-col gap-5">
-          <input
-            type="text"
-            placeholder="Usuario"
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            className="p-4 rounded-xl bg-slate-900/80 border border-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 text-white placeholder-gray-400 transition-all duration-200 text-lg"
-          />
-          <input
-            type="password"
-            placeholder="Contraseña"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="p-4 rounded-xl bg-slate-900/80 border border-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 text-white placeholder-gray-400 transition-all duration-200 text-lg"
-          />
+          <div className="space-y-2">
+            <label htmlFor="password" className="text-sm font-semibold text-slate-200">
+              Contraseña
+            </label>
+            <input
+              id="password"
+              type="password"
+              placeholder="••••••••"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="w-full"
+            />
+          </div>
 
-          <button
-            type="submit"
-            disabled={loading}
-            className={`mt-2 ${
-              loading ? "bg-gray-500" : "bg-blue-600 hover:bg-blue-700"
-            } transition-all duration-300 text-white py-3.5 rounded-xl font-semibold shadow-xl text-lg`}
-          >
+          <PrimaryButton type="submit" disabled={loading} className="mt-2 w-full py-3 text-base">
             {loading ? "Ingresando..." : "Entrar"}
-          </button>
+          </PrimaryButton>
         </form>
-      </div>
+      </AppCard>
     </div>
   );
 };
