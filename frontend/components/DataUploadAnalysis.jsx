@@ -3,7 +3,12 @@ import FileUpload from "./FileUpload";
 import UserManagement from "../src/UserManagement";
 import AdminOpenAIUsage from "../src/AdminOpenAIUsage";
 
-const DataUploadAnalysis = ({ user, onUnauthorized, onDataReceived }) => {
+const DataUploadAnalysis = ({
+  user,
+  onUnauthorized,
+  onDataReceived,
+  onNavigateModule,
+}) => {
   return (
     <section className="space-y-6">
       <div className="space-y-2 text-center">
@@ -19,6 +24,7 @@ const DataUploadAnalysis = ({ user, onUnauthorized, onDataReceived }) => {
         key={user?.username}
         onUnauthorized={onUnauthorized}
         onDataReceived={onDataReceived}
+        onNavigateModule={onNavigateModule}
       />
 
       {user?.role === "admin" && (

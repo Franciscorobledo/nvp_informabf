@@ -13,10 +13,8 @@ import {
   YAxis,
 } from "recharts";
 import DatasetSummaryPanel from "./DatasetSummaryPanel";
-import DataMoviePlayer from "./DataMoviePlayer";
-import { hasPlayableDataMovie } from "./dataMovieUtils";
 
-const FileUpload = ({ onDataReceived, onUnauthorized }) => {
+const FileUpload = ({ onDataReceived, onUnauthorized, onNavigateModule }) => {
   const [files, setFiles] = useState([]);
   const [loading, setLoading] = useState(false);
   const [analysis, setAnalysis] = useState(null);
@@ -44,8 +42,8 @@ const FileUpload = ({ onDataReceived, onUnauthorized }) => {
   const [demoMetadata, setDemoMetadata] = useState(null);
   const filterSelectRef = useRef(null);
 
-  const dataMovie = analysis?.data_movie;
-  const hasDataMovie = hasPlayableDataMovie(dataMovie);
+  const goToMovieModule = () => onNavigateModule?.("movie");
+  const goToCompareModule = () => onNavigateModule?.("compare");
 
   const tokenClientRef = useRef(null);
   const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
@@ -1218,6 +1216,28 @@ const FileUpload = ({ onDataReceived, onUnauthorized }) => {
                 )}
               </div>
               <div className="flex flex-wrap gap-3 justify-end">
+                {onNavigateModule && (
+                  <>
+                    <button
+                      onClick={goToMovieModule}
+                      className="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-gray-200 dark:border-slate-700 bg-white/80 dark:bg-slate-800 text-gray-800 dark:text-slate-100 shadow-sm hover:shadow-md transition"
+                    >
+                      <span role="img" aria-hidden="true">
+                        🎬
+                      </span>
+                      Ver como película de datos
+                    </button>
+                    <button
+                      onClick={goToCompareModule}
+                      className="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-gray-200 dark:border-slate-700 bg-white/80 dark:bg-slate-800 text-gray-800 dark:text-slate-100 shadow-sm hover:shadow-md transition"
+                    >
+                      <span role="img" aria-hidden="true">
+                        🔀
+                      </span>
+                      Comparar con otro dataset
+                    </button>
+                  </>
+                )}
                 <button
                   onClick={focusFilter}
                   className="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-gray-200 dark:border-slate-700 bg-white/80 dark:bg-slate-800 text-gray-800 dark:text-slate-100 shadow-sm hover:shadow-md transition"
@@ -1571,20 +1591,6 @@ const FileUpload = ({ onDataReceived, onUnauthorized }) => {
               )}
             </div>
           </div>
-          {hasDataMovie && (
-            <div className="mt-10 space-y-3">
-              <div className="space-y-1">
-                <h3 className="text-xl font-semibold text-gray-900 dark:text-white flex items-center gap-2">
-                  <span role="img" aria-hidden="true">🎬</span>
-                  Película de datos
-                </h3>
-                <p className="text-sm text-gray-600 dark:text-slate-300">
-                  Recorre los momentos clave del análisis en formato de video interactivo.
-                </p>
-              </div>
-              <DataMoviePlayer dataMovie={dataMovie} />
-            </div>
-          )}
         </div>
       )}
     </div>
