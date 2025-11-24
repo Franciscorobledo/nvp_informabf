@@ -1,151 +1,271 @@
-fecha,sucursal,categoria,venta_neta,tickets
-2024-01-01,Centro,Electrónica,15386.35,32
-2024-01-02,Este,Hogar,13153.94,32
-2024-01-03,Norte,Hogar,10370.71,49
-2024-01-04,Centro,Hogar,12000.1,39
-2024-01-05,Este,Hogar,14224.39,41
-2024-01-06,Este,Ropa,9109.3,45
-2024-01-07,Este,Hogar,12993.04,36
-2024-01-08,Este,Hogar,13442.12,40
-2024-01-09,Norte,Hogar,12150.0,41
-2024-01-10,Este,Hogar,13284.48,42
-2024-01-11,Norte,Hogar,10357.06,29
-2024-01-12,Sur,Electrónica,10297.55,42
-2024-01-13,Centro,Ropa,12886.92,52
-2024-01-14,Este,Hogar,8414.61,44
-2024-01-15,Sur,Hogar,13179.36,36
-2024-01-16,Centro,Ropa,11879.89,39
-2024-01-17,Centro,Hogar,10548.4,41
-2024-01-18,Centro,Ropa,12631.96,41
-2024-01-19,Sur,Electrónica,11952.66,42
-2024-01-20,Norte,Hogar,10273.29,30
-2024-01-21,Sur,Hogar,13999.4,29
-2024-01-22,Este,Electrónica,17535.35,47
-2024-01-23,Este,Hogar,13097.18,40
-2024-01-24,Sur,Electrónica,13595.65,41
-2024-01-25,Centro,Electrónica,17039.6,41
-2024-01-26,Norte,Hogar,11390.87,38
-2024-01-27,Norte,Electrónica,15834.59,38
-2024-01-28,Norte,Hogar,13911.88,36
-2024-01-29,Norte,Hogar,5858.3,46
-2024-01-30,Centro,Hogar,7740.88,37
-2024-01-31,Norte,Electrónica,13050.38,46
-2024-02-01,Centro,Electrónica,11254.63,43
-2024-02-02,Este,Electrónica,12659.01,42
-2024-02-03,Centro,Ropa,13828.16,48
-2024-02-04,Este,Hogar,12570.18,39
-2024-02-05,Norte,Electrónica,6928.69,45
-2024-02-06,Sur,Ropa,14415.48,38
-2024-02-07,Este,Hogar,11532.7,39
-2024-02-08,Este,Hogar,10819.19,35
-2024-02-09,Centro,Hogar,16841.64,31
-2024-02-10,Sur,Ropa,15693.35,34
-2024-02-11,Este,Electrónica,11787.77,49
-2024-02-12,Centro,Electrónica,13069.24,38
-2024-02-13,Norte,Electrónica,11239.3,31
-2024-02-14,Este,Electrónica,12511.56,32
-2024-02-15,Norte,Hogar,11791.65,37
-2024-02-16,Este,Hogar,16572.33,46
-2024-02-17,Este,Electrónica,11389.55,36
-2024-02-18,Sur,Electrónica,13188.15,37
-2024-02-19,Este,Electrónica,10214.46,41
-2024-02-20,Centro,Ropa,9032.66,41
-2024-02-21,Norte,Hogar,13522.23,37
-2024-02-22,Norte,Electrónica,13260.56,32
-2024-02-23,Norte,Electrónica,10715.01,44
-2024-02-24,Este,Ropa,14046.19,42
-2024-02-25,Centro,Electrónica,14891.5,39
-2024-02-26,Este,Hogar,9990.78,38
-2024-02-27,Sur,Ropa,10621.09,56
-2024-02-28,Centro,Ropa,11168.97,32
-2024-02-29,Este,Ropa,16611.29,34
-2024-03-01,Este,Electrónica,10943.06,59
-2024-03-02,Sur,Electrónica,13219.15,49
-2024-03-03,Este,Electrónica,11060.43,36
-2024-03-04,Sur,Ropa,12569.63,37
-2024-03-05,Este,Ropa,13759.47,37
-2024-03-06,Centro,Hogar,10005.5,40
-2024-03-07,Sur,Ropa,10310.25,38
-2024-03-08,Centro,Electrónica,9693.63,53
-2024-03-09,Centro,Electrónica,10878.53,43
-2024-03-10,Centro,Ropa,12454.95,41
-2024-03-11,Norte,Hogar,11449.79,42
-2024-03-12,Norte,Ropa,12062.39,39
-2024-03-13,Sur,Ropa,9770.26,41
-2024-03-14,Centro,Ropa,13425.2,40
-2024-03-15,Centro,Electrónica,18658.07,39
-2024-03-16,Norte,Electrónica,13025.72,44
-2024-03-17,Este,Electrónica,13214.13,36
-2024-03-18,Centro,Ropa,15278.82,44
-2024-03-19,Norte,Hogar,11410.88,34
-2024-03-20,Sur,Ropa,8299.55,50
-2024-03-21,Sur,Ropa,11946.29,39
-2024-03-22,Este,Electrónica,14631.98,43
-2024-03-23,Centro,Electrónica,11706.49,51
-2024-03-24,Norte,Ropa,16571.27,46
-2024-03-25,Norte,Hogar,11958.31,47
-2024-03-26,Este,Electrónica,16675.28,37
-2024-03-27,Norte,Hogar,11049.23,41
-2024-03-28,Norte,Hogar,13071.74,38
-2024-03-29,Este,Ropa,12904.74,31
-2024-03-30,Sur,Ropa,13168.92,36
-2024-03-31,Este,Ropa,8204.93,31
-2024-04-01,Este,Hogar,7267.39,36
-2024-04-02,Sur,Electrónica,10037.28,41
-2024-04-03,Sur,Electrónica,7986.76,41
-2024-04-04,Este,Ropa,15579.6,35
-2024-04-05,Centro,Electrónica,7144.52,32
-2024-04-06,Sur,Hogar,14849.88,42
-2024-04-07,Este,Hogar,10457.09,50
-2024-04-08,Norte,Electrónica,7561.1,39
-2024-04-09,Centro,Hogar,9204.49,39
-2024-04-10,Norte,Hogar,7984.03,39
-2024-04-11,Sur,Hogar,9963.31,44
-2024-04-12,Centro,Ropa,12803.2,36
-2024-04-13,Este,Ropa,11690.17,42
-2024-04-14,Centro,Electrónica,12055.3,43
-2024-04-15,Sur,Electrónica,11196.78,36
-2024-04-16,Centro,Electrónica,13731.55,42
-2024-04-17,Este,Hogar,11116.19,39
-2024-04-18,Este,Hogar,14030.72,42
-2024-04-19,Centro,Ropa,9145.53,42
-2024-04-20,Este,Ropa,11281.13,43
-2024-04-21,Centro,Electrónica,15288.85,47
-2024-04-22,Centro,Electrónica,13714.45,39
-2024-04-23,Centro,Hogar,13311.5,43
-2024-04-24,Centro,Ropa,10016.53,41
-2024-04-25,Sur,Ropa,11405.3,31
-2024-04-26,Este,Hogar,13423.74,29
-2024-04-27,Centro,Electrónica,8223.48,35
-2024-04-28,Este,Ropa,8087.36,33
-2024-04-29,Sur,Ropa,4371.91,37
-2024-04-30,Este,Ropa,15899.16,52
-2024-05-01,Este,Ropa,5422.48,49
-2024-05-02,Norte,Ropa,14859.17,34
-2024-05-03,Norte,Hogar,11529.86,42
-2024-05-04,Norte,Hogar,15116.95,49
-2024-05-05,Centro,Hogar,11365.29,39
-2024-05-06,Norte,Electrónica,9824.56,30
-2024-05-07,Norte,Ropa,12049.13,40
-2024-05-08,Norte,Hogar,9214.07,35
-2024-05-09,Este,Ropa,13519.6,38
-2024-05-10,Centro,Ropa,13143.09,43
-2024-05-11,Este,Ropa,14188.85,50
-2024-05-12,Norte,Ropa,12866.2,37
-2024-05-13,Sur,Electrónica,10862.81,47
-2024-05-14,Centro,Hogar,12495.24,36
-2024-05-15,Norte,Hogar,12978.52,41
-2024-05-16,Sur,Electrónica,4055.35,41
-2024-05-17,Centro,Ropa,9608.56,43
-2024-05-18,Sur,Ropa,11921.81,49
-2024-05-19,Centro,Electrónica,14581.81,49
-2024-05-20,Norte,Electrónica,8960.95,52
-2024-05-21,Este,Electrónica,11203.3,37
-2024-05-22,Sur,Hogar,15737.82,45
-2024-05-23,Sur,Ropa,11674.37,42
-2024-05-24,Norte,Hogar,8992.76,41
-2024-05-25,Centro,Ropa,12498.91,32
-2024-05-26,Este,Hogar,12982.92,34
-2024-05-27,Norte,Electrónica,9657.71,37
-2024-05-28,Norte,Hogar,7051.63,39
-2024-05-29,Este,Electrónica,13113.46,28
+fecha_venta,fecha_envio,sucursal,region,canal,categoria,subcategoria,venta_bruta,descuento_pct,venta_neta,costo,margen,tickets,metodo_pago,segmento_cliente,campana
+2024-01-01,2024-01-03,Norte,Litoral,Online,Electrónica,Computadoras,11944.26,0,11944.26,6859.44,5084.82,38,Efectivo,Premium,Liquidación Q1
+2024-01-01,2024-01-01,Oeste,Cordillera,Tienda,Electrónica,Smartphones,8192.38,5,7782.76,4289.87,3492.89,31,Tarjeta,Frecuente,Lanzamiento Verano
+2024-01-01,2024-01-01,Sur,Patagonia,Mayorista,Ropa,Casual,15273.73,15,12982.67,8170.64,4812.03,66,Transferencia,Frecuente,Back to School
+2024-01-02,2024-01-04,Oeste,Cordillera,Tienda,Hogar,Cocina,8593.6,5,8163.92,5101.03,3062.89,21,Tarjeta,Frecuente,Lanzamiento Verano
+2024-01-02,2024-01-03,Sur,Patagonia,Tienda,Hogar,Decoración,8484.5,0,8484.5,5881.36,2603.14,25,Tarjeta,Frecuente,Liquidación Q1
+2024-01-02,2024-01-03,Norte,Litoral,Tienda,Hogar,Electrodomésticos,13947.3,10,12552.57,8498.65,4053.92,59,Tarjeta,Frecuente,Liquidación Q1
+2024-01-03,2024-01-03,Norte,Litoral,Tienda,Electrónica,Computadoras,7822.77,0,7822.77,5386.98,2435.79,28,Efectivo,Frecuente,Liquidación Q1
+2024-01-03,2024-01-04,Sur,Patagonia,Tienda,Electrónica,Computadoras,9987.62,5,9488.24,5752.27,3735.97,28,Tarjeta,Frecuente,Lanzamiento Verano
+2024-01-03,2024-01-04,Este,Costa,Online,Ropa,Formal,6792.21,10,6112.99,4112.17,2000.82,20,Tarjeta,Frecuente,Lanzamiento Verano
+2024-01-04,2024-01-04,Este,Costa,Tienda,Ropa,Deportiva,22374.43,5,21255.71,14203.87,7051.84,71,Tarjeta,Frecuente,Back to School
+2024-01-04,2024-01-05,Sur,Patagonia,Mayorista,Ropa,Formal,24506.08,10,22055.47,15143.82,6911.65,70,Tarjeta,Ocasional,Back to School
+2024-01-04,2024-01-04,Centro,Ciudad,Online,Ropa,Casual,20253.54,0,20253.54,13369.51,6884.03,52,Tarjeta,Frecuente,Lanzamiento Verano
+2024-01-05,2024-01-06,Oeste,Cordillera,Online,Hogar,Electrodomésticos,24679.79,0,24679.79,13846.15,10833.65,73,Tarjeta,Premium,Back to School
+2024-01-05,2024-01-06,Este,Costa,Tienda,Electrónica,Computadoras,15809.25,15,13437.86,8329.81,5108.05,68,Tarjeta,Frecuente,Back to School
+2024-01-05,2024-01-05,Norte,Litoral,Tienda,Hogar,Decoración,13986.36,0,13986.36,8268.28,5718.08,51,Transferencia,Frecuente,Liquidación Q1
+2024-01-06,2024-01-07,Este,Costa,Online,Ropa,Formal,18156.58,0,18156.58,11566.75,6589.82,55,Tarjeta,Frecuente,Lanzamiento Verano
+2024-01-06,2024-01-06,Norte,Litoral,Tienda,Hogar,Cocina,8190.14,15,6961.62,4867.2,2094.42,30,Tarjeta,Frecuente,Liquidación Q1
+2024-01-06,2024-01-07,Sur,Patagonia,Tienda,Hogar,Cocina,20145.31,15,17123.52,11043.12,6080.39,67,Transferencia,Premium,Lanzamiento Verano
+2024-01-07,2024-01-07,Centro,Ciudad,Online,Ropa,Deportiva,9697.94,5,9213.04,5650.25,3562.79,27,BNPL,Ocasional,Lanzamiento Verano
+2024-01-07,2024-01-08,Oeste,Cordillera,Tienda,Ropa,Deportiva,23169.67,0,23169.67,12814.52,10355.16,60,Tarjeta,Premium,Lanzamiento Verano
+2024-01-07,2024-01-07,Norte,Litoral,Online,Electrónica,Computadoras,16862.01,5,16018.91,11476.13,4542.77,70,Tarjeta,Ocasional,Back to School
+2024-01-08,2024-01-10,Oeste,Cordillera,Online,Electrónica,Computadoras,8354.13,0,8354.13,5511.48,2842.66,23,Tarjeta,Ocasional,Liquidación Q1
+2024-01-08,2024-01-08,Norte,Litoral,Tienda,Electrónica,Smartphones,15323.81,5,14557.62,10432.81,4124.81,43,Tarjeta,Frecuente,Lanzamiento Verano
+2024-01-08,2024-01-10,Sur,Patagonia,Tienda,Hogar,Cocina,12404.12,15,10543.5,7046.49,3497.02,61,Efectivo,Premium,Back to School
+2024-01-09,2024-01-09,Centro,Ciudad,Online,Electrónica,Smartphones,7348.87,0,7348.87,5053.02,2295.85,28,Transferencia,Ocasional,Liquidación Q1
+2024-01-09,2024-01-09,Oeste,Cordillera,Tienda,Electrónica,Smartphones,10878.85,10,9790.96,6709.6,3081.37,27,Transferencia,Frecuente,Lanzamiento Verano
+2024-01-09,2024-01-10,Este,Costa,Online,Hogar,Electrodomésticos,14475.56,0,14475.56,8057.12,6418.44,44,Tarjeta,Frecuente,Lanzamiento Verano
+2024-01-10,2024-01-10,Norte,Litoral,Tienda,Electrónica,Audio,21677.99,5,20594.09,11811.13,8782.97,66,Tarjeta,Ocasional,Liquidación Q1
+2024-01-10,2024-01-10,Sur,Patagonia,Tienda,Ropa,Casual,20426.85,0,20426.85,12722.12,7704.73,74,Efectivo,Premium,Liquidación Q1
+2024-01-10,2024-01-11,Centro,Ciudad,Tienda,Hogar,Cocina,16832.9,15,14307.96,9421.88,4886.08,59,Tarjeta,Frecuente,Back to School
+2024-01-11,2024-01-11,Centro,Ciudad,Tienda,Hogar,Cocina,14676.31,0,14676.31,9298.54,5377.77,48,Tarjeta,Premium,Back to School
+2024-01-11,2024-01-11,Oeste,Cordillera,Online,Electrónica,Audio,30694.74,0,30694.74,20147.91,10546.83,71,Tarjeta,Ocasional,Back to School
+2024-01-11,2024-01-12,Norte,Litoral,Tienda,Ropa,Casual,23163.8,10,20847.42,13866.01,6981.41,68,Efectivo,Premium,Liquidación Q1
+2024-01-12,2024-01-13,Norte,Litoral,Online,Ropa,Deportiva,12018.37,0,12018.37,7380.89,4637.48,32,Tarjeta,Frecuente,Lanzamiento Verano
+2024-01-12,2024-01-14,Oeste,Cordillera,Tienda,Hogar,Decoración,16869.62,5,16026.14,9763.4,6262.74,53,BNPL,Premium,Back to School
+2024-01-12,2024-01-12,Centro,Ciudad,Tienda,Electrónica,Smartphones,9331.62,10,8398.46,6033.34,2365.13,43,Tarjeta,Frecuente,Liquidación Q1
+2024-01-13,2024-01-15,Norte,Litoral,Online,Electrónica,Computadoras,21478.27,5,20404.36,12573.88,7830.48,60,Tarjeta,Premium,Lanzamiento Verano
+2024-01-13,2024-01-13,Sur,Patagonia,Online,Electrónica,Computadoras,8683.27,15,7380.78,5252.19,2128.59,47,Efectivo,Frecuente,Back to School
+2024-01-13,2024-01-13,Centro,Ciudad,Tienda,Ropa,Deportiva,23585.1,15,20047.33,13370.87,6676.46,55,Transferencia,Ocasional,Liquidación Q1
+2024-01-14,2024-01-16,Sur,Patagonia,Online,Electrónica,Smartphones,19279.4,0,19279.4,12508.9,6770.5,56,Transferencia,Ocasional,Lanzamiento Verano
+2024-01-14,2024-01-14,Este,Costa,Online,Hogar,Electrodomésticos,12868.87,0,12868.87,9060.72,3808.15,38,Tarjeta,Frecuente,Lanzamiento Verano
+2024-01-14,2024-01-14,Oeste,Cordillera,Tienda,Electrónica,Computadoras,24511.28,10,22060.15,14687.14,7373.02,60,Tarjeta,Frecuente,Back to School
+2024-01-15,2024-01-16,Sur,Patagonia,Online,Electrónica,Smartphones,21395.82,15,18186.45,10230.7,7955.75,66,Efectivo,Ocasional,Back to School
+2024-01-15,2024-01-15,Este,Costa,Online,Ropa,Deportiva,27288.74,5,25924.3,15951.59,9972.71,72,Efectivo,Ocasional,Liquidación Q1
+2024-01-15,2024-01-15,Oeste,Cordillera,Tienda,Electrónica,Audio,11630.27,0,11630.27,6922.45,4707.83,47,Tarjeta,Frecuente,Back to School
+2024-01-16,2024-01-16,Sur,Patagonia,Online,Electrónica,Smartphones,26997.66,0,26997.66,19165.38,7832.28,65,Tarjeta,Frecuente,Liquidación Q1
+2024-01-16,2024-01-18,Norte,Litoral,Online,Ropa,Deportiva,7574.0,10,6816.6,4893.21,1923.39,24,Tarjeta,Frecuente,Lanzamiento Verano
+2024-01-16,2024-01-16,Este,Costa,Online,Electrónica,Smartphones,16062.54,0,16062.54,9199.9,6862.64,53,Tarjeta,Premium,Back to School
+2024-01-17,2024-01-18,Este,Costa,Online,Electrónica,Smartphones,8496.89,5,8072.04,4616.86,3455.18,29,BNPL,Frecuente,Lanzamiento Verano
+2024-01-17,2024-01-19,Centro,Ciudad,Online,Ropa,Formal,16081.69,5,15277.61,9639.5,5638.11,45,Transferencia,Frecuente,Liquidación Q1
+2024-01-17,2024-01-17,Sur,Patagonia,Tienda,Ropa,Deportiva,12914.01,10,11622.61,6813.22,4809.39,36,Tarjeta,Premium,Lanzamiento Verano
+2024-01-18,2024-01-18,Centro,Ciudad,Tienda,Hogar,Cocina,17291.07,15,14697.41,8828.04,5869.36,43,Tarjeta,Frecuente,Liquidación Q1
+2024-01-18,2024-01-18,Norte,Litoral,Online,Electrónica,Smartphones,12116.35,0,12116.35,7857.94,4258.41,53,Tarjeta,Frecuente,Back to School
+2024-01-18,2024-01-18,Este,Costa,Tienda,Electrónica,Computadoras,20010.1,5,19009.6,12612.58,6397.02,51,Tarjeta,Premium,Lanzamiento Verano
+2024-01-19,2024-01-20,Sur,Patagonia,Tienda,Electrónica,Smartphones,22029.72,0,22029.72,13352.59,8677.13,60,Tarjeta,Premium,Back to School
+2024-01-19,2024-01-19,Oeste,Cordillera,Tienda,Ropa,Formal,20285.7,0,20285.7,12111.96,8173.73,67,Transferencia,Frecuente,Lanzamiento Verano
+2024-01-19,2024-01-20,Centro,Ciudad,Tienda,Hogar,Decoración,14918.64,10,13426.78,7527.03,5899.75,45,Tarjeta,Premium,Back to School
+2024-01-20,2024-01-20,Este,Costa,Tienda,Ropa,Formal,14138.11,0,14138.11,9548.3,4589.81,34,Tarjeta,Frecuente,Liquidación Q1
+2024-01-20,2024-01-21,Norte,Litoral,Tienda,Electrónica,Smartphones,13479.31,10,12131.38,7700.21,4431.17,32,Tarjeta,Frecuente,Back to School
+2024-01-20,2024-01-20,Centro,Ciudad,Tienda,Ropa,Casual,22373.9,0,22373.9,15727.51,6646.39,60,Efectivo,Premium,Back to School
+2024-01-21,2024-01-21,Sur,Patagonia,Tienda,Hogar,Electrodomésticos,19904.72,0,19904.72,11534.26,8370.46,67,Transferencia,Premium,Back to School
+2024-01-21,2024-01-22,Norte,Litoral,Mayorista,Ropa,Casual,6199.05,5,5889.1,4157.45,1731.65,21,Tarjeta,Ocasional,Back to School
+2024-01-21,2024-01-21,Este,Costa,Online,Hogar,Electrodomésticos,6595.07,10,5935.56,3453.3,2482.27,30,Tarjeta,Frecuente,Back to School
+2024-01-22,2024-01-22,Oeste,Cordillera,Tienda,Hogar,Electrodomésticos,19393.09,0,19393.09,12624.13,6768.96,55,Tarjeta,Frecuente,Back to School
+2024-01-22,2024-01-24,Sur,Patagonia,Tienda,Hogar,Cocina,25949.99,10,23354.99,13268.88,10086.11,56,Transferencia,Frecuente,Back to School
+2024-01-22,2024-01-23,Este,Costa,Mayorista,Hogar,Electrodomésticos,15321.7,15,13023.44,8760.5,4262.95,54,Tarjeta,Ocasional,Liquidación Q1
+2024-01-23,2024-01-23,Oeste,Cordillera,Tienda,Ropa,Formal,6187.95,10,5569.15,3434.58,2134.57,33,Transferencia,Frecuente,Lanzamiento Verano
+2024-01-23,2024-01-23,Centro,Ciudad,Tienda,Ropa,Formal,11615.99,5,11035.19,6736.01,4299.18,34,Tarjeta,Frecuente,Lanzamiento Verano
+2024-01-23,2024-01-24,Sur,Patagonia,Tienda,Hogar,Decoración,5088.27,0,5088.27,3485.38,1602.88,22,Efectivo,Frecuente,Liquidación Q1
+2024-01-24,2024-01-24,Norte,Litoral,Online,Electrónica,Audio,8938.38,5,8491.46,5770.95,2720.51,23,Transferencia,Frecuente,Liquidación Q1
+2024-01-24,2024-01-24,Sur,Patagonia,Online,Ropa,Deportiva,7947.6,10,7152.84,4809.61,2343.23,27,Efectivo,Frecuente,Back to School
+2024-01-24,2024-01-26,Este,Costa,Tienda,Ropa,Casual,8318.4,0,8318.4,4896.62,3421.78,29,Tarjeta,Frecuente,Back to School
+2024-01-25,2024-01-27,Oeste,Cordillera,Online,Ropa,Deportiva,15264.01,5,14500.81,9471.08,5029.73,56,Tarjeta,Frecuente,Liquidación Q1
+2024-01-25,2024-01-25,Sur,Patagonia,Tienda,Hogar,Cocina,13931.52,0,13931.52,8103.61,5827.91,40,Transferencia,Frecuente,Lanzamiento Verano
+2024-01-25,2024-01-25,Este,Costa,Online,Ropa,Deportiva,27666.7,0,27666.7,16785.25,10881.46,72,Tarjeta,Frecuente,Liquidación Q1
+2024-01-26,2024-01-26,Este,Costa,Tienda,Ropa,Formal,17957.01,15,15263.46,9039.0,6224.46,63,Efectivo,Premium,Lanzamiento Verano
+2024-01-26,2024-01-27,Centro,Ciudad,Online,Ropa,Casual,13674.0,0,13674.0,9838.01,3835.99,45,Tarjeta,Frecuente,Lanzamiento Verano
+2024-01-26,2024-01-26,Oeste,Cordillera,Tienda,Ropa,Casual,12934.03,5,12287.33,8063.51,4223.82,51,Tarjeta,Ocasional,Back to School
+2024-01-27,2024-01-28,Centro,Ciudad,Tienda,Electrónica,Audio,12218.07,0,12218.07,8509.93,3708.14,49,BNPL,Frecuente,Lanzamiento Verano
+2024-01-27,2024-01-27,Este,Costa,Tienda,Ropa,Formal,15614.44,10,14053.0,9800.4,4252.59,47,Tarjeta,Frecuente,Lanzamiento Verano
+2024-01-27,2024-01-28,Norte,Litoral,Tienda,Hogar,Cocina,24932.65,5,23686.02,15929.75,7756.27,66,Transferencia,Ocasional,Back to School
+2024-01-28,2024-01-29,Sur,Patagonia,Tienda,Ropa,Formal,22133.68,0,22133.68,14556.24,7577.45,67,Efectivo,Ocasional,Lanzamiento Verano
+2024-01-28,2024-01-28,Norte,Litoral,Online,Hogar,Decoración,5772.73,0,5772.73,3547.62,2225.11,20,Efectivo,Frecuente,Back to School
+2024-01-28,2024-01-30,Centro,Ciudad,Online,Hogar,Cocina,24125.25,0,24125.25,17265.79,6859.46,63,Transferencia,Premium,Back to School
+2024-01-29,2024-01-29,Este,Costa,Tienda,Hogar,Cocina,12435.66,10,11192.1,8028.63,3163.46,44,Tarjeta,Premium,Lanzamiento Verano
+2024-01-29,2024-01-29,Oeste,Cordillera,Mayorista,Electrónica,Audio,16220.13,5,15409.12,8650.99,6758.14,55,Tarjeta,Frecuente,Liquidación Q1
+2024-01-29,2024-01-29,Sur,Patagonia,Tienda,Ropa,Deportiva,16768.09,5,15929.68,10562.28,5367.41,50,Tarjeta,Ocasional,Back to School
+2024-01-30,2024-01-31,Centro,Ciudad,Mayorista,Electrónica,Computadoras,27285.23,5,25920.96,15337.68,10583.29,72,Tarjeta,Frecuente,Lanzamiento Verano
+2024-01-30,2024-01-31,Sur,Patagonia,Tienda,Ropa,Casual,18613.19,0,18613.19,11767.97,6845.22,53,Tarjeta,Frecuente,Lanzamiento Verano
+2024-01-30,2024-01-30,Este,Costa,Online,Ropa,Deportiva,19399.84,0,19399.84,13212.36,6187.48,62,Tarjeta,Premium,Liquidación Q1
+2024-01-31,2024-02-02,Oeste,Cordillera,Tienda,Ropa,Casual,21232.03,15,18047.22,12349.76,5697.47,56,Efectivo,Frecuente,Lanzamiento Verano
+2024-01-31,2024-01-31,Centro,Ciudad,Online,Ropa,Deportiva,10235.96,5,9724.16,6492.69,3231.46,36,Transferencia,Premium,Back to School
+2024-01-31,2024-02-01,Norte,Litoral,Mayorista,Electrónica,Audio,21529.77,15,18300.31,11794.31,6505.99,66,Tarjeta,Frecuente,Lanzamiento Verano
+2024-02-01,2024-02-01,Oeste,Cordillera,Mayorista,Hogar,Electrodomésticos,14108.84,0,14108.84,8851.53,5257.32,49,Tarjeta,Frecuente,Back to School
+2024-02-01,2024-02-01,Centro,Ciudad,Online,Electrónica,Audio,5663.92,10,5097.53,2860.28,2237.25,22,Tarjeta,Frecuente,Liquidación Q1
+2024-02-01,2024-02-01,Norte,Litoral,Online,Electrónica,Audio,24990.56,0,24990.56,13848.47,11142.09,63,Transferencia,Premium,Liquidación Q1
+2024-02-02,2024-02-02,Centro,Ciudad,Tienda,Hogar,Cocina,15290.08,5,14525.58,8659.96,5865.62,48,Tarjeta,Premium,Lanzamiento Verano
+2024-02-02,2024-02-02,Norte,Litoral,Online,Electrónica,Computadoras,18347.94,0,18347.94,10987.31,7360.63,64,Tarjeta,Premium,Lanzamiento Verano
+2024-02-02,2024-02-03,Este,Costa,Mayorista,Electrónica,Computadoras,17869.89,15,15189.4,10414.74,4774.66,68,Tarjeta,Frecuente,Liquidación Q1
+2024-02-03,2024-02-03,Oeste,Cordillera,Tienda,Ropa,Deportiva,22154.96,5,21047.21,13410.38,7636.83,73,Tarjeta,Premium,Lanzamiento Verano
+2024-02-03,2024-02-03,Este,Costa,Online,Hogar,Cocina,5881.19,5,5587.13,3640.22,1946.91,24,Tarjeta,Frecuente,Back to School
+2024-02-03,2024-02-03,Centro,Ciudad,Mayorista,Ropa,Formal,20194.46,5,19184.74,12990.72,6194.02,57,Tarjeta,Ocasional,Liquidación Q1
+2024-02-04,2024-02-04,Norte,Litoral,Tienda,Hogar,Decoración,9811.31,10,8830.18,5279.01,3551.18,28,Tarjeta,Premium,Back to School
+2024-02-04,2024-02-05,Este,Costa,Tienda,Electrónica,Smartphones,14473.99,0,14473.99,10055.16,4418.83,47,Tarjeta,Frecuente,Back to School
+2024-02-04,2024-02-05,Centro,Ciudad,Tienda,Hogar,Electrodomésticos,11361.14,10,10225.03,6768.32,3456.71,32,Transferencia,Ocasional,Liquidación Q1
+2024-02-05,2024-02-05,Este,Costa,Online,Hogar,Electrodomésticos,7162.62,10,6446.36,4500.93,1945.42,24,Tarjeta,Ocasional,Lanzamiento Verano
+2024-02-05,2024-02-05,Sur,Patagonia,Online,Ropa,Casual,22772.12,0,22772.12,13272.33,9499.78,55,Tarjeta,Frecuente,Back to School
+2024-02-05,2024-02-06,Norte,Litoral,Tienda,Electrónica,Computadoras,22819.3,0,22819.3,15502.86,7316.44,67,Tarjeta,Ocasional,Lanzamiento Verano
+2024-02-06,2024-02-07,Este,Costa,Tienda,Hogar,Electrodomésticos,13144.11,5,12486.9,6990.75,5496.15,36,Tarjeta,Ocasional,Liquidación Q1
+2024-02-06,2024-02-07,Sur,Patagonia,Tienda,Ropa,Formal,26881.59,10,24193.43,13407.51,10785.92,71,Tarjeta,Frecuente,Back to School
+2024-02-06,2024-02-07,Norte,Litoral,Online,Hogar,Decoración,23445.37,0,23445.37,16299.59,7145.78,65,Tarjeta,Ocasional,Lanzamiento Verano
+2024-02-07,2024-02-07,Oeste,Cordillera,Online,Hogar,Cocina,12684.73,15,10782.02,7501.6,3280.42,40,BNPL,Ocasional,Back to School
+2024-02-07,2024-02-08,Centro,Ciudad,Tienda,Hogar,Electrodomésticos,12980.1,10,11682.09,7364.93,4317.17,53,BNPL,Premium,Liquidación Q1
+2024-02-07,2024-02-07,Sur,Patagonia,Online,Hogar,Decoración,28870.44,0,28870.44,19789.4,9081.03,71,Tarjeta,Ocasional,Liquidación Q1
+2024-02-08,2024-02-08,Sur,Patagonia,Tienda,Electrónica,Audio,18461.85,5,17538.76,10448.35,7090.41,67,Transferencia,Frecuente,Back to School
+2024-02-08,2024-02-08,Oeste,Cordillera,Tienda,Hogar,Decoración,21063.42,5,20010.24,11997.8,8012.45,66,Efectivo,Ocasional,Liquidación Q1
+2024-02-08,2024-02-08,Este,Costa,Tienda,Electrónica,Smartphones,14387.77,10,12948.99,8353.92,4595.08,31,Tarjeta,Frecuente,Back to School
+2024-02-09,2024-02-10,Este,Costa,Tienda,Hogar,Electrodomésticos,6691.52,15,5687.79,3322.5,2365.29,21,Efectivo,Ocasional,Lanzamiento Verano
+2024-02-09,2024-02-10,Sur,Patagonia,Mayorista,Electrónica,Computadoras,10552.54,5,10024.92,6022.99,4001.93,25,BNPL,Ocasional,Back to School
+2024-02-09,2024-02-09,Centro,Ciudad,Online,Ropa,Formal,12089.66,10,10880.69,6997.27,3883.42,30,Transferencia,Frecuente,Back to School
+2024-02-10,2024-02-10,Centro,Ciudad,Tienda,Ropa,Deportiva,13234.28,15,11249.14,6831.29,4417.85,44,Tarjeta,Ocasional,Back to School
+2024-02-10,2024-02-10,Este,Costa,Online,Hogar,Electrodomésticos,14163.45,0,14163.45,9096.07,5067.38,41,Tarjeta,Premium,Back to School
+2024-02-10,2024-02-12,Sur,Patagonia,Tienda,Ropa,Deportiva,10022.03,10,9019.83,6099.75,2920.08,26,Tarjeta,Frecuente,Lanzamiento Verano
+2024-02-11,2024-02-11,Este,Costa,Online,Hogar,Cocina,16607.87,5,15777.47,11020.28,4757.19,53,BNPL,Frecuente,Lanzamiento Verano
+2024-02-11,2024-02-13,Oeste,Cordillera,Mayorista,Ropa,Deportiva,14896.5,0,14896.5,10005.84,4890.67,37,BNPL,Premium,Lanzamiento Verano
+2024-02-11,2024-02-12,Sur,Patagonia,Tienda,Electrónica,Audio,23463.74,0,23463.74,13293.54,10170.2,64,Tarjeta,Frecuente,Back to School
+2024-02-12,2024-02-12,Norte,Litoral,Tienda,Ropa,Deportiva,9275.12,0,9275.12,6630.5,2644.62,24,Tarjeta,Premium,Lanzamiento Verano
+2024-02-12,2024-02-12,Este,Costa,Tienda,Hogar,Decoración,16650.92,0,16650.92,9862.03,6788.89,60,Efectivo,Frecuente,Lanzamiento Verano
+2024-02-12,2024-02-12,Oeste,Cordillera,Tienda,Electrónica,Computadoras,22942.15,10,20647.94,12923.19,7724.75,56,Transferencia,Frecuente,Back to School
+2024-02-13,2024-02-14,Oeste,Cordillera,Mayorista,Electrónica,Smartphones,24469.24,0,24469.24,14206.88,10262.35,74,Tarjeta,Premium,Back to School
+2024-02-13,2024-02-13,Este,Costa,Tienda,Hogar,Electrodomésticos,20092.04,0,20092.04,12832.67,7259.37,62,Tarjeta,Frecuente,Lanzamiento Verano
+2024-02-13,2024-02-15,Sur,Patagonia,Tienda,Hogar,Decoración,25456.51,0,25456.51,14816.18,10640.33,74,Efectivo,Premium,Lanzamiento Verano
+2024-02-14,2024-02-15,Oeste,Cordillera,Mayorista,Hogar,Decoración,24847.46,10,22362.71,15221.14,7141.57,69,Tarjeta,Ocasional,Liquidación Q1
+2024-02-14,2024-02-16,Este,Costa,Mayorista,Hogar,Cocina,19362.07,5,18393.97,10450.0,7943.97,67,Efectivo,Ocasional,Lanzamiento Verano
+2024-02-14,2024-02-15,Sur,Patagonia,Tienda,Electrónica,Smartphones,30011.23,10,27010.11,16711.26,10298.85,72,Tarjeta,Frecuente,Liquidación Q1
+2024-02-15,2024-02-15,Norte,Litoral,Online,Hogar,Decoración,9027.51,0,9027.51,5463.27,3564.25,26,Tarjeta,Frecuente,Back to School
+2024-02-15,2024-02-15,Oeste,Cordillera,Tienda,Electrónica,Smartphones,22600.13,5,21470.12,13500.28,7969.84,54,Tarjeta,Ocasional,Back to School
+2024-02-15,2024-02-15,Este,Costa,Tienda,Hogar,Cocina,11798.26,0,11798.26,7545.29,4252.97,31,Tarjeta,Frecuente,Lanzamiento Verano
+2024-02-16,2024-02-17,Oeste,Cordillera,Tienda,Ropa,Formal,24254.12,0,24254.12,14152.67,10101.45,74,Tarjeta,Premium,Lanzamiento Verano
+2024-02-16,2024-02-16,Centro,Ciudad,Tienda,Hogar,Electrodomésticos,16454.54,10,14809.08,9502.36,5306.73,48,Tarjeta,Frecuente,Liquidación Q1
+2024-02-16,2024-02-16,Sur,Patagonia,Tienda,Electrónica,Audio,8627.42,0,8627.42,5908.74,2718.68,30,Tarjeta,Ocasional,Back to School
+2024-02-17,2024-02-17,Sur,Patagonia,Tienda,Electrónica,Computadoras,14383.31,10,12944.98,9065.56,3879.41,41,Tarjeta,Premium,Back to School
+2024-02-17,2024-02-17,Norte,Litoral,Online,Electrónica,Audio,12737.2,10,11463.48,7130.69,4332.79,46,Efectivo,Premium,Back to School
+2024-02-17,2024-02-17,Oeste,Cordillera,Online,Ropa,Deportiva,20179.55,10,18161.6,11448.92,6712.68,54,Tarjeta,Premium,Lanzamiento Verano
+2024-02-18,2024-02-18,Oeste,Cordillera,Online,Electrónica,Audio,11958.3,0,11958.3,8035.88,3922.42,44,Efectivo,Ocasional,Lanzamiento Verano
+2024-02-18,2024-02-18,Este,Costa,Online,Hogar,Electrodomésticos,26774.21,0,26774.21,15115.7,11658.51,64,Transferencia,Premium,Lanzamiento Verano
+2024-02-18,2024-02-18,Centro,Ciudad,Tienda,Electrónica,Smartphones,6063.65,5,5760.47,3433.79,2326.68,21,Efectivo,Frecuente,Lanzamiento Verano
+2024-02-19,2024-02-20,Centro,Ciudad,Online,Hogar,Electrodomésticos,16283.96,0,16283.96,10563.09,5720.87,49,Tarjeta,Ocasional,Back to School
+2024-02-19,2024-02-19,Este,Costa,Tienda,Hogar,Decoración,20335.39,0,20335.39,13483.07,6852.31,49,Transferencia,Ocasional,Lanzamiento Verano
+2024-02-19,2024-02-20,Oeste,Cordillera,Tienda,Electrónica,Smartphones,14778.07,5,14039.16,9209.82,4829.34,49,Tarjeta,Ocasional,Lanzamiento Verano
+2024-02-20,2024-02-21,Sur,Patagonia,Tienda,Ropa,Casual,17775.54,15,15109.2,9732.54,5376.67,64,Tarjeta,Frecuente,Back to School
+2024-02-20,2024-02-20,Oeste,Cordillera,Tienda,Ropa,Casual,18951.36,5,18003.8,11636.17,6367.62,62,Tarjeta,Frecuente,Lanzamiento Verano
+2024-02-20,2024-02-20,Centro,Ciudad,Online,Hogar,Decoración,13613.0,0,13613.0,9381.87,4231.12,49,Tarjeta,Premium,Lanzamiento Verano
+2024-02-21,2024-02-21,Sur,Patagonia,Online,Electrónica,Audio,17993.98,15,15294.88,9678.61,5616.27,52,Efectivo,Ocasional,Lanzamiento Verano
+2024-02-21,2024-02-21,Centro,Ciudad,Tienda,Electrónica,Smartphones,22778.55,5,21639.62,12757.29,8882.34,72,Tarjeta,Ocasional,Lanzamiento Verano
+2024-02-21,2024-02-21,Oeste,Cordillera,Mayorista,Hogar,Cocina,6422.46,0,6422.46,3551.66,2870.79,25,Efectivo,Frecuente,Lanzamiento Verano
+2024-02-22,2024-02-22,Sur,Patagonia,Tienda,Hogar,Cocina,14309.05,0,14309.05,8607.71,5701.35,50,Tarjeta,Frecuente,Lanzamiento Verano
+2024-02-22,2024-02-23,Este,Costa,Mayorista,Electrónica,Smartphones,17129.96,0,17129.96,9927.46,7202.5,58,Efectivo,Ocasional,Liquidación Q1
+2024-02-22,2024-02-22,Centro,Ciudad,Tienda,Electrónica,Computadoras,5287.38,0,5287.38,3255.99,2031.39,26,BNPL,Premium,Lanzamiento Verano
+2024-02-23,2024-02-23,Centro,Ciudad,Tienda,Electrónica,Smartphones,15423.45,0,15423.45,9115.33,6308.13,32,BNPL,Ocasional,Liquidación Q1
+2024-02-23,2024-02-23,Este,Costa,Tienda,Ropa,Formal,9936.66,0,9936.66,6710.73,3225.93,40,Tarjeta,Frecuente,Lanzamiento Verano
+2024-02-23,2024-02-23,Sur,Patagonia,Online,Electrónica,Smartphones,19055.68,0,19055.68,12614.44,6441.25,60,BNPL,Ocasional,Lanzamiento Verano
+2024-02-24,2024-02-25,Sur,Patagonia,Online,Hogar,Electrodomésticos,16322.28,0,16322.28,10415.73,5906.56,41,Tarjeta,Frecuente,Back to School
+2024-02-24,2024-02-24,Este,Costa,Tienda,Electrónica,Computadoras,25648.82,5,24366.38,16724.16,7642.22,62,Tarjeta,Premium,Back to School
+2024-02-24,2024-02-24,Centro,Ciudad,Tienda,Ropa,Formal,9773.04,0,9773.04,5538.65,4234.39,38,Efectivo,Ocasional,Lanzamiento Verano
+2024-02-25,2024-02-27,Oeste,Cordillera,Online,Electrónica,Smartphones,7396.18,5,7026.37,3876.96,3149.41,21,Tarjeta,Frecuente,Lanzamiento Verano
+2024-02-25,2024-02-26,Norte,Litoral,Tienda,Ropa,Casual,8160.28,15,6936.24,4524.64,2411.59,29,Efectivo,Frecuente,Liquidación Q1
+2024-02-25,2024-02-25,Sur,Patagonia,Tienda,Ropa,Deportiva,22164.55,5,21056.33,11921.08,9135.25,59,Tarjeta,Frecuente,Lanzamiento Verano
+2024-02-26,2024-02-26,Sur,Patagonia,Tienda,Hogar,Cocina,14865.14,10,13378.62,9283.53,4095.1,40,BNPL,Frecuente,Liquidación Q1
+2024-02-26,2024-02-26,Oeste,Cordillera,Online,Hogar,Electrodomésticos,11970.64,5,11372.11,6597.68,4774.43,42,Tarjeta,Ocasional,Liquidación Q1
+2024-02-26,2024-02-26,Centro,Ciudad,Tienda,Electrónica,Smartphones,8439.96,0,8439.96,5235.15,3204.82,34,Transferencia,Frecuente,Back to School
+2024-02-27,2024-02-27,Centro,Ciudad,Online,Electrónica,Computadoras,8575.62,5,8146.84,4493.69,3653.15,27,Tarjeta,Frecuente,Liquidación Q1
+2024-02-27,2024-02-27,Este,Costa,Tienda,Hogar,Decoración,23931.65,10,21538.48,14097.93,7440.55,62,Efectivo,Frecuente,Back to School
+2024-02-27,2024-02-27,Sur,Patagonia,Online,Hogar,Decoración,8323.92,10,7491.53,4378.21,3113.32,31,BNPL,Frecuente,Lanzamiento Verano
+2024-02-28,2024-02-28,Este,Costa,Tienda,Hogar,Decoración,18556.27,0,18556.27,10768.64,7787.64,54,Tarjeta,Premium,Lanzamiento Verano
+2024-02-28,2024-02-28,Oeste,Cordillera,Tienda,Ropa,Deportiva,8827.45,10,7944.7,4510.24,3434.47,33,Tarjeta,Frecuente,Lanzamiento Verano
+2024-02-28,2024-02-28,Norte,Litoral,Online,Ropa,Formal,10294.51,0,10294.51,6246.92,4047.59,38,Transferencia,Frecuente,Liquidación Q1
+2024-02-29,2024-02-29,Sur,Patagonia,Online,Electrónica,Audio,22705.62,0,22705.62,15581.33,7124.29,71,Transferencia,Frecuente,Lanzamiento Verano
+2024-02-29,2024-02-29,Centro,Ciudad,Online,Ropa,Formal,13220.72,0,13220.72,8556.69,4664.03,34,Efectivo,Premium,Lanzamiento Verano
+2024-02-29,2024-02-29,Norte,Litoral,Tienda,Electrónica,Audio,22027.5,0,22027.5,14055.16,7972.34,73,Tarjeta,Ocasional,Lanzamiento Verano
+2024-03-01,2024-03-01,Oeste,Cordillera,Tienda,Electrónica,Smartphones,9552.1,5,9074.49,5067.86,4006.63,29,BNPL,Ocasional,Liquidación Q1
+2024-03-01,2024-03-01,Norte,Litoral,Tienda,Hogar,Cocina,16995.92,15,14446.53,9104.93,5341.6,50,Tarjeta,Frecuente,Lanzamiento Verano
+2024-03-01,2024-03-01,Este,Costa,Tienda,Ropa,Casual,10869.64,0,10869.64,7413.54,3456.1,29,Tarjeta,Frecuente,Lanzamiento Verano
+2024-03-02,2024-03-03,Oeste,Cordillera,Tienda,Electrónica,Computadoras,7067.04,0,7067.04,4171.34,2895.7,26,Efectivo,Frecuente,Lanzamiento Verano
+2024-03-02,2024-03-02,Este,Costa,Tienda,Hogar,Decoración,14189.06,5,13479.6,8476.9,5002.71,56,BNPL,Frecuente,Lanzamiento Verano
+2024-03-02,2024-03-02,Centro,Ciudad,Tienda,Ropa,Casual,9204.61,5,8744.38,5619.73,3124.65,26,BNPL,Premium,Back to School
+2024-03-03,2024-03-03,Este,Costa,Tienda,Hogar,Cocina,10039.61,5,9537.63,5913.33,3624.3,29,Efectivo,Frecuente,Lanzamiento Verano
+2024-03-03,2024-03-04,Sur,Patagonia,Online,Hogar,Electrodomésticos,26196.53,10,23576.87,13774.36,9802.51,70,Tarjeta,Premium,Lanzamiento Verano
+2024-03-03,2024-03-03,Norte,Litoral,Tienda,Electrónica,Computadoras,11896.15,15,10111.73,6524.4,3587.33,41,Transferencia,Frecuente,Back to School
+2024-03-04,2024-03-04,Oeste,Cordillera,Tienda,Hogar,Electrodomésticos,19786.98,5,18797.63,11608.57,7189.06,71,Tarjeta,Frecuente,Lanzamiento Verano
+2024-03-04,2024-03-04,Norte,Litoral,Tienda,Electrónica,Smartphones,15319.17,0,15319.17,10761.45,4557.72,40,Tarjeta,Frecuente,Back to School
+2024-03-04,2024-03-05,Centro,Ciudad,Online,Electrónica,Computadoras,10909.7,0,10909.7,7824.42,3085.28,46,Tarjeta,Premium,Lanzamiento Verano
+2024-03-05,2024-03-07,Norte,Litoral,Tienda,Hogar,Decoración,19596.09,15,16656.68,10535.53,6121.14,73,Tarjeta,Frecuente,Lanzamiento Verano
+2024-03-05,2024-03-05,Centro,Ciudad,Mayorista,Ropa,Formal,17872.98,5,16979.33,9607.16,7372.17,46,Tarjeta,Ocasional,Lanzamiento Verano
+2024-03-05,2024-03-05,Sur,Patagonia,Mayorista,Electrónica,Smartphones,23898.78,0,23898.78,14177.59,9721.19,71,Transferencia,Ocasional,Back to School
+2024-03-06,2024-03-07,Centro,Ciudad,Online,Ropa,Casual,21835.71,10,19652.14,11447.65,8204.49,60,Efectivo,Frecuente,Back to School
+2024-03-06,2024-03-07,Sur,Patagonia,Online,Hogar,Electrodomésticos,12225.78,5,11614.49,7029.88,4584.62,46,Efectivo,Premium,Lanzamiento Verano
+2024-03-06,2024-03-06,Norte,Litoral,Tienda,Ropa,Formal,7468.15,5,7094.75,4520.43,2574.32,22,Tarjeta,Premium,Lanzamiento Verano
+2024-03-07,2024-03-07,Oeste,Cordillera,Online,Electrónica,Computadoras,13747.55,0,13747.55,7956.31,5791.24,37,Tarjeta,Frecuente,Lanzamiento Verano
+2024-03-07,2024-03-07,Sur,Patagonia,Tienda,Ropa,Casual,11245.43,5,10683.16,5908.43,4774.73,33,Tarjeta,Premium,Liquidación Q1
+2024-03-07,2024-03-07,Centro,Ciudad,Online,Hogar,Electrodomésticos,8015.23,0,8015.23,5720.29,2294.94,22,Efectivo,Frecuente,Liquidación Q1
+2024-03-08,2024-03-08,Sur,Patagonia,Tienda,Electrónica,Audio,9993.82,0,9993.82,6293.01,3700.8,28,Tarjeta,Frecuente,Lanzamiento Verano
+2024-03-08,2024-03-08,Centro,Ciudad,Online,Ropa,Casual,14886.83,15,12653.8,8306.59,4347.21,60,Tarjeta,Ocasional,Lanzamiento Verano
+2024-03-08,2024-03-08,Oeste,Cordillera,Tienda,Hogar,Decoración,9744.42,5,9257.2,5191.61,4065.58,40,Transferencia,Frecuente,Lanzamiento Verano
+2024-03-09,2024-03-10,Norte,Litoral,Tienda,Electrónica,Smartphones,8878.72,0,8878.72,6051.38,2827.34,42,Efectivo,Ocasional,Back to School
+2024-03-09,2024-03-10,Este,Costa,Online,Electrónica,Smartphones,19510.68,0,19510.68,12430.29,7080.39,70,Tarjeta,Frecuente,Back to School
+2024-03-09,2024-03-09,Sur,Patagonia,Mayorista,Hogar,Electrodomésticos,27706.45,0,27706.45,15425.85,12280.6,74,Efectivo,Ocasional,Lanzamiento Verano
+2024-03-10,2024-03-10,Norte,Litoral,Online,Hogar,Electrodomésticos,20573.7,0,20573.7,12039.5,8534.2,67,Tarjeta,Premium,Lanzamiento Verano
+2024-03-10,2024-03-11,Sur,Patagonia,Tienda,Electrónica,Audio,19670.73,5,18687.19,11210.32,7476.87,58,BNPL,Frecuente,Lanzamiento Verano
+2024-03-10,2024-03-12,Este,Costa,Tienda,Ropa,Formal,23224.77,5,22063.53,12246.22,9817.31,58,Efectivo,Premium,Back to School
+2024-03-11,2024-03-11,Este,Costa,Online,Electrónica,Smartphones,14408.23,10,12967.4,9237.46,3729.94,64,Transferencia,Premium,Back to School
+2024-03-11,2024-03-11,Norte,Litoral,Tienda,Ropa,Deportiva,24664.35,10,22197.92,13177.53,9020.39,66,Efectivo,Ocasional,Back to School
+2024-03-11,2024-03-11,Sur,Patagonia,Online,Electrónica,Smartphones,9501.77,15,8076.5,5360.03,2716.47,31,Efectivo,Frecuente,Back to School
+2024-03-12,2024-03-13,Este,Costa,Online,Ropa,Casual,12925.99,10,11633.39,7446.52,4186.88,46,Transferencia,Ocasional,Liquidación Q1
+2024-03-12,2024-03-13,Centro,Ciudad,Tienda,Ropa,Deportiva,21243.66,0,21243.66,13701.51,7542.15,74,Tarjeta,Frecuente,Back to School
+2024-03-12,2024-03-13,Oeste,Cordillera,Online,Hogar,Electrodomésticos,20836.52,0,20836.52,12545.11,8291.41,64,Transferencia,Frecuente,Liquidación Q1
+2024-03-13,2024-03-13,Norte,Litoral,Tienda,Ropa,Casual,27882.55,0,27882.55,16126.33,11756.23,73,Tarjeta,Premium,Liquidación Q1
+2024-03-13,2024-03-14,Centro,Ciudad,Tienda,Electrónica,Audio,14341.29,5,13624.22,8282.2,5342.02,37,Tarjeta,Frecuente,Lanzamiento Verano
+2024-03-13,2024-03-13,Sur,Patagonia,Online,Hogar,Decoración,6433.54,0,6433.54,3647.05,2786.49,20,Tarjeta,Ocasional,Back to School
+2024-03-14,2024-03-16,Norte,Litoral,Tienda,Electrónica,Audio,19325.11,15,16426.34,9911.23,6515.11,56,Transferencia,Frecuente,Liquidación Q1
+2024-03-14,2024-03-15,Este,Costa,Tienda,Ropa,Casual,33936.26,0,33936.26,20089.39,13846.87,71,Transferencia,Frecuente,Liquidación Q1
+2024-03-14,2024-03-16,Oeste,Cordillera,Tienda,Electrónica,Audio,13334.81,0,13334.81,9217.25,4117.56,63,Tarjeta,Premium,Back to School
+2024-03-15,2024-03-15,Este,Costa,Tienda,Electrónica,Smartphones,18225.63,5,17314.35,11349.77,5964.58,54,Tarjeta,Frecuente,Lanzamiento Verano
+2024-03-15,2024-03-16,Centro,Ciudad,Tienda,Ropa,Formal,17202.52,15,14622.14,9837.26,4784.89,46,Tarjeta,Ocasional,Lanzamiento Verano
+2024-03-15,2024-03-15,Norte,Litoral,Tienda,Electrónica,Smartphones,20873.24,0,20873.24,14158.02,6715.22,65,Tarjeta,Frecuente,Back to School
+2024-03-16,2024-03-16,Norte,Litoral,Online,Ropa,Deportiva,11854.35,5,11261.63,7042.88,4218.75,33,Efectivo,Frecuente,Liquidación Q1
+2024-03-16,2024-03-17,Este,Costa,Mayorista,Electrónica,Smartphones,12802.08,5,12161.98,8604.42,3557.56,36,Tarjeta,Frecuente,Back to School
+2024-03-16,2024-03-16,Centro,Ciudad,Online,Hogar,Decoración,5743.07,0,5743.07,3944.08,1798.99,40,Tarjeta,Premium,Liquidación Q1
+2024-03-17,2024-03-18,Oeste,Cordillera,Tienda,Hogar,Electrodomésticos,7997.13,10,7197.41,4133.36,3064.05,22,Transferencia,Ocasional,Back to School
+2024-03-17,2024-03-17,Centro,Ciudad,Online,Hogar,Electrodomésticos,20707.27,0,20707.27,13934.66,6772.62,59,Tarjeta,Frecuente,Lanzamiento Verano
+2024-03-17,2024-03-18,Este,Costa,Tienda,Hogar,Cocina,17730.88,10,15957.79,9433.92,6523.88,64,Tarjeta,Premium,Liquidación Q1
+2024-03-18,2024-03-20,Oeste,Cordillera,Online,Hogar,Decoración,25172.55,15,21396.67,12937.59,8459.08,74,Tarjeta,Premium,Back to School
+2024-03-18,2024-03-19,Centro,Ciudad,Online,Electrónica,Computadoras,6108.49,5,5803.06,3808.05,1995.02,44,Tarjeta,Frecuente,Lanzamiento Verano
+2024-03-18,2024-03-18,Sur,Patagonia,Online,Ropa,Casual,16220.52,5,15409.49,8849.5,6559.99,49,Transferencia,Frecuente,Back to School
+2024-03-19,2024-03-19,Sur,Patagonia,Tienda,Electrónica,Computadoras,17680.92,10,15912.83,10357.54,5555.29,50,Transferencia,Frecuente,Back to School
+2024-03-19,2024-03-21,Centro,Ciudad,Mayorista,Electrónica,Computadoras,5661.25,0,5661.25,3657.43,2003.81,20,Transferencia,Frecuente,Liquidación Q1
+2024-03-19,2024-03-19,Oeste,Cordillera,Tienda,Hogar,Electrodomésticos,20399.95,10,18359.96,12207.43,6152.53,56,Tarjeta,Frecuente,Liquidación Q1
+2024-03-20,2024-03-20,Oeste,Cordillera,Online,Hogar,Cocina,13066.13,5,12412.83,8165.63,4247.2,40,BNPL,Premium,Back to School
+2024-03-20,2024-03-21,Norte,Litoral,Online,Ropa,Formal,19226.84,0,19226.84,10745.89,8480.95,67,Transferencia,Frecuente,Liquidación Q1
+2024-03-20,2024-03-20,Centro,Ciudad,Tienda,Electrónica,Audio,7402.72,10,6662.45,4397.96,2264.49,30,Transferencia,Ocasional,Lanzamiento Verano
+2024-03-21,2024-03-21,Centro,Ciudad,Mayorista,Electrónica,Audio,19820.11,0,19820.11,13148.01,6672.1,73,Transferencia,Ocasional,Back to School
+2024-03-21,2024-03-21,Oeste,Cordillera,Online,Electrónica,Smartphones,18767.76,0,18767.76,10383.94,8383.83,57,Tarjeta,Frecuente,Back to School
+2024-03-21,2024-03-21,Sur,Patagonia,Tienda,Hogar,Cocina,25092.18,5,23837.57,14193.68,9643.9,62,Tarjeta,Premium,Liquidación Q1
+2024-03-22,2024-03-22,Centro,Ciudad,Tienda,Electrónica,Audio,7460.58,0,7460.58,4475.32,2985.26,26,Transferencia,Frecuente,Lanzamiento Verano
+2024-03-22,2024-03-22,Oeste,Cordillera,Tienda,Ropa,Deportiva,20991.34,5,19941.77,12822.23,7119.54,55,Transferencia,Frecuente,Lanzamiento Verano
+2024-03-22,2024-03-22,Este,Costa,Tienda,Ropa,Deportiva,19671.97,15,16721.17,10911.56,5809.61,60,Tarjeta,Premium,Back to School
+2024-03-23,2024-03-23,Este,Costa,Mayorista,Hogar,Electrodomésticos,13879.45,0,13879.45,9345.82,4533.63,34,Efectivo,Ocasional,Liquidación Q1
+2024-03-23,2024-03-25,Norte,Litoral,Tienda,Electrónica,Smartphones,9167.2,5,8708.84,5364.54,3344.3,27,Efectivo,Frecuente,Lanzamiento Verano
+2024-03-23,2024-03-25,Oeste,Cordillera,Tienda,Electrónica,Computadoras,15040.46,0,15040.46,8292.3,6748.16,50,Efectivo,Frecuente,Lanzamiento Verano
+2024-03-24,2024-03-24,Centro,Ciudad,Tienda,Electrónica,Audio,7898.53,5,7503.6,5311.59,2192.01,24,Transferencia,Frecuente,Lanzamiento Verano
+2024-03-24,2024-03-25,Este,Costa,Online,Hogar,Cocina,9365.54,0,9365.54,6680.5,2685.04,27,Tarjeta,Ocasional,Liquidación Q1
+2024-03-24,2024-03-24,Oeste,Cordillera,Mayorista,Electrónica,Computadoras,19166.88,0,19166.88,12475.82,6691.05,56,Tarjeta,Frecuente,Liquidación Q1
+2024-03-25,2024-03-27,Norte,Litoral,Mayorista,Ropa,Formal,27575.93,10,24818.34,14958.01,9860.33,72,Tarjeta,Frecuente,Liquidación Q1
+2024-03-25,2024-03-26,Este,Costa,Online,Electrónica,Audio,18958.79,0,18958.79,10456.47,8502.32,63,Tarjeta,Ocasional,Lanzamiento Verano
+2024-03-25,2024-03-25,Oeste,Cordillera,Tienda,Hogar,Electrodomésticos,7655.81,0,7655.81,4734.89,2920.92,27,Transferencia,Premium,Liquidación Q1
+2024-03-26,2024-03-26,Este,Costa,Tienda,Electrónica,Computadoras,24863.94,5,23620.74,13355.7,10265.04,68,Tarjeta,Premium,Back to School
+2024-03-26,2024-03-27,Centro,Ciudad,Online,Electrónica,Smartphones,8173.63,10,7356.27,5174.25,2182.01,39,Transferencia,Ocasional,Lanzamiento Verano
+2024-03-26,2024-03-26,Oeste,Cordillera,Online,Electrónica,Audio,8332.21,0,8332.21,5810.47,2521.73,20,Tarjeta,Ocasional,Back to School
+2024-03-27,2024-03-27,Este,Costa,Online,Ropa,Deportiva,8024.97,10,7222.47,4557.22,2665.26,26,Tarjeta,Premium,Back to School
+2024-03-27,2024-03-27,Norte,Litoral,Tienda,Ropa,Casual,17639.05,5,16757.1,10254.34,6502.76,47,Tarjeta,Ocasional,Back to School
+2024-03-27,2024-03-27,Oeste,Cordillera,Online,Ropa,Deportiva,21022.26,5,19971.14,11498.81,8472.33,55,Transferencia,Frecuente,Lanzamiento Verano
+2024-03-28,2024-03-28,Este,Costa,Online,Electrónica,Smartphones,26603.79,0,26603.79,17902.54,8701.25,73,Tarjeta,Premium,Lanzamiento Verano
+2024-03-28,2024-03-29,Centro,Ciudad,Online,Hogar,Electrodomésticos,9039.98,10,8135.98,5059.33,3076.64,23,Tarjeta,Frecuente,Liquidación Q1
+2024-03-28,2024-03-29,Norte,Litoral,Tienda,Hogar,Electrodomésticos,24369.4,10,21932.46,15734.92,6197.54,66,Transferencia,Frecuente,Back to School
+2024-03-29,2024-03-29,Centro,Ciudad,Online,Ropa,Casual,10262.47,5,9749.35,5961.63,3787.71,28,BNPL,Frecuente,Lanzamiento Verano
+2024-03-29,2024-03-29,Norte,Litoral,Online,Ropa,Deportiva,16539.6,0,16539.6,11719.91,4819.68,70,Transferencia,Frecuente,Liquidación Q1
+2024-03-29,2024-03-29,Este,Costa,Mayorista,Ropa,Casual,17106.13,0,17106.13,9559.28,7546.84,58,Tarjeta,Premium,Back to School
+2024-03-30,2024-03-30,Este,Costa,Online,Electrónica,Computadoras,7530.69,0,7530.69,4759.58,2771.1,20,Tarjeta,Frecuente,Liquidación Q1
+2024-03-30,2024-03-30,Norte,Litoral,Online,Ropa,Casual,16451.9,0,16451.9,11019.94,5431.96,52,Transferencia,Frecuente,Liquidación Q1
+2024-03-30,2024-03-31,Oeste,Cordillera,Tienda,Ropa,Casual,20489.97,0,20489.97,14056.13,6433.84,59,Efectivo,Frecuente,Lanzamiento Verano
