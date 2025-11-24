@@ -39,18 +39,55 @@ const useCountUp = (targetValue, durationMs = 800) => {
 
 const TimelineScene = ({ scene }) => {
   const data = scene.chart_data || [];
-  if (!data.length) return <p className="text-slate-300">Sin datos temporales.</p>;
+  const timelineData = useMemo(() => {
+    return data
+      .map((point) => {
+        const date = new Date(point.x);
+        if (Number.isNaN(date.getTime())) return null;
+        return {
+          ...point,
+          timestamp: date.getTime(),
+          label: date.toLocaleDateString("es-ES", {
+            year: "numeric",
+            month: "short",
+          }),
+        };
+      })
+      .filter(Boolean)
+      .sort((a, b) => a.timestamp - b.timestamp);
+  }, [data]);
 
-  const maxPoint = data.reduce((a, b) => (b.y > a.y ? b : a), data[0]);
-  const minPoint = data.reduce((a, b) => (b.y < a.y ? b : a), data[0]);
+  if (!timelineData.length) return <p className="text-slate-300">Sin datos temporales.</p>;
+
+  const maxPoint = timelineData.reduce((a, b) => (b.y > a.y ? b : a), timelineData[0]);
+  const minPoint = timelineData.reduce((a, b) => (b.y < a.y ? b : a), timelineData[0]);
 
   return (
     <ResponsiveContainer width="100%" height={260}>
-      <LineChart data={data} margin={{ top: 20, right: 20, left: 10, bottom: 0 }}>
+      <LineChart
+        data={timelineData}
+        margin={{ top: 20, right: 20, left: 10, bottom: 0 }}
+      >
         <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-        <XAxis dataKey="x" stroke="#cbd5e1" tick={{ fontSize: 12 }} />
+        <XAxis
+          dataKey="timestamp"
+          type="number"
+          stroke="#cbd5e1"
+          tick={{ fontSize: 12 }}
+          tickFormatter={(value, index) => timelineData[index]?.label || ""}
+          domain={["auto", "auto"]}
+        />
         <YAxis stroke="#cbd5e1" tick={{ fontSize: 12 }} />
-        <Tooltip contentStyle={{ background: "#0f172a", border: "1px solid #1e293b", color: "#e2e8f0" }} />
+        <Tooltip
+          contentStyle={{ background: "#0f172a", border: "1px solid #1e293b", color: "#e2e8f0" }}
+          labelFormatter={(value) =>
+            new Date(value).toLocaleDateString("es-ES", {
+              year: "numeric",
+              month: "short",
+              day: "2-digit",
+            })
+          }
+        />
         <Line
           type="monotone"
           dataKey="y"
@@ -60,8 +97,20 @@ const TimelineScene = ({ scene }) => {
           isAnimationActive
           animationDuration={900}
         />
-        <ReferenceDot x={maxPoint.x} y={maxPoint.y} r={6} fill="#22c55e" stroke="none" />
-        <ReferenceDot x={minPoint.x} y={minPoint.y} r={6} fill="#f87171" stroke="none" />
+        <ReferenceDot
+          x={maxPoint.timestamp}
+          y={maxPoint.y}
+          r={6}
+          fill="#22c55e"
+          stroke="none"
+        />
+        <ReferenceDot
+          x={minPoint.timestamp}
+          y={minPoint.y}
+          r={6}
+          fill="#f87171"
+          stroke="none"
+        />
       </LineChart>
     </ResponsiveContainer>
   );
