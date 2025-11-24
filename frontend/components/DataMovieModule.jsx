@@ -16,7 +16,6 @@ const DataMovieModule = ({ onUnauthorized }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
   const [response, setResponse] = useState(null);
-  const [demoMetadata, setDemoMetadata] = useState(null);
 
   const apiUrl = useMemo(
     () => import.meta.env.VITE_API_URL || "http://localhost:1000",
@@ -25,7 +24,6 @@ const DataMovieModule = ({ onUnauthorized }) => {
 
   const handleSubmit = async () => {
     setError("");
-    setDemoMetadata(null);
     if (!file) {
       setError("Selecciona un archivo para generar la película de datos.");
       return;
@@ -63,7 +61,6 @@ const DataMovieModule = ({ onUnauthorized }) => {
 
       const data = await res.json();
       setResponse(data);
-      setDemoMetadata(null);
     } catch (err) {
       console.error("Error al generar película de datos", err);
       setError(err.message);
@@ -76,7 +73,6 @@ const DataMovieModule = ({ onUnauthorized }) => {
     setError("");
     setIsLoading(true);
     setResponse(null);
-    setDemoMetadata(null);
 
     const token = localStorage.getItem("token");
     try {
@@ -96,7 +92,6 @@ const DataMovieModule = ({ onUnauthorized }) => {
 
       const data = await res.json();
       setResponse(data);
-      setDemoMetadata(data.demo_metadata || { is_demo: true, scenario: "ventas_demo" });
     } catch (err) {
       console.error("Error al generar película demo", err);
       setError(err.message);
@@ -189,44 +184,11 @@ const DataMovieModule = ({ onUnauthorized }) => {
       </div>
 
       {response && (
-        <div className="space-y-4">
-          <div className="grid gap-4 sm:grid-cols-3">
-            <div className="rounded-2xl border border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 shadow-sm">
-              <p className="text-xs uppercase tracking-wide text-gray-500 dark:text-slate-400">Filas</p>
-              <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                {response.basic_summary?.rows?.toLocaleString?.() || "-"}
-              </p>
-            </div>
-            <div className="rounded-2xl border border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 shadow-sm">
-              <p className="text-xs uppercase tracking-wide text-gray-500 dark:text-slate-400">Columnas</p>
-              <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                {response.basic_summary?.columns?.toLocaleString?.() || "-"}
-              </p>
-            </div>
-            <div className="rounded-2xl border border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 shadow-sm">
-              <p className="text-xs uppercase tracking-wide text-gray-500 dark:text-slate-400">Tipo de dataset</p>
-              <p className="text-base font-semibold text-gray-800 dark:text-white">
-                {response.basic_summary?.dataset_purpose || "No identificado"}
-              </p>
-              {response.ai_schema?.ai_notes && (
-                <p className="mt-1 text-sm text-gray-600 dark:text-slate-300 overflow-hidden text-ellipsis">
-                  {response.ai_schema.ai_notes}
-                </p>
-              )}
-            </div>
-            {demoMetadata?.is_demo && (
-              <div className="rounded-2xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/30 p-4 shadow-sm text-amber-800 dark:text-amber-100">
-                Demo activa · Escenario: {demoMetadata.scenario}
-              </div>
-            )}
-          </div>
-
-          <div className="rounded-3xl border border-slate-800 bg-slate-950/80 p-4">
-            <p className="text-sm text-slate-200 mb-2">
-              Presentación automática con escenas animadas y avatar. Usa las flechas o espera a que el reproductor avance según la duración de cada escena.
-            </p>
-            <DataMoviePlayer dataMovie={response.data_movie} />
-          </div>
+        <div className="rounded-3xl border border-slate-800 bg-slate-950/80 p-4">
+          <p className="text-sm text-slate-200 mb-2">
+            Presentación automática con escenas animadas y avatar. Usa las flechas o espera a que el reproductor avance según la duración de cada escena.
+          </p>
+          <DataMoviePlayer dataMovie={response.data_movie} />
         </div>
       )}
     </div>
