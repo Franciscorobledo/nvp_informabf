@@ -249,6 +249,7 @@ const App = () => {
                 onDataReceived={(data) =>
                   console.log("📈 Resultado del análisis:", data)
                 }
+                onNavigate={navigateTo}
               />
             ) : (
               <ConfigurationPage
