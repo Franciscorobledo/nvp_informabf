@@ -264,6 +264,13 @@ const AdminOpenAIUsage = ({ onUnauthorized }) => {
             </p>
           )}
 
+          {hasKey && (
+            <p className="text-xs text-green-700 bg-green-50 border border-green-200 rounded-lg p-2">
+              Token detectado y listo para usarse. Si los costos siguen en $0.00, refresca después de hacer
+              una solicitud a OpenAI o revisa el historial de llamadas más abajo.
+            </p>
+          )}
+
           <div className="flex flex-col sm:flex-row gap-2">
             <input
               type="password"
