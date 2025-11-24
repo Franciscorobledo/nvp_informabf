@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import API_URL from "./api";
+import { LoadingBanner, MessageCard } from "../components/Feedback";
 
 const defaultFormState = {
   username: "",
@@ -340,11 +341,7 @@ const UserManagement = ({ onUnauthorized }) => {
         </div>
       )}
 
-      {error && (
-        <div className="rounded-lg bg-red-50 text-red-800 border border-red-200 px-4 py-3 text-sm">
-          {error}
-        </div>
-      )}
+      {error && <MessageCard message={error} />}
 
       <form
         onSubmit={handleSubmit}
@@ -487,8 +484,10 @@ const UserManagement = ({ onUnauthorized }) => {
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan="7" className="p-4 text-center text-gray-500">
-                  Cargando usuarios...
+                <td colSpan="7" className="p-4">
+                  <div className="flex justify-center">
+                    <LoadingBanner message="Cargando usuarios..." subtle />
+                  </div>
                 </td>
               </tr>
             ) : users.length === 0 ? (

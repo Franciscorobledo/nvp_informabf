@@ -14,6 +14,7 @@ import {
 } from "recharts";
 import axios from "axios";
 import API_URL from "../src/api";
+import { LoadingBanner, MessageCard } from "./Feedback";
 
 const focusOptions = [
   { value: "todo", label: "Todo" },
@@ -434,11 +435,17 @@ const DataComparisonModule = ({ onUnauthorized }) => {
       </form>
 
       {isUploading && (
-        <ProgressBar progress={uploadProgress} step="subiendo_archivos" />
+        <div className="space-y-3">
+          <LoadingBanner message="Subiendo archivos..." subtle />
+          <ProgressBar progress={uploadProgress} step="subiendo_archivos" />
+        </div>
       )}
 
       {!isUploading && isComparing && (
-        <ProgressBar progress={compareProgress} step={compareStep} />
+        <div className="space-y-3">
+          <LoadingBanner message="Preparando comparativa..." subtle />
+          <ProgressBar progress={compareProgress} step={compareStep} />
+        </div>
       )}
 
       {preSummary && (
@@ -459,11 +466,7 @@ const DataComparisonModule = ({ onUnauthorized }) => {
         </div>
       )}
 
-      {compareError && (
-        <div className="rounded-xl border border-red-200 bg-red-50 text-red-700 px-4 py-3 text-sm">
-          {compareError}
-        </div>
-      )}
+      {compareError && <MessageCard message={compareError} />}
 
       {summary && (
         <div className="space-y-6">

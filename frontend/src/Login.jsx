@@ -1,16 +1,19 @@
 import React, { useState } from "react";
 import API_URL from "./api";
+import { LoadingBanner, MessageCard } from "../components/Feedback";
 
 const Login = ({ onLogin }) => {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
   const handleLogin = async (e) => {
     e.preventDefault();
+    setError("");
 
     if (!username.trim() || !password.trim()) {
-      alert("Por favor, ingresa tus credenciales.");
+      setError("Por favor, ingresa usuario y contraseña.");
       return;
     }
 
@@ -32,7 +35,7 @@ const Login = ({ onLogin }) => {
       if (!res.ok) {
         const msg = await res.text();
         console.error("❌ Error backend:", msg);
-        alert("Credenciales incorrectas o servidor no disponible.");
+        setError("Credenciales incorrectas o servidor no disponible.");
         return;
       }
 
@@ -40,7 +43,7 @@ const Login = ({ onLogin }) => {
 
       const token = data.access_token || data.token;
       if (!token) {
-        alert("No se recibió token del servidor.");
+        setError("No se recibió token del servidor.");
         return;
       }
 
@@ -55,51 +58,67 @@ const Login = ({ onLogin }) => {
       onLogin(normalizedUser);
     } catch (err) {
       console.error("💥 Error conexión:", err);
-      alert("Error de conexión.");
+      setError("Error de conexión. Intenta nuevamente.");
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="login-layout">
-      <div className="login-card">
-        <div className="flex flex-col items-center mb-8 space-y-1 text-center">
-          <img src="/logo.png" alt="Logo" className="w-28 mb-2 drop-shadow-xl" />
-          <h2 className="text-3xl font-bold tracking-wide text-blue-300">
-            InformeBF
-          </h2>
-          <p className="text-gray-300 text-base">
-            AI Data Visualizer — Inicio de sesión
+    <div className="relative flex min-h-screen w-full items-center justify-center bg-slate-950 px-4 py-10 text-slate-100">
+      <div className="pointer-events-none absolute inset-0 opacity-60">
+        <div className="absolute inset-0 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950" />
+        <div className="absolute left-4 top-10 h-56 w-56 rounded-full bg-blue-500/20 blur-3xl" />
+        <div className="absolute right-10 bottom-8 h-60 w-60 rounded-full bg-emerald-500/20 blur-3xl" />
+      </div>
+
+      <div className="relative w-full max-w-xl rounded-3xl border border-white/10 bg-slate-900/70 p-10 shadow-2xl shadow-blue-500/20 backdrop-blur-xl">
+        <div className="mb-8 space-y-2 text-center">
+          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-600 text-2xl shadow-lg shadow-blue-600/30">
+            🔐
+          </div>
+          <h1 className="text-3xl font-bold text-white">Inicia sesión en InformeBF</h1>
+          <p className="text-sm text-slate-300">
+            Analiza tus archivos de ventas, stock y más con IA.
           </p>
         </div>
 
         <form onSubmit={handleLogin} className="flex flex-col gap-5">
-          <input
-            type="text"
-            placeholder="Usuario"
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            className="p-4 rounded-xl bg-slate-900/80 border border-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 text-white placeholder-gray-400 transition-all duration-200 text-lg"
-          />
-          <input
-            type="password"
-            placeholder="Contraseña"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="p-4 rounded-xl bg-slate-900/80 border border-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 text-white placeholder-gray-400 transition-all duration-200 text-lg"
-          />
+          <label className="space-y-2 text-sm font-medium text-slate-200">
+            <span>Usuario</span>
+            <input
+              type="text"
+              placeholder="Ej: analista@empresa.com"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-base text-white shadow-inner focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-400/60 placeholder:text-slate-400"
+            />
+          </label>
+
+          <label className="space-y-2 text-sm font-medium text-slate-200">
+            <span>Contraseña</span>
+            <input
+              type="password"
+              placeholder="••••••••"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-base text-white shadow-inner focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-400/60 placeholder:text-slate-400"
+            />
+          </label>
 
           <button
             type="submit"
             disabled={loading}
-            className={`mt-2 ${
-              loading ? "bg-gray-500" : "bg-blue-600 hover:bg-blue-700"
-            } transition-all duration-300 text-white py-3.5 rounded-xl font-semibold shadow-xl text-lg`}
+            className="mt-2 inline-flex items-center justify-center rounded-xl bg-blue-600 px-4 py-3 text-lg font-semibold text-white shadow-lg shadow-blue-600/30 transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-500"
           >
-            {loading ? "Ingresando..." : "Entrar"}
+            {loading ? "Ingresando..." : "Iniciar sesión"}
           </button>
         </form>
+
+        <div className="mt-6 space-y-3">
+          {loading && <LoadingBanner message="Validando credenciales..." subtle />}
+          {error && <MessageCard message={error} />}
+        </div>
       </div>
     </div>
   );

@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from "react";
 import DataMoviePlayer from "./DataMoviePlayer";
+import { MessageCard } from "./Feedback";
 
 const focusOptions = [
   { value: "todos", label: "🔎 Todo / sin filtro" },
@@ -162,11 +163,7 @@ const DataMovieModule = ({ onUnauthorized }) => {
         </div>
       </div>
 
-      {error && (
-        <div className="rounded-xl border border-red-200 bg-red-50 text-red-700 dark:border-red-800 dark:bg-red-950/40 px-4 py-3 text-sm">
-          {error}
-        </div>
-      )}
+      {error && <MessageCard message={error} />}
 
       <div className="flex flex-col sm:flex-row gap-3">
         <button
