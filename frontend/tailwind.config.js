@@ -7,14 +7,7 @@ export default {
   ],
   darkMode: "class",
   theme: {
-    extend: {
-      fontFamily: {
-        sans: ["Inter", "ui-sans-serif", "system-ui", "-apple-system", "Segoe UI", "sans-serif"],
-      },
-      container: {
-        center: true,
-      },
-    },
+    extend: {},
   },
   plugins: [],
 };

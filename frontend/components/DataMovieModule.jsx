@@ -1,6 +1,5 @@
 import React, { useMemo, useState } from "react";
 import DataMoviePlayer from "./DataMoviePlayer";
-import { PrimaryButton, SecondaryButton } from "./ui/Button";
 
 const focusOptions = [
   { value: "todos", label: "🔎 Todo / sin filtro" },
@@ -170,21 +169,23 @@ const DataMovieModule = ({ onUnauthorized }) => {
       )}
 
       <div className="flex flex-col sm:flex-row gap-3">
-        <PrimaryButton
+        <button
           onClick={handleSubmit}
           disabled={isLoading}
-          className="flex-1 justify-center px-6 py-3"
+          className={`flex-1 inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl font-semibold text-white shadow-md transition focus:outline-none focus:ring-4 focus:ring-emerald-200 ${
+            isLoading ? "bg-emerald-400 cursor-not-allowed" : "bg-emerald-600 hover:bg-emerald-700"
+          }`}
         >
           {isLoading ? "Generando…" : "Generar película de datos"}
-        </PrimaryButton>
+        </button>
 
-        <SecondaryButton
+        <button
           onClick={handleDemoMovie}
           disabled={isLoading}
-          className="flex-1 justify-center px-6 py-3 border-amber-400 text-amber-200 hover:border-amber-300"
+          className="flex-1 inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl font-semibold border border-amber-300 text-amber-800 dark:text-amber-200 bg-amber-50 dark:bg-amber-900/30 hover:bg-amber-100 dark:hover:bg-amber-900/50 transition"
         >
           {isLoading ? "Cargando demo…" : "Probar película con datos de ejemplo"}
-        </SecondaryButton>
+        </button>
       </div>
 
       {response && (
