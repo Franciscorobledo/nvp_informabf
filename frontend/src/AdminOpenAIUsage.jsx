@@ -8,6 +8,8 @@ const numberFormatter = new Intl.NumberFormat("es-ES", {
 
 const integerFormatter = new Intl.NumberFormat("es-ES");
 
+const DEFAULT_BUDGET_USD = 5;
+
 const AdminOpenAIUsage = ({ onUnauthorized }) => {
   const [snapshot, setSnapshot] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -16,6 +18,8 @@ const AdminOpenAIUsage = ({ onUnauthorized }) => {
   const [tokenInput, setTokenInput] = useState("");
   const [savingToken, setSavingToken] = useState(false);
   const [hasKey, setHasKey] = useState(false);
+  const [usageSummary, setUsageSummary] = useState(null);
+  const [summaryLoading, setSummaryLoading] = useState(false);
 
   const fetchStatus = useCallback(async () => {
     const token = localStorage.getItem("token");
@@ -62,9 +66,52 @@ const AdminOpenAIUsage = ({ onUnauthorized }) => {
     }
   }, []);
 
+  const fetchUsageSummary = useCallback(async () => {
+    const token = localStorage.getItem("token");
+    if (!token) {
+      onUnauthorized?.("Tu sesión expiró. Inicia sesión nuevamente.");
+      setSummaryLoading(false);
+      return;
+    }
+
+    setSummaryLoading(true);
+
+    try {
+      const response = await fetch(`${API_URL}/usage/summary`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        if ([401, 403].includes(response.status)) {
+          onUnauthorized?.("La sesión expiró. Vuelve a iniciar sesión.");
+          return;
+        }
+
+        const msg = await response.text();
+        throw new Error(msg || "No se pudo obtener el resumen de consumo");
+      }
+
+      const data = await response.json();
+      setUsageSummary(data);
+    } catch (err) {
+      console.error("Error al obtener el resumen de consumo", err);
+      setError(err.message || "No se pudo obtener el resumen de consumo");
+    } finally {
+      setSummaryLoading(false);
+    }
+  }, [onUnauthorized]);
+
+  const handleRefresh = () => {
+    fetchStatus();
+    fetchUsageSummary();
+  };
+
   useEffect(() => {
     fetchStatus();
-  }, [fetchStatus]);
+    fetchUsageSummary();
+  }, [fetchStatus, fetchUsageSummary]);
 
   const handleTokenSave = async () => {
     const token = localStorage.getItem("token");
@@ -106,6 +153,7 @@ const AdminOpenAIUsage = ({ onUnauthorized }) => {
       setSuccess("Token actualizado correctamente. Se usará en las próximas llamadas.");
       setTokenInput("");
       fetchStatus();
+      fetchUsageSummary();
     } catch (err) {
       console.error("Error al actualizar token de OpenAI", err);
       setError(err.message || "No se pudo actualizar el token");
@@ -168,7 +216,7 @@ const AdminOpenAIUsage = ({ onUnauthorized }) => {
           🤖 Panel de consumo OpenAI
         </h3>
         <button
-          onClick={fetchStatus}
+          onClick={handleRefresh}
           disabled={loading}
           className={`px-3 py-2 rounded-lg text-sm font-semibold border border-gray-200 dark:border-slate-700 shadow-sm transition-all duration-200 ${
             loading
@@ -247,6 +295,84 @@ const AdminOpenAIUsage = ({ onUnauthorized }) => {
 
       {snapshot && (
         <div className="space-y-4">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            <div className="p-4 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-sm space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-semibold text-gray-800 dark:text-slate-100">
+                  Gasto total (últimos 30 días)
+                </span>
+              </div>
+              <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">
+                ${numberFormatter.format(usageSummary?.total_cost_usd ?? 0)}
+              </p>
+              <p className="text-xs text-gray-500 dark:text-slate-400">
+                Tokens usados: {integerFormatter.format(usageSummary?.total_tokens ?? 0)}
+              </p>
+            </div>
+
+            <div className="p-4 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-sm space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-semibold text-gray-800 dark:text-slate-100">Avance contra presupuesto</span>
+                <span className="text-xs px-2 py-1 rounded-md bg-slate-100 dark:bg-slate-800 text-gray-600 dark:text-slate-300">
+                  Ref: ${DEFAULT_BUDGET_USD}
+                </span>
+              </div>
+              <div className="w-full bg-gray-100 dark:bg-slate-800 rounded-full h-3 overflow-hidden">
+                <div
+                  className={`h-3 rounded-full transition-all duration-300 ${
+                    (usageSummary?.total_cost_usd ?? 0) > DEFAULT_BUDGET_USD
+                      ? "bg-rose-500"
+                      : "bg-green-500"
+                  }`}
+                  style={{
+                    width: `${Math.min(
+                      ((usageSummary?.total_cost_usd ?? 0) / DEFAULT_BUDGET_USD) * 100,
+                      110
+                    ).toFixed(2)}%`,
+                  }}
+                />
+              </div>
+              <p className="text-xs text-gray-500 dark:text-slate-400 flex justify-between">
+                <span>Gastado: ${numberFormatter.format(usageSummary?.total_cost_usd ?? 0)}</span>
+                <span>
+                  {Math.min(
+                    ((usageSummary?.total_cost_usd ?? 0) / DEFAULT_BUDGET_USD) * 100,
+                    110
+                  ).toFixed(1)}%
+                </span>
+              </p>
+            </div>
+
+            <div className="p-4 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-sm space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-semibold text-gray-800 dark:text-slate-100">Consumo por usuario</span>
+                {summaryLoading && (
+                  <span className="text-xs text-gray-500 dark:text-slate-400">Actualizando...</span>
+                )}
+              </div>
+              {(!usageSummary?.per_user || usageSummary.per_user.length === 0) && (
+                <p className="text-sm text-gray-500 dark:text-slate-400">Sin registros en el periodo seleccionado.</p>
+              )}
+              {usageSummary?.per_user?.length > 0 && (
+                <ul className="divide-y divide-gray-100 dark:divide-slate-800">
+                  {usageSummary.per_user.map((user) => (
+                    <li key={`${user.user_id}-${user.username}`} className="py-2 flex items-center justify-between text-sm text-gray-700 dark:text-slate-200">
+                      <div className="flex flex-col">
+                        <span className="font-semibold">{user.username}</span>
+                        <span className="text-xs text-gray-500 dark:text-slate-400">
+                          Tokens: {integerFormatter.format(user.total_tokens)}
+                        </span>
+                      </div>
+                      <span className="font-semibold text-blue-600 dark:text-blue-400">
+                        ${numberFormatter.format(user.total_cost_usd)}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+
           <div
             className={`flex items-center gap-3 p-4 rounded-xl border text-sm ${
               snapshot.status === "ok"
