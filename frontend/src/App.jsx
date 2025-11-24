@@ -146,6 +146,28 @@ const App = () => {
     );
   }
 
+  const renderModuleContent = () => {
+    switch (currentModule) {
+      case "analyze":
+        return (
+          <DataUploadAnalysis
+            user={user}
+            onUnauthorized={handleUnauthorized}
+            onDataReceived={(data) =>
+              console.log("📈 Resultado del análisis:", data)
+            }
+            onNavigateModule={navigateToModule}
+          />
+        );
+      case "movie":
+        return <DataMovieModule onUnauthorized={handleUnauthorized} />;
+      case "compare":
+        return <DataComparisonModule onUnauthorized={handleUnauthorized} />;
+      default:
+        return null;
+    }
+  };
+
   // -------------------------------
   // 🧩 Renderizado condicional
   // -------------------------------
@@ -291,35 +313,26 @@ const App = () => {
           </header>
 
           {/* MAIN */}
-          <main>
+          <main className="space-y-10">
             {activePage === "config" ? (
               <ConfigurationPage
                 user={user}
                 onUnauthorized={handleUnauthorized}
               />
-            ) : currentModule === "analyze" ? (
-              <DataUploadAnalysis
-                user={user}
-                onUnauthorized={handleUnauthorized}
-                onDataReceived={(data) =>
-                  console.log("📈 Resultado del análisis:", data)
-                }
-                onNavigateModule={navigateToModule}
-              />
-            ) : currentModule === "movie" ? (
-              <DataMovieModule onUnauthorized={handleUnauthorized} />
-            ) : currentModule === "compare" ? (
-              <DataComparisonModule onUnauthorized={handleUnauthorized} />
             ) : (
-              <HomeModules
-                user={user}
-                onUnauthorized={handleUnauthorized}
-                onDataReceived={(data) =>
-                  console.log("📈 Resultado del análisis:", data)
-                }
-                onNavigateModule={navigateToModule}
-                currentModule={currentModule}
-              />
+              <>
+                <HomeModules
+                  user={user}
+                  onUnauthorized={handleUnauthorized}
+                  onDataReceived={(data) =>
+                    console.log("📈 Resultado del análisis:", data)
+                  }
+                  onNavigateModule={navigateToModule}
+                  currentModule={currentModule}
+                />
+
+                {renderModuleContent()}
+              </>
             )}
           </main>
 
