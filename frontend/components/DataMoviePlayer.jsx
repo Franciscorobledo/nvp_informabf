@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   LineChart,
   Line,
@@ -209,6 +209,8 @@ const DataMoviePlayer = ({ dataMovie }) => {
   const [currentSceneIndex, setCurrentSceneIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(true);
   const [displayedNarration, setDisplayedNarration] = useState("");
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const playerRef = useRef(null);
 
   useEffect(() => {
     if (!scenes.length) return;
@@ -246,12 +248,36 @@ const DataMoviePlayer = ({ dataMovie }) => {
     return () => clearTimeout(timer);
   }, [isPlaying, currentSceneIndex, scenes]);
 
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      const isActive = document.fullscreenElement === playerRef.current;
+      setIsFullscreen(isActive);
+    };
+
+    document.addEventListener("fullscreenchange", handleFullscreenChange);
+    return () => document.removeEventListener("fullscreenchange", handleFullscreenChange);
+  }, []);
+
   const hasScenes = hasPlayableDataMovie(dataMovie);
   const currentScene = scenes[currentSceneIndex] || {};
 
   const goToScene = (idx, shouldPlay = false) => {
     setCurrentSceneIndex(idx);
     setIsPlaying(shouldPlay);
+  };
+
+  const toggleFullscreen = async () => {
+    if (!playerRef.current) return;
+
+    try {
+      if (!document.fullscreenElement) {
+        await playerRef.current.requestFullscreen();
+      } else {
+        await document.exitFullscreen();
+      }
+    } catch (error) {
+      console.error("No se pudo cambiar a pantalla completa", error);
+    }
   };
 
   if (!hasScenes) {
@@ -263,7 +289,12 @@ const DataMoviePlayer = ({ dataMovie }) => {
   }
 
   return (
-    <div className="rounded-3xl bg-slate-900 p-6 shadow-2xl border border-slate-800 space-y-4">
+    <div
+      ref={playerRef}
+      className={`rounded-3xl bg-slate-900 p-6 shadow-2xl border border-slate-800 space-y-4 transition-all ${
+        isFullscreen ? "fixed inset-0 z-50 m-0 h-screen w-screen overflow-auto rounded-none" : ""
+      }`}
+    >
       <style>{fadeInKeyframes}</style>
       <div className="space-y-1">
         <h3 className="text-2xl font-bold text-white">{dataMovie?.movie_title || "Película de datos"}</h3>
@@ -295,6 +326,13 @@ const DataMoviePlayer = ({ dataMovie }) => {
                 className="rounded-full border border-slate-600 px-3 py-2 text-white hover:border-slate-400"
               >
                 ▶
+              </button>
+              <button
+                onClick={toggleFullscreen}
+                className="rounded-full border border-slate-600 px-3 py-2 text-white hover:border-slate-400"
+                aria-label={isFullscreen ? "Salir de pantalla completa" : "Ver en pantalla completa"}
+              >
+                {isFullscreen ? "🗗" : "🗖"}
               </button>
             </div>
           </div>
