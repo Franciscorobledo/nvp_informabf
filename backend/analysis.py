@@ -205,23 +205,22 @@ def _infer_dataset_purpose(df: pd.DataFrame) -> str:
     return "generico"
 
 
-def _infer_ai_schema(df: pd.DataFrame, column_types: dict, date_field: str | None = None) -> dict:
+def _infer_ai_schema(
+    df: pd.DataFrame,
+    column_types: dict,
+    date_field: str | None = None,
+    date_decision: dict | None = None,
+) -> dict:
     """Genera un esquema ligero usando heurísticas cuando no proviene de la IA."""
 
-    date_candidates = [
-        date_field,
-        *_find_best_column(
-            df,
-            [["fecha"], ["date"], ["created"], ["dia"], ["mes"], ["semana"]],
-            return_all=True,
-        ),
-    ]
-    date_candidates = [col for col in date_candidates if col and col in df.columns and column_types.get(col) == "date"]
+    date_decision = date_decision or select_primary_date_column(
+        df, column_types=column_types, user_date=date_field
+    )
+
+    detected_date = date_decision.get("selected")
 
     numeric_columns = [c for c, t in column_types.items() if t == "numeric"]
     categorical_columns = [c for c, t in column_types.items() if t == "categorical"]
-
-    detected_date = date_candidates[0] if date_candidates else None
 
     timeline_granularity = None
     if detected_date:
@@ -250,6 +249,7 @@ def _infer_ai_schema(df: pd.DataFrame, column_types: dict, date_field: str | Non
     return {
         "dataset_purpose": purpose,
         "date_column": detected_date,
+        "date_selection": date_decision,
         "main_numeric_metrics": numeric_columns[:3],
         "main_entity_columns": categorical_columns[:3],
         "suggested_kpis": suggested_kpis,
@@ -317,7 +317,9 @@ def _build_frame_title(idx: int, total: int, primary_label: str, is_peak: bool, 
     return "Evolución intermedia"
 
 
-def build_data_movie(df: pd.DataFrame, ai_schema: dict | None) -> dict | None:
+def build_data_movie(
+    df: pd.DataFrame, ai_schema: dict | None, date_decision: dict | None = None
+) -> dict | None:
     """Construye la estructura de "película" de datos con escenas y avatar narrador."""
 
     if ai_schema is None or df is None or df.empty:
@@ -326,7 +328,10 @@ def build_data_movie(df: pd.DataFrame, ai_schema: dict | None) -> dict | None:
     schema = ai_schema or {}
     column_types = detect_column_types(df)
 
+    date_decision = date_decision or schema.get("date_selection") or {}
     date_col = schema.get("date_column") if schema.get("date_column") in df.columns else None
+    if not date_col:
+        date_col = date_decision.get("selected") if date_decision.get("selected") in df.columns else None
     if not date_col:
         date_candidates = [c for c, t in column_types.items() if t == "date"]
         date_col = date_candidates[0] if date_candidates else None
@@ -407,8 +412,9 @@ def build_data_movie(df: pd.DataFrame, ai_schema: dict | None) -> dict | None:
 
     # Timeline scene
     timeline_points: list[dict] = []
-    timeline_narration = "No identifiqué una fecha clara para la tendencia."
-    if date_col:
+    requires_user_date = date_decision.get("status") == "user_required"
+    timeline_narration = date_decision.get("message") or "No identifiqué una fecha clara para la tendencia."
+    if date_col and not requires_user_date:
         working = df.copy()
         working[date_col] = pd.to_datetime(working[date_col], errors="coerce")
         working = working.dropna(subset=[date_col])
@@ -439,6 +445,11 @@ def build_data_movie(df: pd.DataFrame, ai_schema: dict | None) -> dict | None:
             f"el punto más alto fue el {peak_point['x']} y el más bajo el {trough_point['x']}. "
             f"La serie luce {trend_direction}."
         )
+    elif requires_user_date:
+        timeline_narration = (
+            timeline_narration
+            or "Necesito que elijas la columna de fecha principal para ordenar la película."
+        )
 
     scenes.append(
         {
@@ -448,6 +459,8 @@ def build_data_movie(df: pd.DataFrame, ai_schema: dict | None) -> dict | None:
             "avatar_mood": "focused",
             "chart_data": timeline_points,
             "narration": timeline_narration,
+            "date_selection": date_decision,
+            "requires_manual_date": requires_user_date,
         }
     )
 
@@ -553,12 +566,13 @@ def build_data_movie(df: pd.DataFrame, ai_schema: dict | None) -> dict | None:
     return {
         "movie_title": f"Película de datos: {friendly_purpose}",
         "movie_subtitle": "Presentación guiada de tu archivo",
+        "date_selection": date_decision,
         "scenes": scenes,
     }
 
 
 def generate_data_movie_payload(
-    df: pd.DataFrame, focus: str | None = None
+    df: pd.DataFrame, focus: str | None = None, date_field: str | None = None
 ) -> dict:
     """Crea el paquete mínimo para reproducir una película de datos.
 
@@ -573,7 +587,12 @@ def generate_data_movie_payload(
     cleaned = cleaned.replace(["", "NA", "NaN", "None"], np.nan).dropna(how="all")
 
     column_types = detect_column_types(cleaned)
-    ai_schema = _infer_ai_schema(cleaned, column_types)
+    date_decision = select_primary_date_column(
+        cleaned, column_types=column_types, user_date=date_field
+    )
+    ai_schema = _infer_ai_schema(
+        cleaned, column_types, date_field=date_field, date_decision=date_decision
+    )
 
     focus_normalized = (focus or "").strip().lower()
     if focus_normalized and focus_normalized not in {"todo", "todos", "all"}:
@@ -583,7 +602,7 @@ def generate_data_movie_payload(
     if isinstance(ai_schema, dict) and ai_notes:
         ai_schema["ai_notes"] = ai_notes
 
-    data_movie = build_data_movie(cleaned, ai_schema)
+    data_movie = build_data_movie(cleaned, ai_schema, date_decision=date_decision)
 
     basic_summary = {
         "rows": int(len(cleaned)),
@@ -633,6 +652,188 @@ def _find_best_column(df, keyword_groups, return_all: bool = False):
         return [col for col, _ in ranked]
 
     return ranked[0][0]
+
+
+# ---------------------------------------------------------------------
+# ⏱️ SELECCIÓN INTELIGENTE DE COLUMNAS DE FECHA
+# ---------------------------------------------------------------------
+# Palabras clave que ayudan a priorizar la "fecha principal" en distintos idiomas.
+# Se usa _normalize para comparar sin acentos ni mayúsculas.
+HIGH_PRIORITY_DATE_KEYWORDS = {
+    "venta",
+    "ventas",
+    "sale",
+    "sales",
+    "order",
+    "pedido",
+    "orden",
+    "factura",
+    "invoice",
+    "transaccion",
+    "transaction",
+    "purchase",
+    "compra",
+    "venda",
+}
+
+MEDIUM_PRIORITY_DATE_KEYWORDS = {
+    "evento",
+    "event",
+    "movimiento",
+    "movement",
+    "registro",
+    "created_at",
+    "created",
+    "fecha",
+    "date",
+    "data",
+}
+
+LOGISTICS_DATE_KEYWORDS = {
+    "tour",
+    "viaje",
+    "shipping",
+    "envio",
+    "entrega",
+    "delivery",
+    "llegada",
+    "arrival",
+}
+
+GENERIC_DATE_KEYWORDS = {"fecha", "date", "data", "dia", "day"}
+
+
+def _score_date_column(name: str, null_ratio: float, distinct_values: int) -> int:
+    """Asigna un puntaje al nombre de columna para priorizar fechas relevantes.
+
+    Reglas principales:
+    - +3 si contiene palabras de alta prioridad (venta/orden/transacción).
+    - +2 si contiene palabras de prioridad media (evento/registro/created_at).
+    - +1 extra si incluye términos genéricos como ``fecha`` o ``date``.
+    - -1 si coincide con términos logísticos típicos (shipping/tour/envío).
+    - Bonos adicionales por baja cantidad de nulos y variación temporal.
+
+    Para ampliar en el futuro basta con agregar nuevas palabras a las
+    constantes de prioridad anteriores.
+    """
+
+    normalized = _normalize(name.replace(" ", "_"))
+    score = 0
+
+    if any(keyword in normalized for keyword in HIGH_PRIORITY_DATE_KEYWORDS):
+        score += 3
+    if any(keyword in normalized for keyword in MEDIUM_PRIORITY_DATE_KEYWORDS):
+        score += 2
+    if any(keyword in normalized for keyword in GENERIC_DATE_KEYWORDS):
+        score += 1
+    if any(keyword in normalized for keyword in LOGISTICS_DATE_KEYWORDS):
+        score -= 1
+
+    if null_ratio < 0.2:
+        score += 1
+    if distinct_values > 1:
+        score += 1
+
+    return score
+
+
+def detect_date_candidates(
+    df: pd.DataFrame, column_types: dict | None = None, sample_size: int = 5_000
+) -> list[dict]:
+    """Detecta columnas de fecha y las anota con puntajes y métricas básicas."""
+
+    column_types = column_types or detect_column_types(df)
+    sample = df.head(sample_size)
+    candidates: list[dict] = []
+
+    for col in sample.columns:
+        series = sample[col]
+        is_declared_date = column_types.get(col) == "date" or is_datetime64_any_dtype(series)
+        parsed = pd.to_datetime(series, errors="coerce", dayfirst=True, infer_datetime_format=True)
+        parse_ratio = parsed.notna().mean()
+
+        if not is_declared_date and parse_ratio < 0.6:
+            continue
+
+        null_ratio = 1 - parse_ratio if len(series) else 1
+        distinct_values = int(parsed.dropna().nunique())
+        score = _score_date_column(col, null_ratio, distinct_values)
+
+        candidates.append(
+            {
+                "column": col,
+                "score": score,
+                "null_ratio": float(null_ratio),
+                "distinct_values": distinct_values,
+                "parsed_ratio": float(parse_ratio),
+            }
+        )
+
+    candidates.sort(key=lambda item: item["score"], reverse=True)
+    return candidates
+
+
+def select_primary_date_column(
+    df: pd.DataFrame,
+    column_types: dict | None = None,
+    user_date: str | None = None,
+    min_auto_score: float = 1.0,
+) -> dict:
+    """Elige la columna de fecha principal usando puntajes y caídas controladas."""
+
+    column_types = column_types or detect_column_types(df)
+    candidates = detect_date_candidates(df, column_types)
+
+    if user_date and user_date in df.columns:
+        if not any(c["column"] == user_date for c in candidates):
+            parsed = pd.to_datetime(df[user_date], errors="coerce", dayfirst=True, infer_datetime_format=True)
+            parsed_ratio = parsed.notna().mean()
+            if parsed_ratio >= 0.5:
+                candidates.append(
+                    {
+                        "column": user_date,
+                        "score": _score_date_column(user_date, 1 - parsed_ratio, int(parsed.dropna().nunique())),
+                        "null_ratio": float(1 - parsed_ratio),
+                        "distinct_values": int(parsed.dropna().nunique()),
+                        "parsed_ratio": float(parsed_ratio),
+                    }
+                )
+
+        if any(c["column"] == user_date for c in candidates):
+            return {
+                "selected": user_date,
+                "status": "user_supplied",
+                "message": "Fecha principal definida por el usuario.",
+                "candidates": candidates,
+            }
+
+    if not candidates:
+        return {
+            "selected": None,
+            "status": "user_required",
+            "message": "No se detectaron columnas con fechas válidas; selecciona una manualmente.",
+            "candidates": [],
+        }
+
+    best_score = candidates[0]["score"]
+    if best_score < min_auto_score:
+        return {
+            "selected": None,
+            "status": "user_required",
+            "message": "Las columnas de fecha tienen poco contexto; se requiere selección manual.",
+            "candidates": candidates,
+        }
+
+    best_candidates = [c for c in candidates if c["score"] == best_score]
+    best_candidates.sort(key=lambda c: (c["null_ratio"], -c["distinct_values"]))
+    winner = best_candidates[0]
+
+    return {
+        "selected": winner["column"],
+        "status": "auto",
+        "message": "Fecha principal elegida automáticamente por puntaje y calidad.",
+        "candidates": candidates,
+    }
 
 
 def _learning_profile_path(user_id: str) -> str:
@@ -1110,7 +1311,12 @@ def analyze_file(
     summary = {}
     column_types = detect_column_types(df)
 
-    ai_schema = _infer_ai_schema(df, column_types, date_field=date_field)
+    date_decision = select_primary_date_column(
+        df, column_types=column_types, user_date=date_field
+    )
+    ai_schema = _infer_ai_schema(
+        df, column_types, date_field=date_field, date_decision=date_decision
+    )
 
     type_counts = {}
     for detected_type in column_types.values():
@@ -1345,7 +1551,7 @@ def analyze_file(
     else:
         refined_insights.append("Perfil de aprendizaje no disponible: falta identificador de usuario.")
 
-    data_movie = build_data_movie(df, ai_schema)
+    data_movie = build_data_movie(df, ai_schema, date_decision=date_decision)
 
     return {
         "summary": summary,
