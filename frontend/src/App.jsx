@@ -2,13 +2,30 @@ import React, { useState, useEffect } from "react";
 import Login from "./Login";
 import HomeModules from "../components/HomeModules";
 import ConfigurationPage from "./ConfigurationPage";
+import DataUploadAnalysis from "../components/DataUploadAnalysis";
+import DataMovieModule from "../components/DataMovieModule";
+import DataComparisonModule from "../components/DataComparisonModule";
 
 const App = () => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [theme, setTheme] = useState("light");
   const [menuOpen, setMenuOpen] = useState(false);
-  const [activePage, setActivePage] = useState("home");
+  const getNavigationFromPath = (path) => {
+    if (path.startsWith("/modules/analyze"))
+      return { page: "home", module: "analyze" };
+    if (path.startsWith("/modules/movie"))
+      return { page: "home", module: "movie" };
+    if (path.startsWith("/modules/compare"))
+      return { page: "home", module: "compare" };
+    if (path.startsWith("/config")) return { page: "config", module: "home" };
+    return { page: "home", module: "home" };
+  };
+
+  const initialNavigation = getNavigationFromPath(window.location.pathname);
+
+  const [activePage, setActivePage] = useState(initialNavigation.page);
+  const [currentModule, setCurrentModule] = useState(initialNavigation.module);
 
   // 🧠 Verifica si existe sesión al iniciar
   useEffect(() => {
@@ -38,6 +55,18 @@ const App = () => {
 
     setTheme(savedTheme || (prefersDark ? "dark" : "light"));
     setLoading(false);
+  }, []);
+
+  useEffect(() => {
+    const handlePopState = () => {
+      const navigation = getNavigationFromPath(window.location.pathname);
+      setActivePage(navigation.page);
+      setCurrentModule(navigation.module);
+      setMenuOpen(false);
+    };
+
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
   }, []);
 
   useEffect(() => {
@@ -85,6 +114,27 @@ const App = () => {
   const navigateTo = (page) => {
     setActivePage(page);
     setMenuOpen(false);
+
+    if (page === "config") {
+      window.history.pushState({ page }, "", "/config");
+      setCurrentModule("home");
+    } else {
+      window.history.pushState({ page }, "", "/");
+      setCurrentModule("home");
+    }
+  };
+
+  const navigateToModule = (moduleId) => {
+    const moduleRoutes = {
+      analyze: "/modules/analyze",
+      movie: "/modules/movie",
+      compare: "/modules/compare",
+    };
+
+    setActivePage("home");
+    setCurrentModule(moduleId);
+    setMenuOpen(false);
+    window.history.pushState({ module: moduleId }, "", moduleRoutes[moduleId] || "/");
   };
 
   // ⏳ Pantalla de carga inicial
@@ -242,18 +292,33 @@ const App = () => {
 
           {/* MAIN */}
           <main>
-            {activePage === "home" ? (
+            {activePage === "config" ? (
+              <ConfigurationPage
+                user={user}
+                onUnauthorized={handleUnauthorized}
+              />
+            ) : currentModule === "analyze" ? (
+              <DataUploadAnalysis
+                user={user}
+                onUnauthorized={handleUnauthorized}
+                onDataReceived={(data) =>
+                  console.log("📈 Resultado del análisis:", data)
+                }
+                onNavigateModule={navigateToModule}
+              />
+            ) : currentModule === "movie" ? (
+              <DataMovieModule onUnauthorized={handleUnauthorized} />
+            ) : currentModule === "compare" ? (
+              <DataComparisonModule onUnauthorized={handleUnauthorized} />
+            ) : (
               <HomeModules
                 user={user}
                 onUnauthorized={handleUnauthorized}
                 onDataReceived={(data) =>
                   console.log("📈 Resultado del análisis:", data)
                 }
-              />
-            ) : (
-              <ConfigurationPage
-                user={user}
-                onUnauthorized={handleUnauthorized}
+                onNavigateModule={navigateToModule}
+                currentModule={currentModule}
               />
             )}
           </main>

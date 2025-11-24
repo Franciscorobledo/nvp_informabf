@@ -1,11 +1,8 @@
-import React, { useMemo, useState } from "react";
-import DataUploadAnalysis from "./DataUploadAnalysis";
-import DataMovieModule from "./DataMovieModule";
-import DataComparisonModule from "./DataComparisonModule";
+import React, { useMemo, useState, useEffect } from "react";
 
 const moduleDefinitions = [
   {
-    id: "data-analysis",
+    id: "analyze",
     title: "Carga y análisis de datos",
     description:
       "Sube archivos CSV/XLSX/ZIP, genera KPIs y obtén visualizaciones claras en minutos.",
@@ -13,14 +10,14 @@ const moduleDefinitions = [
     badge: "Recomendado",
   },
   {
-    id: "data-movie",
+    id: "movie",
     title: "Película de datos",
     description:
       "Crea una narrativa visual y animada que muestre la evolución de tu dataset.",
     icon: "🎬",
   },
   {
-    id: "comparativa",
+    id: "compare",
     title: "Comparativa de datos",
     description:
       "Compara periodos, productos o canales para detectar cambios clave de un vistazo.",
@@ -28,8 +25,17 @@ const moduleDefinitions = [
   },
 ];
 
-const HomeModules = ({ user, onUnauthorized, onDataReceived }) => {
-  const [selectedModule, setSelectedModule] = useState("none");
+const HomeModules = ({ currentModule = "home", onNavigateModule }) => {
+  const [selectedModule, setSelectedModule] = useState(currentModule);
+
+  useEffect(() => {
+    setSelectedModule(currentModule);
+  }, [currentModule]);
+
+  const handleSelect = (moduleId) => {
+    setSelectedModule(moduleId);
+    onNavigateModule?.(moduleId);
+  };
 
   const cards = useMemo(
     () =>
@@ -56,7 +62,7 @@ const HomeModules = ({ user, onUnauthorized, onDataReceived }) => {
         {cards.map((module) => (
           <button
             key={module.id}
-            onClick={() => setSelectedModule(module.id)}
+            onClick={() => handleSelect(module.id)}
             className={`group relative flex h-full flex-col gap-4 rounded-2xl border p-6 text-left shadow-sm transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-slate-900 ${
               module.isSelected
                 ? "border-blue-500 bg-blue-50/80 text-gray-900 shadow-md dark:border-blue-400 dark:bg-slate-800/70 dark:text-white"
@@ -113,30 +119,6 @@ const HomeModules = ({ user, onUnauthorized, onDataReceived }) => {
             </div>
           </button>
         ))}
-      </div>
-
-      <div className="rounded-2xl border border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm p-6">
-        {selectedModule === "none" && (
-          <p className="text-center text-gray-600 dark:text-slate-300">
-            Selecciona un módulo para comenzar.
-          </p>
-        )}
-
-        {selectedModule === "data-analysis" && (
-          <DataUploadAnalysis
-            user={user}
-            onUnauthorized={onUnauthorized}
-            onDataReceived={onDataReceived}
-          />
-        )}
-
-        {selectedModule === "data-movie" && (
-          <DataMovieModule onUnauthorized={onUnauthorized} />
-        )}
-
-        {selectedModule === "comparativa" && (
-          <DataComparisonModule onUnauthorized={onUnauthorized} />
-        )}
       </div>
     </div>
   );
