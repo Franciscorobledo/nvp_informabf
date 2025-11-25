@@ -396,44 +396,6 @@ const App = () => {
               />
             ) : (
               <>
-                <section className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr] items-center">
-                  <div className="space-y-4">
-                    <div className="inline-flex items-center gap-2 rounded-full border border-blue-100 bg-blue-50/70 px-3 py-1 text-xs font-semibold text-blue-700 dark:border-blue-800 dark:bg-blue-900/40 dark:text-blue-100">
-                      Experiencia premium
-                    </div>
-                    <h2 className="text-4xl font-semibold leading-tight text-slate-900 dark:text-white">
-                      Visualiza, compara y narra datos con un estilo SaaS elegante.
-                    </h2>
-                    <p className="text-base leading-relaxed text-slate-600 dark:text-slate-300 max-w-2xl">
-                      Construimos un hogar calmado para tus decisiones: tarjetas amplias, sombras suaves y un tono corporativo cálido que mantiene el foco en lo esencial.
-                    </p>
-                    <div className="flex flex-wrap gap-3">
-                      <span className="inline-flex items-center gap-2 rounded-full bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm ring-1 ring-slate-200/80 dark:bg-slate-900 dark:text-slate-200 dark:ring-slate-700">
-                        <span className="h-2 w-2 rounded-full bg-emerald-500" aria-hidden="true" /> Sesiones seguras
-                      </span>
-                      <span className="inline-flex items-center gap-2 rounded-full bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm ring-1 ring-slate-200/80 dark:bg-slate-900 dark:text-slate-200 dark:ring-slate-700">
-                        Sombras suaves
-                      </span>
-                      <span className="inline-flex items-center gap-2 rounded-full bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm ring-1 ring-slate-200/80 dark:bg-slate-900 dark:text-slate-200 dark:ring-slate-700">
-                        Minimalismo que respira
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <div className="rounded-2xl border border-slate-200/80 bg-white shadow-lg shadow-slate-200/60 p-4 dark:border-slate-800 dark:bg-slate-900/70 dark:shadow-none">
-                      <p className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Estado</p>
-                      <p className="mt-2 text-lg font-semibold text-slate-900 dark:text-white">Sesión activa</p>
-                      <p className="text-sm text-slate-500 dark:text-slate-300">Conectado como {user.username}</p>
-                    </div>
-                    <div className="rounded-2xl border border-blue-200/80 bg-gradient-to-br from-blue-50 via-white to-blue-100 shadow-lg shadow-blue-200/70 p-4 dark:border-blue-900/60 dark:from-slate-900 dark:via-slate-900 dark:to-blue-950/30 dark:shadow-none">
-                      <p className="text-xs uppercase tracking-wide text-blue-700 dark:text-blue-200">Experiencia</p>
-                      <p className="mt-2 text-lg font-semibold text-slate-900 dark:text-white">Tarjetas profesionales</p>
-                      <p className="text-sm text-slate-600 dark:text-slate-200">Modernas, limpias y con sombras suaves inspiradas en Stripe y Linear.</p>
-                    </div>
-                  </div>
-                </section>
-
                 <HomeModules
                   user={user}
                   onUnauthorized={handleUnauthorized}
