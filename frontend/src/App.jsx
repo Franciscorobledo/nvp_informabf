@@ -331,17 +331,7 @@ const App = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50/60 dark:from-slate-950 dark:via-slate-950 dark:to-slate-900 flex flex-col items-center font-sans px-4 pt-28 pb-10 text-gray-900 dark:text-slate-100 transition-colors duration-300">
       {!user ? (
-        <>
-          {sessionMessage && (
-            <div className="mb-4 max-w-2xl w-full rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-amber-900">
-              {sessionMessage}
-            </div>
-          )}
-          <p className="text-gray-700 mb-3 text-base font-semibold">
-            🔐 Inicia sesión para acceder al panel de análisis
-          </p>
-          <Login onLogin={handleLogin} />
-        </>
+        <Login onLogin={handleLogin} />
       ) : (
         <>
           <header className="fixed top-0 left-0 right-0 z-40 w-full flex justify-center px-2 sm:px-0">

@@ -71,9 +71,34 @@ body {
    🔐 Layout de login
 ------------------------------ */
 .login-layout {
-  @apply flex items-center justify-center min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-slate-800 text-white px-4 py-12;
+  @apply relative flex items-center justify-center min-h-screen bg-gradient-to-br from-slate-950 via-blue-950 to-slate-900 text-white px-4 py-12 overflow-hidden;
+  isolation: isolate;
+}
+
+.login-layout::before,
+.login-layout::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.login-layout::before {
+  background: radial-gradient(circle at 20% 20%, rgba(59, 130, 246, 0.35), transparent 40%),
+    radial-gradient(circle at 80% 0%, rgba(14, 165, 233, 0.28), transparent 36%),
+    radial-gradient(circle at 50% 80%, rgba(79, 70, 229, 0.25), transparent 38%);
+  filter: blur(60px);
+  z-index: 0;
+}
+
+.login-layout::after {
+  background-image: radial-gradient(circle at 1px 1px, rgba(255, 255, 255, 0.05) 1px, transparent 0);
+  background-size: 48px 48px;
+  opacity: 0.6;
+  z-index: 0;
 }
 
 .login-card {
-  @apply bg-slate-800/75 backdrop-blur-2xl p-10 md:p-12 rounded-3xl shadow-[0_20px_60px_rgba(0,0,0,0.45)] w-full max-w-xl border border-slate-700 animate-fade-in;
+  @apply relative bg-slate-900/80 backdrop-blur-3xl p-10 md:p-12 rounded-[32px] shadow-[0_25px_80px_rgba(0,0,0,0.45)] w-full max-w-2xl border border-white/10 animate-fade-in;
+  z-index: 1;
 }
