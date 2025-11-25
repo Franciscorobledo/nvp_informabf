@@ -222,7 +222,7 @@ const App = () => {
   // 🧩 Renderizado condicional
   // -------------------------------
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-slate-950 flex flex-col items-center justify-center font-sans px-4 py-6 text-gray-900 dark:text-slate-100 transition-colors duration-300">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50/60 dark:from-slate-950 dark:via-slate-950 dark:to-slate-900 flex flex-col items-center justify-center font-sans px-4 py-8 text-gray-900 dark:text-slate-100 transition-colors duration-300">
       {!user ? (
         <>
           {sessionMessage && (
@@ -236,12 +236,19 @@ const App = () => {
           <Login onLogin={handleLogin} />
         </>
       ) : (
-        <div className="w-full max-w-5xl p-6 bg-white dark:bg-slate-900 rounded-2xl shadow-xl border border-gray-200 dark:border-slate-800 transition-colors duration-300">
+        <div className="w-full max-w-6xl p-8 bg-white/80 dark:bg-slate-900/80 backdrop-blur-lg rounded-3xl shadow-[0_25px_70px_-30px_rgba(15,23,42,0.45)] border border-white/70 dark:border-slate-800 transition-all duration-300">
           {/* HEADER */}
-          <header className="relative flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-6 border-b pb-4">
-            <div className="text-center sm:text-left space-y-1">
-              <h1 className="text-2xl font-bold text-blue-700 dark:text-blue-300">InformeBF</h1>
-              <p className="text-sm text-gray-500 dark:text-slate-300">AI Data Visualizer</p>
+          <header className="relative flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between mb-8 border-b border-slate-200/70 dark:border-slate-800 pb-6">
+            <div className="text-center sm:text-left space-y-3">
+              <div className="inline-flex items-center gap-2 rounded-full bg-blue-50 text-blue-700 px-3 py-1 text-xs font-semibold dark:bg-blue-900/40 dark:text-blue-100">
+                <span aria-hidden="true">✨</span> Plataforma de insights confiables
+              </div>
+              <div className="space-y-2">
+                <h1 className="text-3xl font-bold tracking-tight text-slate-900 dark:text-white">InformeBF</h1>
+                <p className="text-base text-slate-600 dark:text-slate-300 max-w-xl">
+                  Home curado con estética SaaS: limpio, minimalista y preparado para que tus datos cobren vida con una experiencia cálida y profesional.
+                </p>
+              </div>
             </div>
 
             <div className="flex items-center justify-between sm:justify-end gap-3 w-full sm:w-auto">
@@ -380,6 +387,44 @@ const App = () => {
               />
             ) : (
               <>
+                <section className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr] items-center">
+                  <div className="space-y-4">
+                    <div className="inline-flex items-center gap-2 rounded-full border border-blue-100 bg-blue-50/70 px-3 py-1 text-xs font-semibold text-blue-700 dark:border-blue-800 dark:bg-blue-900/40 dark:text-blue-100">
+                      Experiencia premium
+                    </div>
+                    <h2 className="text-4xl font-semibold leading-tight text-slate-900 dark:text-white">
+                      Visualiza, compara y narra datos con un estilo SaaS elegante.
+                    </h2>
+                    <p className="text-base leading-relaxed text-slate-600 dark:text-slate-300 max-w-2xl">
+                      Construimos un hogar calmado para tus decisiones: tarjetas amplias, sombras suaves y un tono corporativo cálido que mantiene el foco en lo esencial.
+                    </p>
+                    <div className="flex flex-wrap gap-3">
+                      <span className="inline-flex items-center gap-2 rounded-full bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm ring-1 ring-slate-200/80 dark:bg-slate-900 dark:text-slate-200 dark:ring-slate-700">
+                        <span className="h-2 w-2 rounded-full bg-emerald-500" aria-hidden="true" /> Sesiones seguras
+                      </span>
+                      <span className="inline-flex items-center gap-2 rounded-full bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm ring-1 ring-slate-200/80 dark:bg-slate-900 dark:text-slate-200 dark:ring-slate-700">
+                        Sombras suaves
+                      </span>
+                      <span className="inline-flex items-center gap-2 rounded-full bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm ring-1 ring-slate-200/80 dark:bg-slate-900 dark:text-slate-200 dark:ring-slate-700">
+                        Minimalismo que respira
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="rounded-2xl border border-slate-200/80 bg-white shadow-lg shadow-slate-200/60 p-4 dark:border-slate-800 dark:bg-slate-900/70 dark:shadow-none">
+                      <p className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Estado</p>
+                      <p className="mt-2 text-lg font-semibold text-slate-900 dark:text-white">Sesión activa</p>
+                      <p className="text-sm text-slate-500 dark:text-slate-300">Conectado como {user.username}</p>
+                    </div>
+                    <div className="rounded-2xl border border-blue-200/80 bg-gradient-to-br from-blue-50 via-white to-blue-100 shadow-lg shadow-blue-200/70 p-4 dark:border-blue-900/60 dark:from-slate-900 dark:via-slate-900 dark:to-blue-950/30 dark:shadow-none">
+                      <p className="text-xs uppercase tracking-wide text-blue-700 dark:text-blue-200">Experiencia</p>
+                      <p className="mt-2 text-lg font-semibold text-slate-900 dark:text-white">Tarjetas profesionales</p>
+                      <p className="text-sm text-slate-600 dark:text-slate-200">Modernas, limpias y con sombras suaves inspiradas en Stripe y Linear.</p>
+                    </div>
+                  </div>
+                </section>
+
                 <HomeModules
                   user={user}
                   onUnauthorized={handleUnauthorized}
