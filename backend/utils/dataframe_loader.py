@@ -32,13 +32,19 @@ def _read_csv(buffer):
 
     try:
         return pd.read_csv(buffer, engine="pyarrow", **read_kwargs)
-    except Exception:
+    except Exception as exc:
         fallback_kwargs = {k: v for k, v in read_kwargs.items() if k != "low_memory"}
-        return pd.read_csv(buffer, engine="python", **fallback_kwargs)
+        try:
+            return pd.read_csv(buffer, engine="python", **fallback_kwargs)
+        except Exception as inner_exc:  # pragma: no cover - solo si fallan ambos parsers
+            raise ValueError(f"No se pudo leer el CSV: {inner_exc}") from exc
 
 
 def _read_excel(buffer):
-    return pd.read_excel(buffer, engine="openpyxl")
+    try:
+        return pd.read_excel(buffer, engine="openpyxl")
+    except Exception as exc:
+        raise ValueError(f"No se pudo leer el Excel: {exc}") from exc
 
 
 def read_dataframes(upload, content: bytes) -> list[pd.DataFrame]:
@@ -73,7 +79,8 @@ def read_dataframes(upload, content: bytes) -> list[pd.DataFrame]:
                             dataframes.append(_read_excel(f))
             if dataframes:
                 return dataframes
-        except zipfile.BadZipFile:
-            pass
+            raise ValueError("El ZIP no contiene archivos .csv o .xlsx legibles.")
+        except zipfile.BadZipFile as exc:
+            raise ValueError("El archivo ZIP está dañado o vacío.") from exc
 
-    return []
+    raise ValueError("Formato no soportado o archivo vacío.")
