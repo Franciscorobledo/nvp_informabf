@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
 import {
   Bar,
@@ -41,6 +41,10 @@ const FileUpload = ({ onDataReceived, onUnauthorized, onNavigateModule }) => {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [statusMessage, setStatusMessage] = useState("");
   const [demoMetadata, setDemoMetadata] = useState(null);
+  const [analysisError, setAnalysisError] = useState("");
+  const [resultNotice, setResultNotice] = useState("");
+  const [galleryMode, setGalleryMode] = useState("static");
+  const [interactiveLimit, setInteractiveLimit] = useState(10);
   const filterSelectRef = useRef(null);
 
   const goToMovieModule = () => onNavigateModule?.("movie");
@@ -156,19 +160,24 @@ const FileUpload = ({ onDataReceived, onUnauthorized, onNavigateModule }) => {
           setPolling(false);
           setIsAnalyzing(false);
           if (data.error) {
-            alert(`Error en el análisis: ${data.error}`);
+            setAnalysisError(data.error || "No se pudo completar el análisis.");
+            setResultNotice(
+              "Revisa el formato del archivo. Si el problema persiste, intenta con el CSV/Excel original o usa la demo."
+            );
             return;
           }
           if (data.result) {
             setAnalysis(data.result);
             setAiCharts(generateAiCharts(data.result.sample));
             onDataReceived?.(data.result);
+            setResultNotice("Análisis listo. Explora los KPIs, gráficos e insights generados.");
           }
         }
       } catch (error) {
         console.error("Error consultando estado del análisis:", error);
         if (!cancelled) {
           setStatusMessage("No se pudo consultar el progreso.");
+          setAnalysisError("No pudimos actualizar el estado. Reintenta o usa la demo.");
         }
       }
     };
@@ -285,6 +294,58 @@ const FileUpload = ({ onDataReceived, onUnauthorized, onNavigateModule }) => {
     );
     return filtered.length ? filtered.join(" ") : text;
   };
+
+  const buildInteractiveChart = (column) => {
+    if (!column || !analysis?.sample?.length) return null;
+
+    const values = analysis.sample.map((row) => row?.[column]);
+    const numericValues = values.filter((value) =>
+      typeof value === "number" && Number.isFinite(value)
+    );
+
+    if (numericValues.length >= 2) {
+      return {
+        type: "line",
+        title: `Tendencia de ${column}`,
+        column,
+        xKey: "name",
+        yKey: "value",
+        data: numericValues.map((value, index) => ({
+          name: `Fila ${index + 1}`,
+          value,
+        })),
+      };
+    }
+
+    const counts = values.reduce((acc, value) => {
+      const key = (value ?? "Sin dato").toString();
+      acc[key] = (acc[key] || 0) + 1;
+      return acc;
+    }, {});
+
+    const data = Object.entries(counts)
+      .map(([name, value]) => ({ name, value }))
+      .sort((a, b) => b.value - a.value);
+
+    if (!data.length) return null;
+
+    return {
+      type: "bar",
+      title: `Distribución de ${column}`,
+      column,
+      xKey: "name",
+      yKey: "value",
+      data,
+    };
+  };
+
+  const interactiveGalleryCharts = useMemo(() => {
+    if (!analysis?.graphs?.length) return [];
+
+    return analysis.graphs
+      .map((chart) => buildInteractiveChart(chart.column))
+      .filter(Boolean);
+  }, [analysis]);
 
   const renderHealthPanel = () => {
     const kpi = analysis?.data_health;
@@ -617,8 +678,10 @@ const FileUpload = ({ onDataReceived, onUnauthorized, onNavigateModule }) => {
   };
 
   const handleUpload = async () => {
-    if (!files.length)
-      return alert("Selecciona al menos un archivo .csv, .xlsx o .zip primero.");
+    if (!files.length) {
+      setAnalysisError("Selecciona al menos un archivo .csv, .xlsx o .zip primero.");
+      return;
+    }
     const token = localStorage.getItem("token");
     if (!token) {
       onUnauthorized?.("Tu sesión expiró. Inicia sesión nuevamente.");
@@ -638,6 +701,9 @@ const FileUpload = ({ onDataReceived, onUnauthorized, onNavigateModule }) => {
     setStatusMessage("Preparando archivo…");
     setPolling(false);
     setIsAnalyzing(true);
+    setAnalysisError("");
+    setResultNotice("");
+    setGalleryMode("static");
 
     const formData = new FormData();
     files.forEach((fileItem) => formData.append("files", fileItem));
@@ -681,7 +747,12 @@ const FileUpload = ({ onDataReceived, onUnauthorized, onNavigateModule }) => {
         onUnauthorized?.("Tu sesión expiró. Por favor, vuelve a iniciar sesión.");
       } else {
         const detail = err?.response?.data?.detail || err?.message || "Error de conexión.";
-        alert(typeof detail === "string" ? detail : "No se pudo iniciar el análisis.");
+        setAnalysisError(
+          typeof detail === "string"
+            ? detail
+            : "No se pudo iniciar el análisis. Verifica que el archivo sea CSV, Excel o ZIP válido."
+        );
+        setResultNotice("Intenta de nuevo o carga la demo para validar el flujo.");
       }
       setIsAnalyzing(false);
       setStatusMessage("No se pudo iniciar el análisis.");
@@ -701,6 +772,9 @@ const FileUpload = ({ onDataReceived, onUnauthorized, onNavigateModule }) => {
     setAnalysisProgress(0);
     setUploadProgress(0);
     setDisplayProgress(0);
+    setAnalysisError("");
+    setResultNotice("");
+    setGalleryMode("interactive");
 
     const token = localStorage.getItem("token");
     const API_URL = import.meta.env.VITE_API_URL || "http://localhost:1000";
@@ -733,9 +807,11 @@ const FileUpload = ({ onDataReceived, onUnauthorized, onNavigateModule }) => {
       setAnalysisProgress(100);
       setUploadProgress(100);
       setDisplayProgress(100);
+      setResultNotice("Demo lista. Explora los gráficos interactivos y descárgalos en PDF.");
     } catch (error) {
       console.error("Error al cargar demo:", error);
-      alert(error.message || "No se pudo cargar la demo");
+      setAnalysisError(error.message || "No se pudo cargar la demo");
+      setResultNotice("Intenta nuevamente o usa otro escenario demo disponible.");
     } finally {
       setIsAnalyzing(false);
       setLoading(false);
@@ -1123,10 +1199,30 @@ const FileUpload = ({ onDataReceived, onUnauthorized, onNavigateModule }) => {
             )}
           </div>
 
-          {preAnalysis && (
-            <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 shadow space-y-4">
-              <div className="flex items-center gap-2">
-                <div className="w-10 h-10 rounded-full bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-200 flex items-center justify-center font-bold">
+          {(analysisError || resultNotice) && (
+            <div className="space-y-2">
+              {analysisError && (
+                <div className="flex items-start gap-2 p-3 rounded-xl border border-rose-200 dark:border-rose-800 bg-rose-50 dark:bg-rose-950/40 text-rose-800 dark:text-rose-100">
+                  <span aria-hidden className="text-lg">⚠️</span>
+                  <div>
+                    <p className="text-sm font-semibold">Hubo un problema con el archivo</p>
+                    <p className="text-sm leading-relaxed">{analysisError}</p>
+                  </div>
+                </div>
+              )}
+              {resultNotice && (
+                <div className="flex items-start gap-2 p-3 rounded-xl border border-blue-200 dark:border-slate-700 bg-blue-50 dark:bg-slate-900/60 text-blue-800 dark:text-slate-100">
+                  <span aria-hidden className="text-lg">💡</span>
+                  <p className="text-sm leading-relaxed">{resultNotice}</p>
+                </div>
+              )}
+            </div>
+          )}
+
+        {preAnalysis && (
+          <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 shadow space-y-4">
+            <div className="flex items-center gap-2">
+              <div className="w-10 h-10 rounded-full bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-200 flex items-center justify-center font-bold">
                   ⚡️
                 </div>
                 <div>
@@ -1342,61 +1438,159 @@ const FileUpload = ({ onDataReceived, onUnauthorized, onNavigateModule }) => {
                       <div>
                         <p className="text-xs uppercase tracking-[0.15em] text-gray-500 dark:text-slate-400">Galería automática</p>
                         <h4 className="text-base font-semibold text-gray-900 dark:text-white">Gráficos generados por el backend</h4>
-                        <p className="text-sm text-gray-600 dark:text-slate-300">Mantuvimos las capturas originales como referencia rápida.</p>
+                        <p className="text-sm text-gray-600 dark:text-slate-300">Alterna entre capturas rápidas y vistas interactivas con filtros.</p>
                       </div>
-                      <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 text-xs text-gray-600 dark:text-slate-200">
-                        <span className="w-2 h-2 rounded-full bg-blue-500" />
-                        Estáticos
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => setGalleryMode("static")}
+                          className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition ${
+                            galleryMode === "static"
+                              ? "border-blue-500 text-blue-700 dark:text-blue-200 bg-blue-50 dark:bg-slate-800"
+                              : "border-gray-200 dark:border-slate-700 text-gray-600 dark:text-slate-300"
+                          }`}
+                        >
+                          📷 Capturas
+                        </button>
+                        <button
+                          onClick={() => setGalleryMode("interactive")}
+                          disabled={!interactiveGalleryCharts.length}
+                          className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition flex items-center gap-1 ${
+                            galleryMode === "interactive"
+                              ? "border-emerald-500 text-emerald-700 dark:text-emerald-200 bg-emerald-50 dark:bg-slate-800"
+                              : "border-gray-200 dark:border-slate-700 text-gray-600 dark:text-slate-300"
+                          } ${!interactiveGalleryCharts.length ? "opacity-60 cursor-not-allowed" : ""}`}
+                        >
+                          🧭 Interactivo
+                        </button>
+                      </div>
                     </div>
 
-                    <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-                      {filterGraphsByCategory(analysis.graphs)?.length > 0 ? (
-                        filterGraphsByCategory(analysis.graphs).map((chart, i) => (
-                          <div
-                            key={i}
-                            className="group relative overflow-hidden rounded-2xl border border-gray-200 dark:border-slate-800 bg-gradient-to-br from-white to-slate-50 dark:from-slate-900 dark:to-slate-950 shadow-lg"
-                          >
-                            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-slate-800">
-                              <div className="flex items-center gap-3">
-                                <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-200">
-                                  <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                                    <path d="M3 3v18h18" />
-                                    <path d="M7 16l3-3 4 4 5-5" />
-                                  </svg>
-                                </span>
-                                <div>
-                                  <p className="text-xs uppercase tracking-wide text-gray-500 dark:text-slate-400">Visualización</p>
-                                  <h4 className="text-base font-semibold text-gray-900 dark:text-white">{chart.column || `Gráfico ${i + 1}`}</h4>
-                                </div>
-                              </div>
-                              <div className="relative">
-                                <div className="inline-flex items-center gap-1 text-xs text-gray-500 dark:text-slate-400 border border-gray-200 dark:border-slate-700 rounded-full px-3 py-1">
-                                  <span className="w-2 h-2 rounded-full bg-blue-500" />
-                                  Hover para detalles
-                                </div>
-                                <div className="pointer-events-none absolute right-0 mt-2 w-48 rounded-xl bg-white/95 dark:bg-slate-900/95 shadow-lg border border-gray-200 dark:border-slate-800 p-3 text-xs text-gray-600 dark:text-slate-200 opacity-0 translate-y-1 group-hover:opacity-100 group-hover:translate-y-0 transition duration-200">
-                                  Gráficos enmarcados con sombra sutil y tipografía reforzada para un look tipo Notion/Linear.
-                                </div>
-                              </div>
-                            </div>
-                            <div className="p-5">
-                              <div className="overflow-hidden rounded-xl border border-gray-100 dark:border-slate-800 shadow-inner bg-white dark:bg-slate-900">
-                                <img
-                                  src={chart.image}
-                                  alt={chart.column}
-                                  className="rounded-lg mx-auto"
-                                  style={{ maxHeight: "320px", objectFit: "contain" }}
-                                />
-                              </div>
-                            </div>
-                          </div>
-                        ))
-                      ) : (
-                        <p className="text-gray-500 dark:text-slate-400 italic text-center">
-                          No hay gráficos disponibles.
+                    {galleryMode === "interactive" && interactiveGalleryCharts.length > 0 && (
+                      <div className="flex items-center justify-between flex-wrap gap-3 p-3 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-gray-200 dark:border-slate-800 text-xs text-gray-700 dark:text-slate-200">
+                        <p className="flex items-center gap-2">
+                          <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-emerald-500 text-white text-[10px] font-bold">i</span>
+                          Ajusta cuántas categorías quieres ver en cada gráfico.
                         </p>
-                      )}
+                        <div className="flex items-center gap-2">
+                          <span>Top {interactiveLimit}</span>
+                          <input
+                            type="range"
+                            min="3"
+                            max="20"
+                            value={interactiveLimit}
+                            onChange={(e) => setInteractiveLimit(Number(e.target.value))}
+                            className="accent-emerald-500"
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+                      {galleryMode === "interactive"
+                        ? (() => {
+                            const charts = filterGraphsByCategory(interactiveGalleryCharts).slice(
+                              0,
+                              interactiveLimit
+                            );
+
+                            return charts.length ? (
+                              charts.map((chart, index) => (
+                                <div
+                                  key={`${chart.title}-${index}`}
+                                  className="group overflow-hidden rounded-2xl border border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-lg"
+                                >
+                                  <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-slate-800">
+                                    <div className="flex items-center gap-3">
+                                      <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-700 dark:text-emerald-200">
+                                        <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                          <path d="M3 3v18h18" />
+                                          <path d="M7 16l3-3 4 4 5-5" />
+                                        </svg>
+                                      </span>
+                                      <div>
+                                        <p className="text-xs uppercase tracking-wide text-gray-500 dark:text-slate-400">Interactivo</p>
+                                        <h4 className="text-base font-semibold text-gray-900 dark:text-white">{chart.title}</h4>
+                                      </div>
+                                    </div>
+                                    <span className="text-[11px] text-gray-500 dark:text-slate-400">Tooltip + Leyenda</span>
+                                  </div>
+                                  <div className="p-5 h-72">
+                                    <ResponsiveContainer width="100%" height="100%">
+                                      {chart.type === "bar" ? (
+                                        <BarChart data={chart.data.slice(0, interactiveLimit)} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                                          <CartesianGrid strokeDasharray="3 3" strokeOpacity={0.2} />
+                                          <XAxis dataKey={chart.xKey} tick={{ fontSize: 12 }} angle={-15} textAnchor="end" height={70} />
+                                          <YAxis tick={{ fontSize: 12 }} />
+                                          <Tooltip formatter={(value) => Number(value).toLocaleString()} />
+                                          <Legend />
+                                          <Bar dataKey={chart.yKey} name={chart.yKey} fill="#10b981" radius={[10, 10, 4, 4]} />
+                                        </BarChart>
+                                      ) : (
+                                        <LineChart data={chart.data.slice(0, interactiveLimit)} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                                          <CartesianGrid strokeDasharray="3 3" strokeOpacity={0.2} />
+                                          <XAxis dataKey={chart.xKey} tick={{ fontSize: 12 }} angle={-10} textAnchor="end" height={60} />
+                                          <YAxis tick={{ fontSize: 12 }} />
+                                          <Tooltip formatter={(value) => Number(value).toLocaleString()} />
+                                          <Legend />
+                                          <Line type="monotone" dataKey={chart.yKey} name={chart.yKey} stroke="#6366f1" strokeWidth={2} dot={{ r: 3 }} />
+                                        </LineChart>
+                                      )}
+                                    </ResponsiveContainer>
+                                  </div>
+                                </div>
+                              ))
+                            ) : (
+                              <p className="text-gray-500 dark:text-slate-400 italic text-center col-span-2">
+                                No hay datos suficientes en la muestra para construir gráficos interactivos.
+                              </p>
+                            );
+                          })()
+                        : filterGraphsByCategory(analysis.graphs)?.length > 0 ? (
+                            filterGraphsByCategory(analysis.graphs).map((chart, i) => (
+                              <div
+                                key={i}
+                                className="group relative overflow-hidden rounded-2xl border border-gray-200 dark:border-slate-800 bg-gradient-to-br from-white to-slate-50 dark:from-slate-900 dark:to-slate-950 shadow-lg"
+                              >
+                                <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-slate-800">
+                                  <div className="flex items-center gap-3">
+                                    <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-200">
+                                      <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                        <path d="M3 3v18h18" />
+                                        <path d="M7 16l3-3 4 4 5-5" />
+                                      </svg>
+                                    </span>
+                                    <div>
+                                      <p className="text-xs uppercase tracking-wide text-gray-500 dark:text-slate-400">Visualización</p>
+                                      <h4 className="text-base font-semibold text-gray-900 dark:text-white">{chart.column || `Gráfico ${i + 1}`}</h4>
+                                    </div>
+                                  </div>
+                                  <div className="relative">
+                                    <div className="inline-flex items-center gap-1 text-xs text-gray-500 dark:text-slate-400 border border-gray-200 dark:border-slate-700 rounded-full px-3 py-1">
+                                      <span className="w-2 h-2 rounded-full bg-blue-500" />
+                                      Hover para detalles
+                                    </div>
+                                    <div className="pointer-events-none absolute right-0 mt-2 w-48 rounded-xl bg-white/95 dark:bg-slate-900/95 shadow-lg border border-gray-200 dark:border-slate-800 p-3 text-xs text-gray-600 dark:text-slate-200 opacity-0 translate-y-1 group-hover:opacity-100 group-hover:translate-y-0 transition duration-200">
+                                      Gráficos enmarcados con sombra sutil y tipografía reforzada para un look tipo Notion/Linear.
+                                    </div>
+                                  </div>
+                                </div>
+                                <div className="p-5">
+                                  <div className="overflow-hidden rounded-xl border border-gray-100 dark:border-slate-800 shadow-inner bg-white dark:bg-slate-900">
+                                    <img
+                                      src={chart.image}
+                                      alt={chart.column}
+                                      className="rounded-lg mx-auto"
+                                      style={{ maxHeight: "320px", objectFit: "contain" }}
+                                    />
+                                  </div>
+                                </div>
+                              </div>
+                            ))
+                          ) : (
+                            <p className="text-gray-500 dark:text-slate-400 italic text-center col-span-2">
+                              No hay gráficos disponibles.
+                            </p>
+                          )}
                     </div>
                   </div>
                 </div>

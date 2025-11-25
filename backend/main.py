@@ -253,6 +253,24 @@ def _prepare_preview(upload: UploadFile, content: bytes) -> dict:
     }
 
 
+def _load_dataframes_or_http_error(upload: UploadFile, content: bytes):
+    """Lee dataframes y convierte errores de parsing en respuestas amigables."""
+
+    try:
+        dataframes = read_dataframes(upload, content)
+    except ValueError as exc:
+        logging.error("❌ Error leyendo %s: %s", upload.filename, exc)
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    if not dataframes:
+        raise HTTPException(
+            status_code=400,
+            detail=f"No se encontraron datos legibles en {upload.filename}.",
+        )
+
+    return dataframes
+
+
 def _read_schema_sample(path: str, filename: str, nrows: int = 2000) -> pd.DataFrame:
     ext = os.path.splitext(filename)[1].lower()
 
@@ -1034,7 +1052,7 @@ async def upload_preview(files: List[UploadFile] = File(...)):
             raise HTTPException(status_code=400, detail="Formato no soportado (.csv, .xlsx o .zip)")
 
         content = await upload.read()
-        dataframes.extend(read_dataframes(upload, content))
+        dataframes.extend(_load_dataframes_or_http_error(upload, content))
 
     if not dataframes:
         raise HTTPException(status_code=400, detail="No se pudo leer información de los archivos adjuntos.")
@@ -1109,7 +1127,10 @@ def _run_full_analysis_job(
         logging.info("✅ Análisis de job %s completado", job_id)
     except Exception as exc:
         logging.error("❌ Error en job %s: %s", job_id, exc)
-        job_store.update_job(job_id, step="error", progress=100, done=True, error=str(exc))
+        error_msg = (
+            f"{exc}. Revisa que el archivo tenga columnas válidas y datos legibles."
+        )
+        job_store.update_job(job_id, step="error", progress=100, done=True, error=error_msg)
 
 
 def _prepare_pre_analysis(df: pd.DataFrame, focus: str | None):
@@ -1310,10 +1331,7 @@ async def start_analysis(
         ext = os.path.splitext(upload.filename)[1].lower()
         file_types.add(ext)
         file_names.append(upload.filename)
-        dataframes.extend(read_dataframes(upload, content))
-
-    if not dataframes:
-        raise HTTPException(status_code=400, detail="No se pudo leer información de los archivos adjuntos.")
+        dataframes.extend(_load_dataframes_or_http_error(upload, content))
 
     try:
         df = pd.concat(dataframes, ignore_index=True)
@@ -1406,10 +1424,7 @@ async def upload_file(
         ext = os.path.splitext(upload.filename)[1].lower()
         file_types.add(ext)
         file_names.append(upload.filename)
-        dataframes.extend(read_dataframes(upload, content))
-
-    if not dataframes:
-        raise HTTPException(status_code=400, detail="No se pudo leer información de los archivos adjuntos.")
+        dataframes.extend(_load_dataframes_or_http_error(upload, content))
 
     try:
         df = pd.concat(dataframes, ignore_index=True)
@@ -1469,9 +1484,7 @@ async def analyze_data_movie(
         raise HTTPException(status_code=400, detail="Formato no soportado (.csv, .xlsx o .zip)")
 
     content = await file.read()
-    dataframes = read_dataframes(file, content)
-    if not dataframes:
-        raise HTTPException(status_code=400, detail="No se pudo leer información del archivo enviado.")
+    dataframes = _load_dataframes_or_http_error(file, content)
 
     try:
         df = pd.concat(dataframes, ignore_index=True)
@@ -1502,11 +1515,8 @@ async def compare_datasets(
             raise HTTPException(status_code=400, detail="Formato no soportado (.csv, .xlsx o .zip)")
 
     content_a, content_b = await file_a.read(), await file_b.read()
-    dataframes_a = read_dataframes(file_a, content_a)
-    dataframes_b = read_dataframes(file_b, content_b)
-
-    if not dataframes_a or not dataframes_b:
-        raise HTTPException(status_code=400, detail="No se pudieron leer ambos archivos para la comparativa.")
+    dataframes_a = _load_dataframes_or_http_error(file_a, content_a)
+    dataframes_b = _load_dataframes_or_http_error(file_b, content_b)
 
     try:
         df_a = pd.concat(dataframes_a, ignore_index=True)
