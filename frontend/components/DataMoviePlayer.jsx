@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   LineChart,
   Line,
@@ -10,7 +10,11 @@ import {
   ReferenceDot,
 } from "recharts";
 import AvatarPresenter from "./AvatarPresenter";
-import { hasPlayableDataMovie } from "./dataMovieUtils";
+import {
+  extractScenes,
+  hasPlayableDataMovie,
+  normalizeSceneList,
+} from "./dataMovieUtils";
 
 const fadeInKeyframes = `
 @keyframes dataMovieFadeIn {
@@ -235,26 +239,73 @@ const IntroScene = ({ scene }) => {
   );
 };
 
+const UnknownScene = ({ scene }) => (
+  <p className="text-slate-300">Escena no soportada todavía ({scene?.type}).</p>
+);
+
+const SCENE_REGISTRY = {
+  intro: {
+    type: "intro",
+    label: "Introducción",
+    defaultMood: "neutral",
+    defaultDuration: 6,
+    defaults: {},
+    render: ({ scene }) => <IntroScene scene={scene} />,
+  },
+  timeline: {
+    type: "timeline",
+    label: "Línea de tiempo",
+    defaultMood: "focused",
+    defaultDuration: 7,
+    defaults: { chart_data: [] },
+    render: ({ scene }) => <TimelineScene scene={scene} />,
+  },
+  ranking: {
+    type: "ranking",
+    label: "Ranking",
+    defaultMood: "happy",
+    defaultDuration: 7,
+    defaults: { entities: [] },
+    render: ({ scene }) => <RankingScene scene={scene} />,
+  },
+  risks: {
+    type: "risks",
+    label: "Alertas",
+    defaultMood: "warning",
+    defaultDuration: 6,
+    defaults: { alerts: [] },
+    render: ({ scene }) => <RisksScene scene={scene} />,
+  },
+  outro: {
+    type: "outro",
+    label: "Cierre",
+    defaultMood: "positive",
+    defaultDuration: 7,
+    defaults: { recommendations: [] },
+    render: ({ scene, onReplay, onRestart }) => (
+      <OutroScene scene={scene} onReplay={onReplay} onRestart={onRestart} />
+    ),
+  },
+  fallback: {
+    type: "generic",
+    label: "Escena",
+    defaultMood: "neutral",
+    defaultDuration: 6,
+    defaults: {},
+    render: ({ scene }) => <UnknownScene scene={scene} />,
+  },
+};
+
 const renderSceneContent = (scene, onReplay, onRestart) => {
-  // Para agregar un nuevo tipo de escena, extiende este switch y reutiliza el layout principal.
-  switch (scene.type) {
-    case "intro":
-      return <IntroScene scene={scene} />;
-    case "timeline":
-      return <TimelineScene scene={scene} />;
-    case "ranking":
-      return <RankingScene scene={scene} />;
-    case "risks":
-      return <RisksScene scene={scene} />;
-    case "outro":
-      return <OutroScene scene={scene} onReplay={onReplay} onRestart={onRestart} />;
-    default:
-      return <p className="text-slate-300">Escena no soportada todavía.</p>;
-  }
+  const definition = SCENE_REGISTRY[scene?.type] || SCENE_REGISTRY.fallback;
+  return definition.render({ scene, onReplay, onRestart });
 };
 
 const DataMoviePlayer = ({ dataMovie }) => {
-  const scenes = useMemo(() => dataMovie?.scenes || dataMovie?.frames || [], [dataMovie]);
+  const scenes = useMemo(() => {
+    const rawScenes = extractScenes(dataMovie);
+    return normalizeSceneList(rawScenes, SCENE_REGISTRY);
+  }, [dataMovie]);
   const [currentSceneIndex, setCurrentSceneIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(true);
   const [displayedNarration, setDisplayedNarration] = useState("");
@@ -268,6 +319,7 @@ const DataMoviePlayer = ({ dataMovie }) => {
   }, [scenes.length]);
 
   useEffect(() => {
+    if (!scenes.length) return undefined;
     const narration = scenes[currentSceneIndex]?.narration || "";
     let index = 0;
     setDisplayedNarration("");
@@ -284,7 +336,9 @@ const DataMoviePlayer = ({ dataMovie }) => {
   useEffect(() => {
     if (!isPlaying || scenes.length <= 1) return undefined;
     const currentScene = scenes[currentSceneIndex] || {};
-    const duration = (currentScene.duration_sec || 6) * 1000;
+    const definition = SCENE_REGISTRY[currentScene.type] || SCENE_REGISTRY.fallback;
+    const durationSec = Number(currentScene.duration_sec) || definition.defaultDuration;
+    const duration = Math.max(durationSec * 1000, 2000);
 
     const timer = setTimeout(() => {
       if (currentSceneIndex >= scenes.length - 1) {
@@ -307,13 +361,42 @@ const DataMoviePlayer = ({ dataMovie }) => {
     return () => document.removeEventListener("fullscreenchange", handleFullscreenChange);
   }, []);
 
-  const hasScenes = hasPlayableDataMovie(dataMovie);
-  const currentScene = scenes[currentSceneIndex] || {};
+  useEffect(() => {
+    const handleKeyDown = (event) => {
+      if (!hasScenes) return;
+      if (event.key === "ArrowRight") {
+        event.preventDefault();
+        goToScene(currentSceneIndex + 1, false);
+      }
+      if (event.key === "ArrowLeft") {
+        event.preventDefault();
+        goToScene(currentSceneIndex - 1, false);
+      }
+      if (event.key === " ") {
+        event.preventDefault();
+        setIsPlaying((prev) => !prev);
+      }
+    };
 
-  const goToScene = (idx, shouldPlay = false) => {
-    setCurrentSceneIndex(idx);
-    setIsPlaying(shouldPlay);
-  };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [currentSceneIndex, goToScene, hasScenes]);
+
+  const hasScenes = hasPlayableDataMovie(dataMovie) && scenes.length > 0;
+  const currentScene = scenes[currentSceneIndex] || {};
+  const currentDefinition = SCENE_REGISTRY[currentScene.type] || SCENE_REGISTRY.fallback;
+
+  const goToScene = useCallback(
+    (idx, shouldPlay = null) => {
+      if (!scenes.length) return;
+      const clamped = Math.min(Math.max(idx, 0), scenes.length - 1);
+      setCurrentSceneIndex(clamped);
+      if (typeof shouldPlay === "boolean") {
+        setIsPlaying(shouldPlay);
+      }
+    },
+    [scenes.length]
+  );
 
   const toggleFullscreen = async () => {
     if (!playerRef.current) return;
@@ -355,7 +438,8 @@ const DataMoviePlayer = ({ dataMovie }) => {
           <div className="mb-4 flex items-center justify-between text-slate-200">
             <div className="space-y-1">
               <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Escena</p>
-              <h4 className="text-xl font-semibold">{currentScene.type || ""}</h4>
+              <h4 className="text-xl font-semibold">{currentDefinition.label}</h4>
+              <p className="text-xs text-slate-400">{currentScene.type}</p>
             </div>
             <div className="flex items-center gap-2">
               <button
@@ -386,13 +470,20 @@ const DataMoviePlayer = ({ dataMovie }) => {
             </div>
           </div>
 
-          <div className="min-h-[260px]">
+          <div
+            key={currentScene.id}
+            className="min-h-[260px] rounded-2xl border border-slate-700/60 bg-slate-900/20 p-1"
+            style={{ animation: "dataMovieFadeIn 0.45s ease" }}
+          >
             {renderSceneContent(currentScene, () => goToScene(0, true), () => goToScene(0, false))}
           </div>
         </div>
 
         <div className="rounded-3xl bg-slate-800 p-5 shadow-xl border border-slate-700">
-          <AvatarPresenter mood={currentScene.avatar_mood} narration={displayedNarration || currentScene.narration} />
+          <AvatarPresenter
+            mood={currentScene.avatar_mood || currentDefinition.defaultMood}
+            narration={displayedNarration || currentScene.narration}
+          />
         </div>
       </div>
 
