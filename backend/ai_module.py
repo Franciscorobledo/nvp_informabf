@@ -66,37 +66,35 @@ def generate_ai_insights(
     profile = dataset_profile or {}
     file_types = profile.get("file_types") or ["desconocido"]
     type_counts = profile.get("type_counts") or {}
-    column_examples = profile.get("column_examples") or {}
     row_count = profile.get("row_count")
     column_count = profile.get("column_count")
 
-    dataset_context = f"""
-Contexto del dataset:
-• Tipos de archivo detectados: {", ".join(sorted(file_types))}
-• Tamaño: {row_count} filas x {column_count} columnas
-• Mezcla de columnas: {json.dumps(type_counts, ensure_ascii=False)}
-• Columnas representativas por tipo: {json.dumps(column_examples, ensure_ascii=False)}
-"""
+    dataset_context = (
+        f"Archivo(s): {', '.join(sorted(file_types))} | "
+        f"Filas: {row_count} | Columnas: {column_count} | "
+        f"Tipos: {json.dumps(type_counts, ensure_ascii=False)}"
+    )
 
     prompt = f"""
-Actúa como analista de negocio senior y storyteller de datos. Redacta en español claro y conciso.
+Eres analista de datos para PYMES. Usa solo la información provista, sin inventar campos.
+Texto breve, concreto y accionable. Prohibido: gráficos, estadística avanzada o descripciones columna por columna.
 
-{dataset_context}
+Contexto:
+- {dataset_context}
+- Heurísticas rápidas: {heuristics or '(sin heurísticas)'}
 
-Resumen estadístico (JSON):
+Datos en JSON:
 {json.dumps(summary, indent=2)}
-
-Tipos de columna detectados:
+Tipos detectados:
 {json.dumps(column_types, indent=2)}
 
-Insights heurísticos previos detectados automáticamente (pueden estar incompletos):
-{heuristics or "(sin heurísticas)"}
+Genera exactamente estos 4 bloques en español:
+1) 📝 Resumen ejecutivo: 2-3 líneas en párrafo.
+2) ⚠️ Alertas críticas: máximo 3 viñetas.
+3) 🚀 Oportunidades de mejora: máximo 3 viñetas.
+4) ✔️ Acciones recomendadas: máximo 5 viñetas.
 
-Estructura la respuesta en viñetas, máximo 8 líneas en total, diferenciando entre información útil y genérica:
-• Accionables priorizados (3 viñetas): acciones específicas basadas en los datos. Si hay fechas, habla de estacionalidad o tendencia; si hay métricas numéricas, menciona cómo optimizarlas; si predominan categorías, sugiere segmentación o ranking. Evita lugares comunes.
-• Señales rápidas (3 viñetas): hallazgos directos del dataset (calidad, correlaciones fuertes, cobertura temporal) que ayuden a decidir próximos análisis.
-• Visualizaciones recomendadas (2 viñetas): gráficos concretos que expliquen los hallazgos para negocio.
-No repitas texto del resumen heurístico; complementa con decisiones accionables y priorizadas. Evita relleno o frases vagas.
+Prioriza tendencias simples (↑/↓), variaciones relevantes, estacionalidad básica y productos/categorías/clientes destacados. Sé directo y evita relleno.
 """
 
     try:
@@ -114,7 +112,7 @@ No repitas texto del resumen heurístico; complementa con decisiones accionables
                 {"role": "user", "content": prompt},
             ],
             temperature=0.35,
-            max_tokens=320,  # 🔹 Permite contexto adicional sin respuestas extensas
+            max_tokens=220,
         )
 
         content = response.choices[0].message.content.strip()
@@ -129,7 +127,7 @@ No repitas texto del resumen heurístico; complementa con decisiones accionables
             action=(usage_context or {}).get("action") or "analysis",
         )
         logging.info("✅ Análisis IA generado correctamente.")
-        return f"🤖 Análisis generado por IA\n{content}"
+        return content
 
     except Exception as e:
         error_msg = str(e)
