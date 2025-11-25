@@ -1572,4 +1572,5 @@ def analyze_file(
         "learning_updated": learning_updated,
         "ai_schema": ai_schema,
         "data_movie": data_movie,
+        "column_types": column_types,
     }
