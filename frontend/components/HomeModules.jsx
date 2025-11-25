@@ -63,11 +63,11 @@ const HomeModules = ({ currentModule = "home", onNavigateModule }) => {
         </p>
       </div>
 
-      <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
+      <div className="grid grid-cols-1 gap-8 md:grid-cols-2 xl:grid-cols-2">
         {cards.map((module) => (
           <div
             key={module.id}
-            className={`group relative flex h-full flex-col justify-between gap-4 rounded-2xl border p-6 text-left shadow-[0_20px_60px_-35px_rgba(15,23,42,0.45)] transition-all duration-300 ${
+            className={`group relative flex h-full flex-col justify-between gap-6 rounded-2xl border p-8 text-left shadow-[0_20px_60px_-35px_rgba(15,23,42,0.45)] transition-all duration-300 ${
               module.isSelected
                 ? "border-blue-400/80 bg-gradient-to-br from-blue-50 via-white to-blue-100 text-gray-900 dark:border-blue-800 dark:from-slate-900 dark:via-slate-900 dark:to-blue-950/30 dark:text-white"
                 : "border-slate-200/80 bg-white/90 text-gray-900 hover:-translate-y-1 hover:border-blue-200 hover:shadow-[0_25px_70px_-40px_rgba(37,99,235,0.55)] dark:border-slate-800 dark:bg-slate-900/80 dark:text-white"
@@ -76,7 +76,7 @@ const HomeModules = ({ currentModule = "home", onNavigateModule }) => {
             <div className="flex items-start justify-between gap-3">
               <div className="flex items-start gap-4">
                 <span
-                  className={`flex h-12 w-12 items-center justify-center rounded-xl text-2xl shadow-sm ring-1 ${
+                  className={`flex h-14 w-14 items-center justify-center rounded-xl text-3xl shadow-sm ring-1 ${
                     module.isSelected
                       ? "bg-white text-blue-700 ring-blue-200 shadow-blue-200/70 dark:bg-blue-900/40 dark:text-blue-100 dark:ring-blue-800"
                       : "bg-slate-50 text-slate-700 ring-slate-200 dark:bg-slate-800 dark:text-slate-100 dark:ring-slate-700"
@@ -86,10 +86,10 @@ const HomeModules = ({ currentModule = "home", onNavigateModule }) => {
                   {module.icon}
                 </span>
                 <div className="space-y-1">
-                  <h3 className="text-lg font-semibold leading-tight text-gray-900 dark:text-white">
+                  <h3 className="text-xl font-semibold leading-tight text-gray-900 dark:text-white">
                     {module.title}
                   </h3>
-                  <p className="text-sm text-gray-600 dark:text-slate-300">
+                  <p className="text-base text-gray-600 dark:text-slate-300">
                     {module.description}
                   </p>
                 </div>
