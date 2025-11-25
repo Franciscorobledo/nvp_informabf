@@ -350,6 +350,12 @@ const FileUpload = ({ onDataReceived, onUnauthorized, onNavigateModule }) => {
     return sections;
   };
 
+  const truncateText = (text = "", limit = 280) => {
+    if (!text) return "";
+    if (text.length <= limit) return text;
+    return `${text.slice(0, limit).trim()}…`;
+  };
+
   const buildInteractiveChart = (column) => {
     if (!column || !analysis?.sample?.length) return null;
 
@@ -979,6 +985,38 @@ const FileUpload = ({ onDataReceived, onUnauthorized, onNavigateModule }) => {
     [analysis?.ai_summary, categoryFilter]
   );
 
+  const executiveSummary =
+    parsedInsights.resumenEjecutivo ||
+    filterInsights(analysis?.ai_summary) ||
+    "No se recibieron insights de IA.";
+
+  const conciseSummary = truncateText(executiveSummary, 260);
+
+  const quickStats = [
+    {
+      label: "Filas revisadas",
+      value:
+        analysis?.rows_count ||
+        analysis?.row_count ||
+        analysis?.rowsCount ||
+        analysis?.summary?.rows ||
+        analysis?.sample?.length ||
+        "—",
+    },
+    {
+      label: "Columnas detectadas",
+      value:
+        analysis?.columns_count ||
+        analysis?.summary?.columns ||
+        Object.keys(analysis?.sample?.[0] || {}).length ||
+        "—",
+    },
+    {
+      label: "Foco del análisis",
+      value: categoryFilter === "todos" ? "General" : categoryFilter,
+    },
+  ];
+
   const recommendedActions = useMemo(() => {
     const aiActions = parsedInsights.acciones.filter(Boolean);
     if (aiActions.length) return aiActions.slice(0, 5);
@@ -1582,24 +1620,50 @@ const FileUpload = ({ onDataReceived, onUnauthorized, onNavigateModule }) => {
               {/* 🤖 INSIGHTS */}
               {activeTab === "insights" && (
                 <div className="space-y-6">
-                  <div className="rounded-3xl bg-gradient-to-r from-white via-blue-50 to-emerald-50 dark:from-slate-900 dark:via-slate-900 dark:to-slate-950 border border-blue-100/70 dark:border-slate-800 px-6 py-5 shadow-xl">
-                    <p className="text-xs uppercase tracking-[0.2em] text-blue-700 dark:text-blue-200">Módulo Insights IA</p>
-                    <h3 className="text-2xl font-bold text-gray-900 dark:text-white mt-1">💡 Insights Inteligentes para tu negocio</h3>
-                    <p className="text-sm text-gray-600 dark:text-slate-300 mt-1">Interpretación automática de tus datos con foco en decisiones prácticas.</p>
+                  <div className="rounded-3xl bg-gradient-to-br from-white via-blue-50 to-emerald-50 dark:from-slate-900 dark:via-slate-900 dark:to-slate-950 border border-blue-100/70 dark:border-slate-800 px-6 py-6 shadow-xl">
+                    <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="space-y-1">
+                        <p className="text-xs uppercase tracking-[0.2em] text-blue-700 dark:text-blue-200">Módulo Insights IA</p>
+                        <h3 className="text-2xl font-bold text-gray-900 dark:text-white">💡 Insights Inteligentes para tu negocio</h3>
+                        <p className="text-sm text-gray-600 dark:text-slate-300">Interpretación automática de tus datos con foco en decisiones prácticas.</p>
+                      </div>
+                      <div className="grid grid-cols-1 gap-2 sm:grid-cols-3 w-full sm:max-w-md">
+                        {quickStats.map((stat) => (
+                          <div
+                            key={stat.label}
+                            className="rounded-2xl border border-blue-100/60 dark:border-slate-700 bg-white/80 dark:bg-slate-900/80 px-3 py-2 text-left shadow-sm"
+                          >
+                            <p className="text-[11px] uppercase tracking-[0.14em] text-blue-700 dark:text-blue-200">{stat.label}</p>
+                            <p className="text-lg font-semibold text-gray-900 dark:text-white leading-tight">{stat.value}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
                   </div>
 
-                  <div className="grid gap-4 lg:grid-cols-2">
-                    <div className="lg:col-span-2 rounded-2xl border border-blue-100 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-lg p-6">
-                      <div className="flex items-start gap-3 mb-2">
+                  <div className="grid gap-4 lg:grid-cols-3">
+                    <div className="lg:col-span-2 rounded-2xl border border-blue-100 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-lg p-6 flex flex-col gap-3">
+                      <div className="flex items-start gap-3">
                         <span className="text-2xl" aria-hidden="true">📝</span>
                         <div>
                           <p className="text-xs uppercase tracking-[0.18em] text-blue-700 dark:text-blue-200">Resumen ejecutivo</p>
                           <h4 className="text-xl font-semibold text-gray-900 dark:text-white">Panorama rápido</h4>
                         </div>
                       </div>
-                      <p className="text-base leading-relaxed text-gray-800 dark:text-slate-100">
-                        {parsedInsights.resumenEjecutivo || filterInsights(analysis.ai_summary) || "No se recibieron insights de IA."}
-                      </p>
+                      <div className="grid gap-3 md:grid-cols-2">
+                        <div className="rounded-2xl bg-blue-50/80 dark:bg-slate-800/70 border border-blue-100 dark:border-slate-700 px-4 py-3 text-sm text-gray-800 dark:text-slate-100 shadow-inner">
+                          <p className="font-semibold text-blue-800 dark:text-blue-200 mb-1">Lo esencial</p>
+                          <p className="leading-relaxed">{conciseSummary}</p>
+                        </div>
+                        <div className="rounded-2xl bg-emerald-50/70 dark:bg-emerald-900/30 border border-emerald-100 dark:border-emerald-700 px-4 py-3 text-sm text-gray-800 dark:text-slate-100 shadow-inner">
+                          <p className="font-semibold text-emerald-800 dark:text-emerald-200 mb-2">Micro-resúmenes</p>
+                          <ul className="space-y-2 list-disc list-inside">
+                            {(executiveSummary.split(/(?<=[.!?])\s+/).filter(Boolean).slice(0, 3) || [conciseSummary]).map((item, idx) => (
+                              <li key={`micro-${idx}`}>{truncateText(item, 120)}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      </div>
                     </div>
 
                     <div className="rounded-2xl border border-amber-200 dark:border-amber-500/30 bg-amber-50 dark:bg-amber-900/30 shadow-lg p-6">
@@ -1611,12 +1675,14 @@ const FileUpload = ({ onDataReceived, onUnauthorized, onNavigateModule }) => {
                         </div>
                       </div>
                       <ul className="space-y-2 text-sm text-gray-800 dark:text-slate-100 list-disc list-inside">
-                        {(parsedInsights.alertas.length ? parsedInsights.alertas : ["Sin alertas críticas detectadas."]).map((item, idx) => (
-                          <li key={`alerta-${idx}`}>{item}</li>
+                        {(parsedInsights.alertas.length ? parsedInsights.alertas.slice(0, 4) : ["Sin alertas críticas detectadas."]).map((item, idx) => (
+                          <li key={`alerta-${idx}`}>{truncateText(item, 110)}</li>
                         ))}
                       </ul>
                     </div>
+                  </div>
 
+                  <div className="grid gap-4 lg:grid-cols-2">
                     <div className="rounded-2xl border border-sky-200 dark:border-sky-500/40 bg-sky-50 dark:bg-sky-900/30 shadow-lg p-6">
                       <div className="flex items-start gap-3 mb-3">
                         <span className="text-2xl" aria-hidden="true">🚀</span>
@@ -1626,8 +1692,11 @@ const FileUpload = ({ onDataReceived, onUnauthorized, onNavigateModule }) => {
                         </div>
                       </div>
                       <ul className="space-y-2 text-sm text-gray-800 dark:text-slate-100 list-disc list-inside">
-                        {(parsedInsights.oportunidades.length ? parsedInsights.oportunidades : ["Aún no hay oportunidades específicas."]).map((item, idx) => (
-                          <li key={`oportunidad-${idx}`}>{item}</li>
+                        {(parsedInsights.oportunidades.length
+                          ? parsedInsights.oportunidades.slice(0, 4)
+                          : ["Carga un archivo para detectar brechas y oportunidades."]
+                        ).map((item, idx) => (
+                          <li key={`oportunidad-${idx}`}>{truncateText(item, 115)}</li>
                         ))}
                       </ul>
                     </div>
@@ -1642,7 +1711,7 @@ const FileUpload = ({ onDataReceived, onUnauthorized, onNavigateModule }) => {
                       </div>
                       <ul className="space-y-2 text-sm text-gray-800 dark:text-slate-100 list-disc list-inside">
                         {(recommendedActions.length ? recommendedActions : ["Carga un archivo para obtener un checklist personalizado."]).map((action, idx) => (
-                          <li key={`accion-${idx}`}>{action}</li>
+                          <li key={`accion-${idx}`}>{truncateText(action, 115)}</li>
                         ))}
                       </ul>
                     </div>
