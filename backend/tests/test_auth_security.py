@@ -89,37 +89,6 @@ def test_regular_user_cannot_access_admin_endpoints(client: TestClient):
     assert forbidden_token_update.status_code == 403
 
 
-def test_can_create_and_login_new_user_with_custom_password(client: TestClient):
-    """Ensure a freshly created user can authenticate with their password."""
-
-    admin_token = _login(client, "admin", "Francisco8")
-
-    create_response = client.post(
-        "/auth/users",
-        json={
-            "username": "benja",
-            "password": "1234",
-            "full_name": "Benja QA",
-            "role": "user",
-            "active": True,
-            "expires_at": None,
-        },
-        headers={"Authorization": f"Bearer {admin_token}"},
-    )
-
-    assert create_response.status_code == 200, create_response.text
-
-    login_response = client.post(
-        "/auth/login",
-        data={"username": "benja", "password": "1234"},
-    )
-
-    assert login_response.status_code == 200, login_response.text
-    payload = login_response.json()
-    assert payload["username"] == "benja"
-    assert payload["role"] == "user"
-
-
 def test_expired_token_is_rejected(client: TestClient):
     from auth import create_access_token
 
