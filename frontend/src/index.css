@@ -102,3 +102,58 @@ body {
   @apply relative bg-slate-900/80 backdrop-blur-3xl p-10 md:p-12 rounded-[32px] shadow-[0_25px_80px_rgba(0,0,0,0.45)] w-full max-w-2xl border border-white/10 animate-fade-in;
   z-index: 1;
 }
+
+/* -----------------------------
+   🔁 Barra de carga fluida
+------------------------------ */
+.loading-bar-fill {
+  position: relative;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #2563eb, #7c3aed, #22d3ee, #2563eb);
+  background-size: 200% 100%;
+  animation: loading-flow 2.4s ease-in-out infinite;
+  box-shadow: 0 10px 30px rgba(37, 99, 235, 0.2), 0 6px 20px rgba(6, 182, 212, 0.15);
+}
+
+.loading-bar-shine {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(120deg, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.45), rgba(255, 255, 255, 0.15));
+  background-size: 200% 100%;
+  animation: loading-shine 1.4s linear infinite;
+  mix-blend-mode: screen;
+  opacity: 0.9;
+}
+
+.loading-bar-glow {
+  position: absolute;
+  inset: -20% -10%;
+  background:
+    radial-gradient(circle at 15% 50%, rgba(59, 130, 246, 0.18), transparent 35%),
+    radial-gradient(circle at 85% 50%, rgba(14, 165, 233, 0.2), transparent 40%);
+  filter: blur(16px);
+  opacity: 0.85;
+  pointer-events: none;
+}
+
+@keyframes loading-flow {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+@keyframes loading-shine {
+  from {
+    background-position: -120% 0;
+  }
+  to {
+    background-position: 120% 0;
+  }
+}
