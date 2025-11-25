@@ -5,9 +5,15 @@ import ConfigurationPage from "./ConfigurationPage";
 import DataUploadAnalysis from "../components/DataUploadAnalysis";
 import DataMovieModule from "../components/DataMovieModule";
 import DataComparisonModule from "../components/DataComparisonModule";
+import {
+  clearStoredSession,
+  decodeTokenPayload,
+  isTokenExpired,
+} from "./session";
 
 const App = () => {
   const [user, setUser] = useState(null);
+  const [sessionMessage, setSessionMessage] = useState("");
   const [loading, setLoading] = useState(true);
   const [theme, setTheme] = useState("light");
   const [menuOpen, setMenuOpen] = useState(false);
@@ -35,16 +41,23 @@ const App = () => {
     console.log("🧩 Inicializando App.jsx → Token:", token, "| Usuario:", storedUser);
 
     if (token && storedUser) {
-      console.log("✅ Sesión activa detectada.");
-      try {
-        const parsed = JSON.parse(storedUser);
-        if (parsed?.username) {
-          setUser({ username: parsed.username, role: parsed.role || "user" });
-        } else {
+      if (isTokenExpired(token)) {
+        console.warn("⏰ Token expirado al iniciar la app. Limpiando sesión.");
+        clearStoredSession();
+        setSessionMessage("Tu sesión expiró. Vuelve a iniciar sesión.");
+      } else {
+        console.log("✅ Sesión activa detectada.");
+        try {
+          const parsed = JSON.parse(storedUser);
+          const payload = decodeTokenPayload(token);
+          const resolvedUser = {
+            username: parsed?.username || payload?.sub || storedUser,
+            role: parsed?.role || payload?.role || "user",
+          };
+          setUser(resolvedUser);
+        } catch {
           setUser({ username: storedUser, role: "user" });
         }
-      } catch {
-        setUser({ username: storedUser, role: "user" });
       }
     } else {
       console.log("⚠️ No hay sesión activa, mostrando pantalla de login.");
@@ -79,6 +92,16 @@ const App = () => {
     localStorage.setItem("theme", theme);
   }, [theme]);
 
+  useEffect(() => {
+    if (user && activePage === "config" && user.role !== "admin") {
+      setSessionMessage(
+        "Solo los administradores pueden acceder al panel de configuración."
+      );
+      setActivePage("home");
+      setCurrentModule("home");
+    }
+  }, [user, activePage]);
+
   // 🔓 Maneja el login exitoso desde Login.jsx
   const handleLogin = (data) => {
     console.log("🎯 Login exitoso → usuario:", data.username);
@@ -89,21 +112,25 @@ const App = () => {
       return;
     }
 
+    setSessionMessage("");
     setUser({ username: data.username, role: data.role || "user" });
   };
 
   // 🔒 Cierre de sesión
-  const handleLogout = () => {
+  const handleLogout = (message = "") => {
     console.log("👋 Cerrando sesión...");
-    localStorage.removeItem("token");
-    localStorage.removeItem("user");
+    clearStoredSession();
+    if (message) {
+      setSessionMessage(message);
+    }
     setUser(null);
+    setActivePage("home");
+    setCurrentModule("home");
   };
 
   const handleUnauthorized = (message) => {
     console.warn("🚫 Sesión inválida o expirada.");
-    if (message) alert(message);
-    handleLogout();
+    handleLogout(message || "Tu sesión expiró. Vuelve a iniciar sesión.");
   };
 
   const toggleTheme = () => {
@@ -112,6 +139,16 @@ const App = () => {
   };
 
   const navigateTo = (page) => {
+    if (page === "config" && user?.role !== "admin") {
+      setSessionMessage(
+        "Solo los administradores pueden acceder al panel de configuración."
+      );
+      setActivePage("home");
+      setCurrentModule("home");
+      setMenuOpen(false);
+      return;
+    }
+
     setActivePage(page);
     setMenuOpen(false);
 
@@ -175,6 +212,11 @@ const App = () => {
     <div className="min-h-screen bg-gray-50 dark:bg-slate-950 flex flex-col items-center justify-center font-sans px-4 py-6 text-gray-900 dark:text-slate-100 transition-colors duration-300">
       {!user ? (
         <>
+          {sessionMessage && (
+            <div className="mb-4 max-w-2xl w-full rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-amber-900">
+              {sessionMessage}
+            </div>
+          )}
           <p className="text-gray-700 mb-3 text-base font-semibold">
             🔐 Inicia sesión para acceder al panel de análisis
           </p>
@@ -213,8 +255,11 @@ const App = () => {
                   </button>
                   <button
                     onClick={() => navigateTo("config")}
+                    disabled={user?.role !== "admin"}
                     className={`px-4 py-2 rounded-md text-sm font-semibold transition ${
-                      activePage === "config"
+                      user?.role !== "admin"
+                        ? "text-gray-400 dark:text-slate-500 cursor-not-allowed"
+                        : activePage === "config"
                         ? "bg-blue-600 text-white shadow"
                         : "text-gray-700 dark:text-slate-100 hover:bg-gray-100 dark:hover:bg-slate-700"
                     }`}
@@ -272,8 +317,11 @@ const App = () => {
                     </button>
                     <button
                       onClick={() => navigateTo("config")}
+                      disabled={user?.role !== "admin"}
                       className={`flex-1 px-4 py-2 rounded-md text-sm font-semibold transition ${
-                        activePage === "config"
+                        user?.role !== "admin"
+                          ? "text-gray-400 dark:text-slate-500 cursor-not-allowed"
+                          : activePage === "config"
                           ? "bg-blue-600 text-white shadow"
                           : "text-gray-700 dark:text-slate-100 hover:bg-gray-100 dark:hover:bg-slate-700"
                       }`}

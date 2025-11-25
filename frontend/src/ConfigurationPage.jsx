@@ -32,15 +32,17 @@ const ConfigurationPage = ({ user, onUnauthorized }) => {
         </div>
       )}
 
-      <div className="grid grid-cols-1 gap-6">
-        <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-          <UserManagement onUnauthorized={onUnauthorized} />
-        </div>
+      {isAdmin && (
+        <div className="grid grid-cols-1 gap-6">
+          <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+            <UserManagement onUnauthorized={onUnauthorized} />
+          </div>
 
-        <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-          <AdminOpenAIUsage onUnauthorized={onUnauthorized} />
+          <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+            <AdminOpenAIUsage onUnauthorized={onUnauthorized} />
+          </div>
         </div>
-      </div>
+      )}
     </section>
   );
 };

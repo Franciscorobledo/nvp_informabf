@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import API_URL from "./api";
+import { persistUserSession } from "./session";
 
 const Login = ({ onLogin }) => {
   const [username, setUsername] = useState("");
@@ -49,8 +50,7 @@ const Login = ({ onLogin }) => {
         role: data.role || "user",
       };
 
-      localStorage.setItem("token", token);
-      localStorage.setItem("user", JSON.stringify(normalizedUser));
+      persistUserSession(token, normalizedUser);
 
       onLogin(normalizedUser);
     } catch (err) {
