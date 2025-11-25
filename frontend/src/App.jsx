@@ -120,12 +120,15 @@ const App = () => {
   const handleLogout = (message = "") => {
     console.log("👋 Cerrando sesión...");
     clearStoredSession();
-    if (message) {
-      setSessionMessage(message);
-    }
+    setSessionMessage(
+      message ||
+        "Sesión cerrada. Vuelve a iniciar sesión para continuar."
+    );
     setUser(null);
     setActivePage("home");
     setCurrentModule("home");
+    setMenuOpen(false);
+    window.history.pushState({ page: "home" }, "", "/");
   };
 
   const handleUnauthorized = (message) => {
