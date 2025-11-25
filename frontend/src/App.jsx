@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import Login from "./Login";
 import HomeModules from "../components/HomeModules";
 import ConfigurationPage from "./ConfigurationPage";
@@ -32,6 +32,7 @@ const App = () => {
 
   const [activePage, setActivePage] = useState(initialNavigation.page);
   const [currentModule, setCurrentModule] = useState(initialNavigation.module);
+  const moduleContentRef = useRef(null);
 
   // 🧠 Verifica si existe sesión al iniciar
   useEffect(() => {
@@ -81,6 +82,12 @@ const App = () => {
     window.addEventListener("popstate", handlePopState);
     return () => window.removeEventListener("popstate", handlePopState);
   }, []);
+
+  useEffect(() => {
+    if (currentModule !== "home" && moduleContentRef.current) {
+      moduleContentRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }, [currentModule]);
 
   useEffect(() => {
     const root = document.documentElement;
@@ -406,7 +413,14 @@ const App = () => {
                   currentModule={currentModule}
                 />
 
-                {renderModuleContent()}
+                <div
+                  ref={moduleContentRef}
+                  id="module-content"
+                  className="scroll-mt-20"
+                  tabIndex={-1}
+                >
+                  {renderModuleContent()}
+                </div>
               </>
             )}
           </main>
