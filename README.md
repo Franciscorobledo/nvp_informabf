@@ -11,7 +11,7 @@ migrará automáticamente el contenido del archivo legado ubicado junto al códi
 
 ## Duración de los tokens de sesión
 
-Por defecto los tokens de acceso ahora duran 24 horas. Puedes ajustar este
+Por defecto los tokens de acceso ahora duran 7 días. Puedes ajustar este
 comportamiento estableciendo la variable de entorno
 `ACCESS_TOKEN_EXPIRE_MINUTES` con la duración deseada (en minutos) antes de
 levantar el backend.
