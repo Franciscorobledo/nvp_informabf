@@ -65,11 +65,11 @@ const VisualizationExplorer = ({ analysis }) => {
   );
 
   const [selectedMetric, setSelectedMetric] = useState(null);
-  const [selectedDimension, setSelectedDimension] = useState(null);
+  const [selectedDimensions, setSelectedDimensions] = useState([]);
   const [selectedChartType, setSelectedChartType] = useState("bar");
   const [selectedDateColumn, setSelectedDateColumn] = useState(null);
   const [filters, setFilters] = useState({
-    dimensionValues: [],
+    dimensionValues: {},
     dateRange: { start: "", end: "" },
   });
 
@@ -80,10 +80,10 @@ const VisualizationExplorer = ({ analysis }) => {
   }, [numericColumns, selectedMetric]);
 
   useEffect(() => {
-    if (!selectedDimension && categoricalColumns.length) {
-      setSelectedDimension(categoricalColumns[0]);
+    if (!selectedDimensions.length && categoricalColumns.length) {
+      setSelectedDimensions(categoricalColumns.slice(0, 2));
     }
-  }, [categoricalColumns, selectedDimension]);
+  }, [categoricalColumns, selectedDimensions]);
 
   useEffect(() => {
     if (!selectedDateColumn && dateColumns.length) {
@@ -92,22 +92,29 @@ const VisualizationExplorer = ({ analysis }) => {
   }, [dateColumns, selectedDateColumn]);
 
   const uniqueDimensionValues = useMemo(() => {
-    if (!selectedDimension || !sampleData.length) return [];
-    const values = new Set();
-    sampleData.forEach((row) => values.add(row?.[selectedDimension] ?? "Sin dato"));
-    return Array.from(values).filter(Boolean).slice(0, 15);
-  }, [sampleData, selectedDimension]);
+    if (!selectedDimensions.length || !sampleData.length) return {};
+
+    return selectedDimensions.reduce((acc, dimension) => {
+      const values = new Set();
+      sampleData.forEach((row) => values.add(row?.[dimension] ?? "Sin dato"));
+      acc[dimension] = Array.from(values).filter(Boolean).slice(0, 20);
+      return acc;
+    }, {});
+  }, [sampleData, selectedDimensions]);
 
   const applyFilters = useMemo(() => {
     return (rows) => {
       let filtered = rows;
 
-      if (selectedDimension && filters.dimensionValues.length) {
-        const allowed = new Set(filters.dimensionValues);
-        filtered = filtered.filter((row) =>
-          allowed.has(row?.[selectedDimension] ?? "Sin dato")
-        );
-      }
+      selectedDimensions.forEach((dimension) => {
+        const selectedValues = filters.dimensionValues?.[dimension] || [];
+        if (selectedValues.length) {
+          const allowed = new Set(selectedValues);
+          filtered = filtered.filter((row) =>
+            allowed.has(row?.[dimension] ?? "Sin dato")
+          );
+        }
+      });
 
       if (selectedDateColumn && (filters.dateRange.start || filters.dateRange.end)) {
         const { start, end } = filters.dateRange;
@@ -124,16 +131,18 @@ const VisualizationExplorer = ({ analysis }) => {
 
       return filtered;
     };
-  }, [filters.dateRange, filters.dimensionValues, selectedDateColumn, selectedDimension]);
+  }, [filters.dateRange, filters.dimensionValues, selectedDateColumn, selectedDimensions]);
 
   const chartData = useMemo(() => {
     if (!selectedMetric || !sampleData.length) return [];
     const filteredRows = applyFilters(sampleData);
     if (!filteredRows.length) return [];
 
-    if (selectedDimension) {
+    if (selectedDimensions.length) {
       const grouped = filteredRows.reduce((acc, row) => {
-        const key = row?.[selectedDimension] ?? "Sin dato";
+        const key = selectedDimensions
+          .map((dimension) => row?.[dimension] ?? "Sin dato")
+          .join(" • ");
         const value = Number(row?.[selectedMetric]) || 0;
         acc[key] = (acc[key] || 0) + value;
         return acc;
@@ -142,14 +151,14 @@ const VisualizationExplorer = ({ analysis }) => {
       return Object.entries(grouped)
         .map(([name, value]) => ({ name, value }))
         .sort((a, b) => b.value - a.value)
-        .slice(0, 25);
+        .slice(0, 30);
     }
 
     return filteredRows.map((row, index) => ({
       name: `Fila ${index + 1}`,
       value: Number(row?.[selectedMetric]) || 0,
     }));
-  }, [applyFilters, sampleData, selectedDimension, selectedMetric]);
+  }, [applyFilters, sampleData, selectedDimensions, selectedMetric]);
 
   const stats = useMemo(() => {
     if (!chartData.length) return null;
@@ -161,15 +170,37 @@ const VisualizationExplorer = ({ analysis }) => {
     return { total, max, min, avg };
   }, [chartData]);
 
-  const handleDimensionValueToggle = (value) => {
+  const handleDimensionValueToggle = (dimension, value) => {
     setFilters((prev) => {
-      const exists = prev.dimensionValues.includes(value);
+      const currentValues = prev.dimensionValues?.[dimension] || [];
+      const exists = currentValues.includes(value);
+      const updatedValues = exists
+        ? currentValues.filter((v) => v !== value)
+        : [...currentValues, value];
+
       return {
         ...prev,
-        dimensionValues: exists
-          ? prev.dimensionValues.filter((v) => v !== value)
-          : [...prev.dimensionValues, value],
+        dimensionValues: {
+          ...prev.dimensionValues,
+          [dimension]: updatedValues,
+        },
       };
+    });
+  };
+
+  const handleDimensionToggle = (dimension) => {
+    setSelectedDimensions((prev) => {
+      if (prev.includes(dimension)) {
+        const nextDimensions = prev.filter((d) => d !== dimension);
+        setFilters((current) => {
+          const updated = { ...current.dimensionValues };
+          delete updated[dimension];
+          return { ...current, dimensionValues: updated };
+        });
+        return nextDimensions;
+      }
+
+      return [...prev, dimension];
     });
   };
 
@@ -180,8 +211,8 @@ const VisualizationExplorer = ({ analysis }) => {
     }));
   };
 
-  const chartTitle = selectedDimension
-    ? `${selectedMetric || "Métrica"} por ${selectedDimension}`
+  const chartTitle = selectedDimensions.length
+    ? `${selectedMetric || "Métrica"} por ${selectedDimensions.join(" • ")}`
     : `Distribución de ${selectedMetric || "métrica"}`;
 
   const renderChart = () => {
@@ -284,19 +315,29 @@ const VisualizationExplorer = ({ analysis }) => {
             </div>
 
             <div className="space-y-2">
-              <label className="text-xs font-semibold text-gray-500 dark:text-slate-400">Segmento (categoría)</label>
-              <select
-                value={selectedDimension || ""}
-                onChange={(e) => setSelectedDimension(e.target.value)}
-                className="w-full rounded-xl border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 px-3 py-2 text-sm"
-              >
-                <option value="">Sin segmentar</option>
-                {categoricalColumns.map((col) => (
-                  <option key={col} value={col}>
-                    {col}
-                  </option>
-                ))}
-              </select>
+              <div className="flex items-center justify-between gap-2">
+                <label className="text-xs font-semibold text-gray-500 dark:text-slate-400">Segmentos (categoría)</label>
+                <span className="text-[11px] text-gray-400">Multi-selección</span>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {categoricalColumns.map((col) => {
+                  const isActive = selectedDimensions.includes(col);
+                  return (
+                    <button
+                      key={col}
+                      onClick={() => handleDimensionToggle(col)}
+                      className={`px-3 py-1.5 rounded-full text-xs border transition ${
+                        isActive
+                          ? "bg-blue-500/10 text-blue-700 dark:text-blue-200 border-blue-300"
+                          : "bg-gray-50 dark:bg-slate-800 text-gray-600 dark:text-slate-300 border-gray-200 dark:border-slate-700"
+                      }`}
+                    >
+                      {col}
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="text-[11px] text-gray-500 dark:text-slate-400">Combina varias categorías (ej. producto, canal, región) para segmentar los KPIs.</p>
             </div>
 
             <div className="space-y-2">
@@ -329,29 +370,36 @@ const VisualizationExplorer = ({ analysis }) => {
               <span className="text-[11px] text-gray-400">Opcional</span>
             </div>
 
-            {selectedDimension && uniqueDimensionValues.length > 0 && (
-              <div className="space-y-2">
-                <p className="text-xs uppercase tracking-[0.15em] text-gray-500 dark:text-slate-400">Valores de {selectedDimension}</p>
-                <div className="flex flex-wrap gap-2">
-                  {uniqueDimensionValues.map((value) => {
-                    const isActive = filters.dimensionValues.includes(value);
-                    return (
-                      <button
-                        key={value}
-                        onClick={() => handleDimensionValueToggle(value)}
-                        className={`px-3 py-1.5 rounded-full text-xs border transition ${
-                          isActive
-                            ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-300"
-                            : "bg-gray-50 dark:bg-slate-800 text-gray-600 dark:text-slate-300 border-gray-200 dark:border-slate-700"
-                        }`}
-                      >
-                        {value}
-                      </button>
-                    );
-                  })}
+            {selectedDimensions.map((dimension) => {
+              const values = uniqueDimensionValues[dimension] || [];
+              if (!values.length) return null;
+
+              return (
+                <div key={dimension} className="space-y-2">
+                  <p className="text-xs uppercase tracking-[0.15em] text-gray-500 dark:text-slate-400">
+                    Valores de {dimension}
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {values.map((value) => {
+                      const isActive = filters.dimensionValues?.[dimension]?.includes(value);
+                      return (
+                        <button
+                          key={`${dimension}-${value}`}
+                          onClick={() => handleDimensionValueToggle(dimension, value)}
+                          className={`px-3 py-1.5 rounded-full text-xs border transition ${
+                            isActive
+                              ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-300"
+                              : "bg-gray-50 dark:bg-slate-800 text-gray-600 dark:text-slate-300 border-gray-200 dark:border-slate-700"
+                          }`}
+                        >
+                          {value}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
-              </div>
-            )}
+              );
+            })}
 
             {dateColumns.length > 0 && (
               <div className="space-y-2">
