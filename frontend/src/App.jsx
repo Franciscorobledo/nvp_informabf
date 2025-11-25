@@ -253,19 +253,18 @@ const App = () => {
                   >
                     Inicio
                   </button>
-                  <button
-                    onClick={() => navigateTo("config")}
-                    disabled={user?.role !== "admin"}
-                    className={`px-4 py-2 rounded-md text-sm font-semibold transition ${
-                      user?.role !== "admin"
-                        ? "text-gray-400 dark:text-slate-500 cursor-not-allowed"
-                        : activePage === "config"
-                        ? "bg-blue-600 text-white shadow"
-                        : "text-gray-700 dark:text-slate-100 hover:bg-gray-100 dark:hover:bg-slate-700"
-                    }`}
-                  >
-                    Configuración
-                  </button>
+                  {user?.role === "admin" && (
+                    <button
+                      onClick={() => navigateTo("config")}
+                      className={`px-4 py-2 rounded-md text-sm font-semibold transition ${
+                        activePage === "config"
+                          ? "bg-blue-600 text-white shadow"
+                          : "text-gray-700 dark:text-slate-100 hover:bg-gray-100 dark:hover:bg-slate-700"
+                      }`}
+                    >
+                      Configuración
+                    </button>
+                  )}
                 </div>
 
                 <button
@@ -315,19 +314,18 @@ const App = () => {
                     >
                       Inicio
                     </button>
-                    <button
-                      onClick={() => navigateTo("config")}
-                      disabled={user?.role !== "admin"}
-                      className={`flex-1 px-4 py-2 rounded-md text-sm font-semibold transition ${
-                        user?.role !== "admin"
-                          ? "text-gray-400 dark:text-slate-500 cursor-not-allowed"
-                          : activePage === "config"
-                          ? "bg-blue-600 text-white shadow"
-                          : "text-gray-700 dark:text-slate-100 hover:bg-gray-100 dark:hover:bg-slate-700"
-                      }`}
-                    >
-                      Configuración
-                    </button>
+                    {user?.role === "admin" && (
+                      <button
+                        onClick={() => navigateTo("config")}
+                        className={`flex-1 px-4 py-2 rounded-md text-sm font-semibold transition ${
+                          activePage === "config"
+                            ? "bg-blue-600 text-white shadow"
+                            : "text-gray-700 dark:text-slate-100 hover:bg-gray-100 dark:hover:bg-slate-700"
+                        }`}
+                      >
+                        Configuración
+                      </button>
+                    )}
                   </div>
 
                   <button
@@ -362,7 +360,7 @@ const App = () => {
 
           {/* MAIN */}
           <main className="space-y-10">
-            {activePage === "config" ? (
+            {activePage === "config" && user?.role === "admin" ? (
               <ConfigurationPage
                 user={user}
                 onUnauthorized={handleUnauthorized}
