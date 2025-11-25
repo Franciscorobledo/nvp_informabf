@@ -398,8 +398,8 @@ const DataComparisonModule = ({ onUnauthorized }) => {
           />
         </div>
 
-        <div className="lg:col-span-2 flex flex-wrap items-center gap-3 justify-between">
-          <label className="text-sm font-medium text-gray-700 dark:text-slate-200 flex items-center gap-2">
+        <div className="lg:col-span-2 flex flex-col sm:flex-row sm:items-center gap-3 justify-between">
+          <label className="w-full sm:w-auto text-sm font-medium text-gray-700 dark:text-slate-200 flex items-center gap-2">
             Foco de usuario
             <select
               value={focus}
@@ -414,22 +414,29 @@ const DataComparisonModule = ({ onUnauthorized }) => {
             </select>
           </label>
 
-          <button
-            type="submit"
-            disabled={isComparing}
-            className="inline-flex items-center gap-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 text-sm font-semibold shadow-md disabled:opacity-60"
-          >
-            {isComparing ? "Procesando comparativa..." : "Comparar"}
-          </button>
+          <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
+            <AppButton
+              type="submit"
+              loading={isComparing}
+              loadingText="Procesando comparativa..."
+              fullWidth
+              className="sm:w-auto"
+            >
+              Comparar
+            </AppButton>
 
-          <button
-            type="button"
-            onClick={handleDemoCompare}
-            disabled={isComparing}
-            className="inline-flex items-center gap-2 rounded-lg border border-amber-300 text-amber-800 dark:text-amber-200 bg-amber-50 dark:bg-amber-900/30 px-5 py-2 text-sm font-semibold shadow-sm hover:bg-amber-100 dark:hover:bg-amber-900/50 disabled:opacity-60"
-          >
-            {isComparing ? "Cargando demo..." : "Probar comparativa de ejemplo"}
-          </button>
+            <AppButton
+              type="button"
+              onClick={handleDemoCompare}
+              loading={isComparing}
+              loadingText="Cargando demo..."
+              variant="secondary"
+              fullWidth
+              className="sm:w-auto"
+            >
+              Probar comparativa de ejemplo
+            </AppButton>
+          </div>
         </div>
       </form>
 
