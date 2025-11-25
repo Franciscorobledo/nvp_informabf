@@ -13,6 +13,7 @@ import {
   YAxis,
 } from "recharts";
 import DatasetSummaryPanel from "./DatasetSummaryPanel";
+import VisualizationExplorer from "./VisualizationExplorer";
 
 const FileUpload = ({ onDataReceived, onUnauthorized, onNavigateModule }) => {
   const [files, setFiles] = useState([]);
@@ -1333,53 +1334,71 @@ const FileUpload = ({ onDataReceived, onUnauthorized, onNavigateModule }) => {
 
               {/* 📊 GRÁFICOS */}
               {activeTab === "graficos" && (
-                <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-                  {filterGraphsByCategory(analysis.graphs)?.length > 0 ? (
-                    filterGraphsByCategory(analysis.graphs).map((chart, i) => (
-                      <div
-                        key={i}
-                        className="group relative overflow-hidden rounded-2xl border border-gray-200 dark:border-slate-800 bg-gradient-to-br from-white to-slate-50 dark:from-slate-900 dark:to-slate-950 shadow-lg"
-                      >
-                        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-slate-800">
-                          <div className="flex items-center gap-3">
-                            <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-200">
-                              <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                                <path d="M3 3v18h18" />
-                                <path d="M7 16l3-3 4 4 5-5" />
-                              </svg>
-                            </span>
-                            <div>
-                              <p className="text-xs uppercase tracking-wide text-gray-500 dark:text-slate-400">Visualización</p>
-                              <h4 className="text-base font-semibold text-gray-900 dark:text-white">{chart.column || `Gráfico ${i + 1}`}</h4>
-                            </div>
-                          </div>
-                          <div className="relative">
-                            <div className="inline-flex items-center gap-1 text-xs text-gray-500 dark:text-slate-400 border border-gray-200 dark:border-slate-700 rounded-full px-3 py-1">
-                              <span className="w-2 h-2 rounded-full bg-blue-500" />
-                              Hover para detalles
-                            </div>
-                            <div className="pointer-events-none absolute right-0 mt-2 w-48 rounded-xl bg-white/95 dark:bg-slate-900/95 shadow-lg border border-gray-200 dark:border-slate-800 p-3 text-xs text-gray-600 dark:text-slate-200 opacity-0 translate-y-1 group-hover:opacity-100 group-hover:translate-y-0 transition duration-200">
-                              Gráficos enmarcados con sombra sutil y tipografía reforzada para un look tipo Notion/Linear.
-                            </div>
-                          </div>
-                        </div>
-                        <div className="p-5">
-                          <div className="overflow-hidden rounded-xl border border-gray-100 dark:border-slate-800 shadow-inner bg-white dark:bg-slate-900">
-                            <img
-                              src={chart.image}
-                              alt={chart.column}
-                              className="rounded-lg mx-auto"
-                              style={{ maxHeight: "320px", objectFit: "contain" }}
-                            />
-                          </div>
-                        </div>
+                <div className="space-y-8">
+                  <VisualizationExplorer analysis={analysis} />
+
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between flex-wrap gap-2">
+                      <div>
+                        <p className="text-xs uppercase tracking-[0.15em] text-gray-500 dark:text-slate-400">Galería automática</p>
+                        <h4 className="text-base font-semibold text-gray-900 dark:text-white">Gráficos generados por el backend</h4>
+                        <p className="text-sm text-gray-600 dark:text-slate-300">Mantuvimos las capturas originales como referencia rápida.</p>
                       </div>
-                    ))
-                  ) : (
-                    <p className="text-gray-500 dark:text-slate-400 italic text-center">
-                      No hay gráficos disponibles.
-                    </p>
-                  )}
+                      <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 text-xs text-gray-600 dark:text-slate-200">
+                        <span className="w-2 h-2 rounded-full bg-blue-500" />
+                        Estáticos
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+                      {filterGraphsByCategory(analysis.graphs)?.length > 0 ? (
+                        filterGraphsByCategory(analysis.graphs).map((chart, i) => (
+                          <div
+                            key={i}
+                            className="group relative overflow-hidden rounded-2xl border border-gray-200 dark:border-slate-800 bg-gradient-to-br from-white to-slate-50 dark:from-slate-900 dark:to-slate-950 shadow-lg"
+                          >
+                            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-slate-800">
+                              <div className="flex items-center gap-3">
+                                <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-200">
+                                  <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                    <path d="M3 3v18h18" />
+                                    <path d="M7 16l3-3 4 4 5-5" />
+                                  </svg>
+                                </span>
+                                <div>
+                                  <p className="text-xs uppercase tracking-wide text-gray-500 dark:text-slate-400">Visualización</p>
+                                  <h4 className="text-base font-semibold text-gray-900 dark:text-white">{chart.column || `Gráfico ${i + 1}`}</h4>
+                                </div>
+                              </div>
+                              <div className="relative">
+                                <div className="inline-flex items-center gap-1 text-xs text-gray-500 dark:text-slate-400 border border-gray-200 dark:border-slate-700 rounded-full px-3 py-1">
+                                  <span className="w-2 h-2 rounded-full bg-blue-500" />
+                                  Hover para detalles
+                                </div>
+                                <div className="pointer-events-none absolute right-0 mt-2 w-48 rounded-xl bg-white/95 dark:bg-slate-900/95 shadow-lg border border-gray-200 dark:border-slate-800 p-3 text-xs text-gray-600 dark:text-slate-200 opacity-0 translate-y-1 group-hover:opacity-100 group-hover:translate-y-0 transition duration-200">
+                                  Gráficos enmarcados con sombra sutil y tipografía reforzada para un look tipo Notion/Linear.
+                                </div>
+                              </div>
+                            </div>
+                            <div className="p-5">
+                              <div className="overflow-hidden rounded-xl border border-gray-100 dark:border-slate-800 shadow-inner bg-white dark:bg-slate-900">
+                                <img
+                                  src={chart.image}
+                                  alt={chart.column}
+                                  className="rounded-lg mx-auto"
+                                  style={{ maxHeight: "320px", objectFit: "contain" }}
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        ))
+                      ) : (
+                        <p className="text-gray-500 dark:text-slate-400 italic text-center">
+                          No hay gráficos disponibles.
+                        </p>
+                      )}
+                    </div>
+                  </div>
                 </div>
               )}
 

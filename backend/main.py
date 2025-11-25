@@ -1092,7 +1092,7 @@ def _run_full_analysis_job(
 
         job_store.update_job(job_id, step="ia", progress=80)
 
-        safe_sample = df.head(10).applymap(json_safe).to_dict(orient="records")
+        safe_sample = result.get("sample") or df.head(10).applymap(json_safe).to_dict(orient="records")
         response = json_safe_deep({
             "summary": result.get("summary", {}),
             "sample": safe_sample,
@@ -1102,6 +1102,7 @@ def _run_full_analysis_job(
             "refined_insights": result.get("refined_insights", []),
             "historical_deviation": result.get("historical_deviation"),
             "learning_updated": result.get("learning_updated", False),
+            "column_types": result.get("column_types", {}),
         })
 
         job_store.update_job(job_id, step="reporte", progress=100, done=True, result=response)
@@ -1178,7 +1179,7 @@ async def demo_analyze(
             user_id=current_user.get("username") if isinstance(current_user, dict) else None,
         )
 
-        safe_sample = df.head(10).applymap(json_safe).to_dict(orient="records")
+        safe_sample = result.get("sample") or df.head(10).applymap(json_safe).to_dict(orient="records")
         response = json_safe_deep(
             {
                 "summary": result.get("summary", {}),
@@ -1191,6 +1192,7 @@ async def demo_analyze(
                 "learning_updated": result.get("learning_updated", False),
                 "ai_schema": result.get("ai_schema"),
                 "data_movie": result.get("data_movie"),
+                "column_types": result.get("column_types", {}),
                 "demo_metadata": {"is_demo": True, "scenario": scenario},
             }
         )
