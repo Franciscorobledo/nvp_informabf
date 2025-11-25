@@ -1184,74 +1184,35 @@ def generate_sales_insights(df):
 
 
 def generate_ai_summary(df, column_types, date_field=None, metric_field=None):
-    """Genera un resumen textual basado en las métricas reales del dataset."""
-    insights = []
+    """Resumen breve de hallazgos básicos para alimentar los insights IA."""
+    insights: list[str] = []
+
     total_rows = len(df)
+    if total_rows:
+        insights.append(f"Muestra analizada: {total_rows} filas")
 
     sales_insights = generate_sales_insights(df)
     insights.extend(sales_insights)
 
-    # Calidad de datos
+    # Calidad de datos (solo alertas simples)
     null_ratio = (df.isna().sum() / total_rows).sort_values(ascending=False)
     high_nulls = [
-        f"⚠️ {col}: {ratio:.0%} de datos faltantes"
+        f"{col}: {ratio:.0%} nulos"
         for col, ratio in null_ratio.items()
         if ratio > 0.15
     ]
     if high_nulls:
-        insights.append("Calidad de datos: " + ", ".join(high_nulls))
+        insights.append("Campos con muchos nulos: " + ", ".join(high_nulls))
 
-    # Variables numéricas: variabilidad y outliers
-    numeric_cols = [c for c, t in column_types.items() if t == "numeric"]
-    if numeric_cols:
-        stds = df[numeric_cols].std().sort_values(ascending=False)
-        top_variability = [f"{col} (σ={std:.2f})" for col, std in stds.head(3).items() if std > 0]
-        if top_variability:
-            insights.append(
-                "Mayor variabilidad: " + ", ".join(top_variability)
-            )
-
-        outlier_msgs = []
-        for col in numeric_cols:
-            series = df[col].dropna()
-            if series.empty:
-                continue
-            q1, q3 = series.quantile([0.25, 0.75])
-            iqr = q3 - q1
-            if iqr == 0:
-                continue
-            lower, upper = q1 - 1.5 * iqr, q3 + 1.5 * iqr
-            outliers = ((series < lower) | (series > upper)).sum()
-            if outliers:
-                outlier_msgs.append(
-                    f"{col}: {outliers} outliers (≈{outliers / len(series):.0%})"
-                )
-        if outlier_msgs:
-            insights.append("Outliers detectados en " + ", ".join(outlier_msgs))
-
-    # Correlaciones fuertes
-    numeric_df = df.select_dtypes(include=[np.number])
-    if not numeric_df.empty:
-        corr = numeric_df.corr().abs()
-        strong_pairs = [
-            f"{a}–{b} (ρ={corr.loc[a, b]:.2f})"
-            for i, a in enumerate(corr.columns)
-            for b in corr.columns[i + 1 :]
-            if corr.loc[a, b] >= 0.6
-        ]
-        if strong_pairs:
-            insights.append("Correlaciones fuertes: " + ", ".join(strong_pairs))
-
-    # Fechas y tendencia de negocio
+    # Ventana temporal y tendencia básica
     date_cols = [c for c, t in column_types.items() if t == "date"]
     if date_cols:
         for col in date_cols:
             dates = pd.to_datetime(df[col], errors="coerce").dropna()
-            if dates.empty:
-                continue
-            insights.append(
-                f"Ventana temporal en {col}: {dates.min().date()} → {dates.max().date()}"
-            )
+            if not dates.empty:
+                insights.append(
+                    f"Rango temporal {col}: {dates.min().date()} a {dates.max().date()}"
+                )
 
         if metric_field and metric_field in df.columns:
             metric_series = pd.to_numeric(df[metric_field], errors="coerce")
@@ -1261,43 +1222,26 @@ def generate_ai_summary(df, column_types, date_field=None, metric_field=None):
                     "metric": metric_series,
                 }).dropna()
                 if not temp.empty:
-                    monthly = temp.groupby(temp["date"].dt.to_period("M"))[
-                        "metric"
-                    ].mean()
+                    monthly = temp.groupby(temp["date"].dt.to_period("M"))["metric"].mean()
                     if len(monthly) >= 2:
-                        trend = monthly.iloc[-1] - monthly.iloc[0]
-                        direction = "alza" if trend > 0 else "baja"
+                        direction = "↑" if monthly.iloc[-1] > monthly.iloc[0] else "↓"
                         insights.append(
-                            f"Tendencia del/la {metric_field}: {direction} de {monthly.iloc[0]:.2f} a {monthly.iloc[-1]:.2f}"
+                            f"Tendencia {metric_field}: {direction} {monthly.iloc[0]:.2f} → {monthly.iloc[-1]:.2f}"
                         )
 
-    # Categóricas dominantes
+    # Categóricas dominantes (solo top 3)
     categorical_cols = [c for c, t in column_types.items() if t == "categorical"]
     for col in categorical_cols:
         counts = df[col].value_counts(normalize=True).head(3)
         if not counts.empty:
             top = ", ".join([f"{idx} ({val:.0%})" for idx, val in counts.items()])
-            insights.append(f"Top categorías en {col}: {top}")
-
-    # Heurísticas de negocio
-    business_keywords = {
-        "venta": "Analiza ticket promedio y estacionalidad de ventas para detectar picos de demanda.",
-        "precio": "Revisa la dispersión de precios y su relación con el volumen para ajustar márgenes.",
-        "cliente": "Segmenta clientes por frecuencia o monto para priorizar retención.",
-        "producto": "Identifica productos más vendidos y los que generan mayor variabilidad en ingresos.",
-    }
-    detected = [msg for key, msg in business_keywords.items() if any(key in c.lower() for c in df.columns)]
-    if detected:
-        insights.append("Pistas de negocio: " + " ".join(detected))
+            insights.append(f"Destacados en {col}: {top}")
 
     if not insights:
-        insights.append(
-            "No se encontraron patrones destacados; revisa la calidad de datos o sube campos de negocio (ventas, clientes, fechas)."
-        )
+        return ""
 
-    header = "🤖 Análisis automático basado en tus datos:\n"
-    bullets = "\n".join([f"• {text}" for text in insights])
-    return f"{header}{bullets}"
+    bullets = "\n".join([f"• {text}" for text in insights[:12]])
+    return bullets
 
 
 # ---------------------------------------------------------------------
@@ -1520,17 +1464,12 @@ def analyze_file(
         metric_field=metric_field,
     )
 
-    ai_summary = "\n\n".join(
-        [
-            heuristic_summary,
-            generate_ai_insights(
-                summary=summary,
-                column_types=column_types,
-                heuristics=heuristic_summary,
-                dataset_profile=dataset_profile,
-                usage_context=usage_context,
-            ),
-        ]
+    ai_summary = generate_ai_insights(
+        summary=summary,
+        column_types=column_types,
+        heuristics=heuristic_summary,
+        dataset_profile=dataset_profile,
+        usage_context=usage_context,
     )
 
     # --------------------------------------------------------------

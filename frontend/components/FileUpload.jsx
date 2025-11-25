@@ -296,6 +296,60 @@ const FileUpload = ({ onDataReceived, onUnauthorized, onNavigateModule }) => {
     return filtered.length ? filtered.join(" ") : text;
   };
 
+  const parseAiInsights = (text = "") => {
+    const sections = {
+      resumenEjecutivo: "",
+      alertas: [],
+      oportunidades: [],
+      acciones: [],
+    };
+
+    if (!text) return sections;
+
+    const lines = text.split("\n");
+    let current = null;
+
+    lines.forEach((rawLine) => {
+      const line = rawLine.trim();
+      if (!line) return;
+      const lower = line.toLowerCase();
+
+      if (lower.startsWith("📝") || lower.startsWith("resumen ejecutivo")) {
+        current = "resumenEjecutivo";
+        return;
+      }
+      if (lower.startsWith("⚠️") || lower.startsWith("alertas")) {
+        current = "alertas";
+        return;
+      }
+      if (lower.startsWith("🚀") || lower.startsWith("oportunidades")) {
+        current = "oportunidades";
+        return;
+      }
+      if (lower.startsWith("✔️") || lower.startsWith("acciones")) {
+        current = "acciones";
+        return;
+      }
+
+      if (!current) return;
+
+      const cleaned = line.replace(/^[-•\d.)\s]+/, "");
+      if (current === "resumenEjecutivo") {
+        sections.resumenEjecutivo = sections.resumenEjecutivo
+          ? `${sections.resumenEjecutivo} ${cleaned}`
+          : cleaned;
+      } else {
+        sections[current].push(cleaned);
+      }
+    });
+
+    if (!sections.resumenEjecutivo && text) {
+      sections.resumenEjecutivo = text;
+    }
+
+    return sections;
+  };
+
   const buildInteractiveChart = (column) => {
     if (!column || !analysis?.sample?.length) return null;
 
@@ -920,6 +974,17 @@ const FileUpload = ({ onDataReceived, onUnauthorized, onNavigateModule }) => {
 
   const suggestedActions = buildSuggestedActions();
 
+  const parsedInsights = useMemo(
+    () => parseAiInsights(filterInsights(analysis?.ai_summary)),
+    [analysis?.ai_summary, categoryFilter]
+  );
+
+  const recommendedActions = useMemo(() => {
+    const aiActions = parsedInsights.acciones.filter(Boolean);
+    if (aiActions.length) return aiActions.slice(0, 5);
+    return suggestedActions.slice(0, 5);
+  }, [parsedInsights, suggestedActions]);
+
   const getFocusIndicators = () => {
     if (categoryFilter !== "auditoria") return [];
 
@@ -1517,119 +1582,71 @@ const FileUpload = ({ onDataReceived, onUnauthorized, onNavigateModule }) => {
               {/* 🤖 INSIGHTS */}
               {activeTab === "insights" && (
                 <div className="space-y-6">
-                  <div className="grid gap-4 lg:grid-cols-2">
-                    <div className="relative rounded-2xl border border-blue-200 dark:border-slate-800 bg-gradient-to-br from-blue-50 via-white to-blue-100 dark:from-slate-900 dark:via-slate-900 dark:to-slate-950 p-6 shadow-lg">
-                      <div className="flex items-center gap-2 mb-3">
-                        <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-blue-600 text-white">
-                          <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                            <path d="M12 3v4" />
-                            <path d="M6.6 7l-2.1 3.6" />
-                            <path d="M17.4 7l2.1 3.6" />
-                            <path d="M3 13h4" />
-                            <path d="M17 13h4" />
-                            <path d="M6.6 19l-2.1-3.6" />
-                            <path d="M17.4 19l2.1-3.6" />
-                            <path d="M12 17v4" />
-                          </svg>
-                        </span>
-                        <div>
-                          <p className="text-xs uppercase tracking-[0.15em] text-blue-700 dark:text-blue-200">Panel inteligente</p>
-                          <h4 className="text-lg font-semibold text-gray-900 dark:text-white">Insights generados por IA</h4>
-                        </div>
-                      </div>
-                      <div className="mt-3 max-h-64 overflow-y-auto pr-2">
-                        <p className="text-sm text-blue-900 dark:text-blue-100 whitespace-pre-wrap leading-relaxed">
-                          {filterInsights(analysis.ai_summary) || "No se recibieron insights de IA."}
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-gray-200 dark:border-slate-800 shadow-lg">
-                      <div className="flex items-start justify-between gap-3 mb-3">
-                        <div>
-                          <p className="text-xs uppercase tracking-[0.15em] text-emerald-600 dark:text-emerald-300">Acciones sugeridas</p>
-                          <h4 className="text-lg font-semibold text-gray-900 dark:text-white">Checklist priorizado</h4>
-                          <p className="text-xs text-gray-500 dark:text-slate-400">Generadas según tus insights y el enfoque seleccionado.</p>
-                        </div>
-                        <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-500 text-white" aria-hidden="true">
-                          <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M20 6 9 17l-5-5" />
-                          </svg>
-                        </span>
-                      </div>
-                      {suggestedActions.length > 0 ? (
-                        <ul className="space-y-3 max-h-60 overflow-y-auto pr-2">
-                          {suggestedActions.map((action, index) => (
-                            <li
-                              key={`${action}-${index}`}
-                              className="flex items-start gap-3 bg-emerald-50 dark:bg-slate-800/60 rounded-lg p-3 border border-emerald-100 dark:border-slate-700"
-                            >
-                              <span className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-emerald-600 text-white text-sm font-bold">
-                                {index + 1}
-                              </span>
-                              <p className="text-sm text-gray-800 dark:text-slate-100 leading-relaxed">{action}</p>
-                            </li>
-                          ))}
-                        </ul>
-                      ) : (
-                        <p className="text-sm text-gray-500 dark:text-slate-400">
-                          Carga un archivo y obtén recomendaciones listas para ejecutar.
-                        </p>
-                      )}
-                    </div>
+                  <div className="rounded-3xl bg-gradient-to-r from-white via-blue-50 to-emerald-50 dark:from-slate-900 dark:via-slate-900 dark:to-slate-950 border border-blue-100/70 dark:border-slate-800 px-6 py-5 shadow-xl">
+                    <p className="text-xs uppercase tracking-[0.2em] text-blue-700 dark:text-blue-200">Módulo Insights IA</p>
+                    <h3 className="text-2xl font-bold text-gray-900 dark:text-white mt-1">💡 Insights Inteligentes para tu negocio</h3>
+                    <p className="text-sm text-gray-600 dark:text-slate-300 mt-1">Interpretación automática de tus datos con foco en decisiones prácticas.</p>
                   </div>
 
-                  {filterGraphsByCategory(aiCharts).length > 0 && (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {filterGraphsByCategory(aiCharts).map((chart, index) => (
-                        <div
-                          key={`${chart.title}-${index}`}
-                          className="bg-white dark:bg-slate-900 rounded-2xl border border-gray-200 dark:border-slate-800 shadow-lg p-4"
-                        >
-                          <h5 className="text-sm font-semibold text-gray-800 dark:text-slate-100 mb-3 text-center">
-                            {chart.title}
-                          </h5>
-                          <div className="h-64">
-                            <ResponsiveContainer width="100%" height="100%">
-                              {chart.type === "bar" ? (
-                                <BarChart data={chart.data} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                                  <CartesianGrid strokeDasharray="3 3" strokeOpacity={0.2} />
-                                  <XAxis dataKey={chart.xKey} tick={{ fontSize: 12 }} />
-                                  <YAxis tick={{ fontSize: 12 }} />
-                                  <Tooltip
-                                    formatter={(value) => Number(value).toLocaleString()}
-                                    contentStyle={{
-                                      borderRadius: "12px",
-                                      border: "1px solid #e5e7eb",
-                                      boxShadow: "0 10px 40px rgba(0,0,0,0.12)",
-                                    }}
-                                  />
-                                  <Legend />
-                                  <Bar dataKey={chart.yKey} name={chart.yKey} fill="#3b82f6" radius={[8, 8, 0, 0]} />
-                                </BarChart>
-                              ) : (
-                                <LineChart data={chart.data} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                                  <CartesianGrid strokeDasharray="3 3" strokeOpacity={0.2} />
-                                  <XAxis dataKey={chart.xKey} tick={{ fontSize: 12 }} />
-                                  <YAxis tick={{ fontSize: 12 }} />
-                                  <Tooltip
-                                    formatter={(value) => Number(value).toLocaleString()}
-                                    contentStyle={{
-                                      borderRadius: "12px",
-                                      border: "1px solid #e5e7eb",
-                                      boxShadow: "0 10px 40px rgba(0,0,0,0.12)",
-                                    }}
-                                  />
-                                  <Legend />
-                                  <Line type="monotone" dataKey={chart.yKey} name={chart.yKey} stroke="#10b981" strokeWidth={2} dot={{ r: 3 }} />
-                                </LineChart>
-                              )}
-                            </ResponsiveContainer>
-                          </div>
+                  <div className="grid gap-4 lg:grid-cols-2">
+                    <div className="lg:col-span-2 rounded-2xl border border-blue-100 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-lg p-6">
+                      <div className="flex items-start gap-3 mb-2">
+                        <span className="text-2xl" aria-hidden="true">📝</span>
+                        <div>
+                          <p className="text-xs uppercase tracking-[0.18em] text-blue-700 dark:text-blue-200">Resumen ejecutivo</p>
+                          <h4 className="text-xl font-semibold text-gray-900 dark:text-white">Panorama rápido</h4>
                         </div>
-                      ))}
+                      </div>
+                      <p className="text-base leading-relaxed text-gray-800 dark:text-slate-100">
+                        {parsedInsights.resumenEjecutivo || filterInsights(analysis.ai_summary) || "No se recibieron insights de IA."}
+                      </p>
                     </div>
-                  )}
+
+                    <div className="rounded-2xl border border-amber-200 dark:border-amber-500/30 bg-amber-50 dark:bg-amber-900/30 shadow-lg p-6">
+                      <div className="flex items-start gap-3 mb-3">
+                        <span className="text-2xl" aria-hidden="true">⚠️</span>
+                        <div>
+                          <p className="text-xs uppercase tracking-[0.18em] text-amber-700 dark:text-amber-200">Alertas críticas</p>
+                          <h4 className="text-lg font-semibold text-gray-900 dark:text-white">Riesgos inmediatos</h4>
+                        </div>
+                      </div>
+                      <ul className="space-y-2 text-sm text-gray-800 dark:text-slate-100 list-disc list-inside">
+                        {(parsedInsights.alertas.length ? parsedInsights.alertas : ["Sin alertas críticas detectadas."]).map((item, idx) => (
+                          <li key={`alerta-${idx}`}>{item}</li>
+                        ))}
+                      </ul>
+                    </div>
+
+                    <div className="rounded-2xl border border-sky-200 dark:border-sky-500/40 bg-sky-50 dark:bg-sky-900/30 shadow-lg p-6">
+                      <div className="flex items-start gap-3 mb-3">
+                        <span className="text-2xl" aria-hidden="true">🚀</span>
+                        <div>
+                          <p className="text-xs uppercase tracking-[0.18em] text-sky-700 dark:text-sky-200">Oportunidades</p>
+                          <h4 className="text-lg font-semibold text-gray-900 dark:text-white">Dónde crecer</h4>
+                        </div>
+                      </div>
+                      <ul className="space-y-2 text-sm text-gray-800 dark:text-slate-100 list-disc list-inside">
+                        {(parsedInsights.oportunidades.length ? parsedInsights.oportunidades : ["Aún no hay oportunidades específicas."]).map((item, idx) => (
+                          <li key={`oportunidad-${idx}`}>{item}</li>
+                        ))}
+                      </ul>
+                    </div>
+
+                    <div className="rounded-2xl border border-emerald-200 dark:border-emerald-500/40 bg-emerald-50 dark:bg-emerald-900/30 shadow-lg p-6">
+                      <div className="flex items-start gap-3 mb-3">
+                        <span className="text-2xl" aria-hidden="true">✔️</span>
+                        <div>
+                          <p className="text-xs uppercase tracking-[0.18em] text-emerald-700 dark:text-emerald-200">Acciones recomendadas</p>
+                          <h4 className="text-lg font-semibold text-gray-900 dark:text-white">Próximos pasos</h4>
+                        </div>
+                      </div>
+                      <ul className="space-y-2 text-sm text-gray-800 dark:text-slate-100 list-disc list-inside">
+                        {(recommendedActions.length ? recommendedActions : ["Carga un archivo para obtener un checklist personalizado."]).map((action, idx) => (
+                          <li key={`accion-${idx}`}>{action}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
                 </div>
               )}
 
