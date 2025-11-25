@@ -17,6 +17,117 @@ const App = () => {
   const [loading, setLoading] = useState(true);
   const [theme, setTheme] = useState("light");
   const [menuOpen, setMenuOpen] = useState(false);
+  const [modulesOpen, setModulesOpen] = useState(false);
+
+  const HomeIcon = ({ className = "" }) => (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <path
+        d="M4 10.5 12 4l8 6.5V20a1 1 0 0 1-1 1h-4.5v-5.25h-5V21H5a1 1 0 0 1-1-1v-9.5Z"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+
+  const BoxIcon = ({ className = "" }) => (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <path
+        d="m4.5 7 7.5 4.25L19.5 7m-15 0L12 2.75 19.5 7m-15 0v10.25L12 22l7.5-4.75V7"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+
+  const GearIcon = ({ className = "" }) => (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <path
+        d="M12 15.25a3.25 3.25 0 1 0 0-6.5 3.25 3.25 0 0 0 0 6.5Z"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M19.25 12a7.25 7.25 0 0 1-.074.995l1.662 1.211a.75.75 0 0 1 .173 1.048l-1.75 2.426a.75.75 0 0 1-.992.21l-1.88-.985a7.273 7.273 0 0 1-1.72.999l-.279 2.1a.75.75 0 0 1-.742.646h-3.5a.75.75 0 0 1-.742-.646l-.28-2.1a7.26 7.26 0 0 1-1.719-.998l-1.88.984a.75.75 0 0 1-.992-.21l-1.75-2.426a.75.75 0 0 1 .173-1.048l1.662-1.21A7.251 7.251 0 0 1 4.75 12c0-.336.025-.667.074-.995L3.162 9.794a.75.75 0 0 1-.173-1.048l1.75-2.426a.75.75 0 0 1 .992-.21l1.88.985c.54-.404 1.121-.742 1.72-.999l.28-2.1A.75.75 0 0 1 10.583 3h3.5a.75.75 0 0 1 .742.646l.28 2.1c.598.257 1.18.595 1.719.999l1.88-.985a.75.75 0 0 1 .992.21l1.75 2.426a.75.75 0 0 1-.173 1.048l-1.662 1.21c.05.328.075.659.075.995Z"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+
+  const SunIcon = ({ className = "" }) => (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <circle cx="12" cy="12" r="4.5" stroke="currentColor" strokeWidth="1.6" />
+      <path
+        d="M12 2v2.5M12 19.5V22M4.5 12H2m20 0h-2.5M18.95 5.05 17.2 6.8M6.8 17.2 5.05 18.95M18.95 18.95 17.2 17.2M6.8 6.8 5.05 5.05"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+
+  const MoonIcon = ({ className = "" }) => (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <path
+        d="M20.5 14.25A8.25 8.25 0 0 1 10.274 4.03 7.25 7.25 0 1 0 20.5 14.25Z"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+
+  const LogoutIcon = ({ className = "" }) => (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <path
+        d="M15.5 7V6a2 2 0 0 0-2-2h-7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h7a2 2 0 0 0 2-2v-1m3-4-3-3m3 3-3 3m3-3H9"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+
   const getNavigationFromPath = (path) => {
     if (path.startsWith("/modules/analyze"))
       return { page: "home", module: "analyze" };
@@ -33,20 +144,15 @@ const App = () => {
   const [activePage, setActivePage] = useState(initialNavigation.page);
   const [currentModule, setCurrentModule] = useState(initialNavigation.module);
 
-  // 🧠 Verifica si existe sesión al iniciar
   useEffect(() => {
     const token = localStorage.getItem("token");
     const storedUser = localStorage.getItem("user");
 
-    console.log("🧩 Inicializando App.jsx → Token:", token, "| Usuario:", storedUser);
-
     if (token && storedUser) {
       if (isTokenExpired(token)) {
-        console.warn("⏰ Token expirado al iniciar la app. Limpiando sesión.");
         clearStoredSession();
         setSessionMessage("Tu sesión expiró. Vuelve a iniciar sesión.");
       } else {
-        console.log("✅ Sesión activa detectada.");
         try {
           const parsed = JSON.parse(storedUser);
           const payload = decodeTokenPayload(token);
@@ -59,8 +165,6 @@ const App = () => {
           setUser({ username: storedUser, role: "user" });
         }
       }
-    } else {
-      console.log("⚠️ No hay sesión activa, mostrando pantalla de login.");
     }
 
     const savedTheme = localStorage.getItem("theme");
@@ -76,6 +180,7 @@ const App = () => {
       setActivePage(navigation.page);
       setCurrentModule(navigation.module);
       setMenuOpen(false);
+      setModulesOpen(false);
     };
 
     window.addEventListener("popstate", handlePopState);
@@ -102,13 +207,9 @@ const App = () => {
     }
   }, [user, activePage]);
 
-  // 🔓 Maneja el login exitoso desde Login.jsx
   const handleLogin = (data) => {
-    console.log("🎯 Login exitoso → usuario:", data.username);
-
     const token = localStorage.getItem("token");
     if (!token) {
-      console.error("🚫 Token ausente en localStorage después del login.");
       return;
     }
 
@@ -116,12 +217,11 @@ const App = () => {
     setUser({ username: data.username, role: data.role || "user" });
   };
 
-  // 🔒 Cierre de sesión
   const handleLogout = (eventOrMessage = "") => {
-    console.log("👋 Cerrando sesión...");
-
     const isEvent =
-      eventOrMessage && typeof eventOrMessage === "object" && "preventDefault" in eventOrMessage;
+      eventOrMessage &&
+      typeof eventOrMessage === "object" &&
+      "preventDefault" in eventOrMessage;
 
     if (isEvent) {
       eventOrMessage.preventDefault();
@@ -137,18 +237,19 @@ const App = () => {
     setActivePage("home");
     setCurrentModule("home");
     setMenuOpen(false);
+    setModulesOpen(false);
     window.history.replaceState({ page: "home" }, "", "/");
     window.scrollTo(0, 0);
   };
 
   const handleUnauthorized = (message) => {
-    console.warn("🚫 Sesión inválida o expirada.");
     handleLogout(message || "Tu sesión expiró. Vuelve a iniciar sesión.");
   };
 
   const toggleTheme = () => {
     setTheme((prev) => (prev === "dark" ? "light" : "dark"));
     setMenuOpen(false);
+    setModulesOpen(false);
   };
 
   const navigateTo = (page) => {
@@ -159,11 +260,13 @@ const App = () => {
       setActivePage("home");
       setCurrentModule("home");
       setMenuOpen(false);
+      setModulesOpen(false);
       return;
     }
 
     setActivePage(page);
     setMenuOpen(false);
+    setModulesOpen(false);
 
     if (page === "config") {
       window.history.pushState({ page }, "", "/config");
@@ -184,6 +287,7 @@ const App = () => {
     setActivePage("home");
     setCurrentModule(moduleId);
     setMenuOpen(false);
+    setModulesOpen(false);
     window.history.pushState({ module: moduleId }, "", moduleRoutes[moduleId] || "/");
   };
 
@@ -196,7 +300,6 @@ const App = () => {
     }
   }, [user]);
 
-  // ⏳ Pantalla de carga inicial
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gray-100 text-gray-700">
@@ -212,9 +315,7 @@ const App = () => {
           <DataUploadAnalysis
             user={user}
             onUnauthorized={handleUnauthorized}
-            onDataReceived={(data) =>
-              console.log("📈 Resultado del análisis:", data)
-            }
+            onDataReceived={(data) => console.log("📈 Resultado del análisis:", data)}
             onNavigateModule={navigateToModule}
           />
         );
@@ -227,11 +328,8 @@ const App = () => {
     }
   };
 
-  // -------------------------------
-  // 🧩 Renderizado condicional
-  // -------------------------------
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50/60 dark:from-slate-950 dark:via-slate-950 dark:to-slate-900 flex flex-col items-center justify-center font-sans px-4 py-8 text-gray-900 dark:text-slate-100 transition-colors duration-300">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50/60 dark:from-slate-950 dark:via-slate-950 dark:to-slate-900 flex flex-col items-center font-sans px-4 py-6 text-gray-900 dark:text-slate-100 transition-colors duration-300">
       {!user ? (
         <>
           {sessionMessage && (
@@ -245,177 +343,328 @@ const App = () => {
           <Login onLogin={handleLogin} />
         </>
       ) : (
-        <div className="w-full max-w-6xl p-8 bg-white/80 dark:bg-slate-900/80 backdrop-blur-lg rounded-3xl shadow-[0_25px_70px_-30px_rgba(15,23,42,0.45)] border border-white/70 dark:border-slate-800 transition-all duration-300">
-          {/* HEADER */}
-          <header className="relative flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between mb-8 border-b border-slate-200/70 dark:border-slate-800 pb-6">
-            <div className="text-center sm:text-left space-y-3">
-              <div className="inline-flex items-center gap-2 rounded-full bg-blue-50 text-blue-700 px-3 py-1 text-xs font-semibold dark:bg-blue-900/40 dark:text-blue-100">
-                <span aria-hidden="true">✨</span> Plataforma de insights confiables
-              </div>
-              <div className="space-y-2">
-                <h1 className="text-3xl font-bold tracking-tight text-slate-900 dark:text-white">InformeBF</h1>
-                <p className="text-base text-slate-600 dark:text-slate-300 max-w-xl">
-                  Home curado con estética SaaS: limpio, minimalista y preparado para que tus datos cobren vida con una experiencia cálida y profesional.
-                </p>
-              </div>
-            </div>
+        <>
+          <header className="sticky top-4 z-40 w-full flex justify-center">
+            <div className="w-full max-w-6xl px-3">
+              <div className="relative overflow-hidden rounded-2xl border border-white/70 dark:border-slate-800 bg-white/70 dark:bg-slate-900/70 backdrop-blur-2xl shadow-[0_20px_70px_-35px_rgba(15,23,42,0.6)]">
+                <div
+                  className="pointer-events-none absolute inset-0 bg-gradient-to-r from-blue-50/60 via-white/0 to-indigo-100/40 dark:from-slate-800/50 dark:via-slate-950/20 dark:to-indigo-900/50"
+                  aria-hidden="true"
+                />
+                <div className="relative flex items-center gap-3 sm:gap-4 px-4 sm:px-6 py-3">
+                  <div className="flex items-center gap-3">
+                    <div className="h-11 w-11 rounded-xl bg-gradient-to-br from-blue-500 via-indigo-500 to-cyan-400 text-white flex items-center justify-center shadow-lg shadow-blue-500/20 ring-4 ring-white/60 dark:ring-slate-800/60">
+                      <span className="text-lg" aria-hidden="true">
+                        ✨
+                      </span>
+                    </div>
+                    <div className="leading-tight">
+                      <p className="text-lg font-semibold text-slate-900 dark:text-white tracking-tight">
+                        InformeBF
+                      </p>
+                      <p className="text-xs text-slate-500 dark:text-slate-300">Insights con IA</p>
+                    </div>
+                  </div>
 
-            <div className="flex items-center justify-between sm:justify-end gap-3 w-full sm:w-auto">
-              <div className="text-right flex-1 sm:flex-none leading-tight">
-                <p className="text-sm font-semibold text-gray-700 dark:text-slate-100">
-                  Hola, {user.username} 👋
-                </p>
-                <p className="text-xs text-gray-500 dark:text-slate-300">
-                  Sesión personalizada activa
-                </p>
-              </div>
-
-              <nav className="hidden sm:flex flex-wrap items-center justify-end gap-3">
-                <div className="flex items-center gap-2 rounded-lg border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 p-1">
-                  <button
-                    onClick={() => navigateTo("home")}
-                    className={`px-4 py-2 rounded-md text-sm font-semibold transition ${
-                      activePage === "home"
-                        ? "bg-blue-600 text-white shadow"
-                        : "text-gray-700 dark:text-slate-100 hover:bg-gray-100 dark:hover:bg-slate-700"
-                    }`}
-                  >
-                    Inicio
-                  </button>
-                  {user?.role === "admin" && (
-                    <button
-                      onClick={() => navigateTo("config")}
-                      className={`px-4 py-2 rounded-md text-sm font-semibold transition ${
-                        activePage === "config"
-                          ? "bg-blue-600 text-white shadow"
-                          : "text-gray-700 dark:text-slate-100 hover:bg-gray-100 dark:hover:bg-slate-700"
-                      }`}
-                    >
-                      Configuración
-                    </button>
-                  )}
-                </div>
-
-                <button
-                  onClick={toggleTheme}
-                  className="flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 text-gray-700 dark:text-slate-100 shadow-sm hover:shadow-md transition"
-                  aria-pressed={theme === "dark"}
-                >
-                  <span className="text-lg" role="img" aria-hidden="true">
-                    {theme === "dark" ? "🌙" : "☀️"}
-                  </span>
-                  <span className="text-sm font-semibold">
-                    {theme === "dark" ? "Modo oscuro" : "Modo claro"}
-                  </span>
-                </button>
-
-                <button
-                  onClick={handleLogout}
-                  className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg transition-all duration-200"
-                >
-                  Cerrar sesión
-                </button>
-              </nav>
-
-              <button
-                className="sm:hidden inline-flex items-center justify-center rounded-lg border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 text-gray-700 dark:text-slate-100 p-2 shadow-sm hover:shadow-md transition"
-                onClick={() => setMenuOpen((prev) => !prev)}
-                aria-expanded={menuOpen}
-                aria-label="Abrir menú"
-              >
-                <span className="text-xl" role="img" aria-hidden="true">
-                  ☰
-                </span>
-              </button>
-            </div>
-
-            {menuOpen && (
-              <div className="sm:hidden absolute top-full right-0 mt-3 w-full rounded-xl border border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xl p-4 z-10">
-                <div className="flex flex-col gap-3">
-                  <div className="flex items-center gap-2 rounded-lg border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 p-2">
+                  <nav className="hidden lg:flex items-center gap-1 ml-4">
                     <button
                       onClick={() => navigateTo("home")}
-                      className={`flex-1 px-4 py-2 rounded-md text-sm font-semibold transition ${
+                      className={`group flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold transition-all duration-200 ${
                         activePage === "home"
-                          ? "bg-blue-600 text-white shadow"
-                          : "text-gray-700 dark:text-slate-100 hover:bg-gray-100 dark:hover:bg-slate-700"
+                          ? "bg-blue-600 text-white shadow-lg shadow-blue-500/30"
+                          : "text-slate-700 dark:text-slate-100 hover:bg-slate-100/70 dark:hover:bg-slate-800/70"
                       }`}
                     >
+                      <HomeIcon className="h-4 w-4 transition-transform duration-200 group-hover:-translate-y-0.5" />
                       Inicio
                     </button>
+
+                    <div className="relative">
+                      <button
+                        onClick={() => setModulesOpen((prev) => !prev)}
+                        className={`group flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold transition-all duration-200 ${
+                          modulesOpen
+                            ? "bg-slate-900 text-white shadow-lg shadow-indigo-500/20"
+                            : "text-slate-700 dark:text-slate-100 hover:bg-slate-100/70 dark:hover:bg-slate-800/70"
+                        }`}
+                        aria-expanded={modulesOpen}
+                        aria-haspopup="menu"
+                      >
+                        <BoxIcon className="h-4 w-4 transition-transform duration-200 group-hover:-translate-y-0.5" />
+                        Módulos
+                        <span className={`transition-transform duration-200 ${modulesOpen ? "rotate-180" : "rotate-0"}`}>
+                          ▾
+                        </span>
+                      </button>
+
+                      {modulesOpen && (
+                        <div className="absolute left-0 mt-2 w-64 rounded-2xl border border-white/70 dark:border-slate-800 bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl shadow-xl p-2 space-y-1">
+                          <button
+                            onClick={() => navigateToModule("analyze")}
+                            className={`group flex w-full items-start justify-between gap-2 rounded-xl px-3 py-2 text-sm text-left transition-all duration-200 hover:-translate-y-0.5 ${
+                              currentModule === "analyze"
+                                ? "bg-blue-600 text-white shadow-lg shadow-blue-500/30"
+                                : "text-slate-700 dark:text-slate-100 hover:bg-slate-100/80 dark:hover:bg-slate-800/70"
+                            }`}
+                          >
+                            <div className="flex flex-col gap-0.5">
+                              <span className="font-semibold">Carga y análisis</span>
+                              <span className="text-xs text-slate-500 dark:text-slate-300">Explora tus datos con IA</span>
+                            </div>
+                            <span className="rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-200 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide">
+                              Recomendado
+                            </span>
+                          </button>
+                          <button
+                            onClick={() => navigateToModule("movie")}
+                            className={`group flex w-full items-start gap-2 rounded-xl px-3 py-2 text-sm text-left transition-all duration-200 hover:-translate-y-0.5 ${
+                              currentModule === "movie"
+                                ? "bg-blue-600 text-white shadow-lg shadow-blue-500/30"
+                                : "text-slate-700 dark:text-slate-100 hover:bg-slate-100/80 dark:hover:bg-slate-800/70"
+                            }`}
+                          >
+                            <div className="flex flex-col gap-0.5">
+                              <span className="font-semibold">Película de datos</span>
+                              <span className="text-xs text-slate-500 dark:text-slate-300">Historias dinámicas</span>
+                            </div>
+                          </button>
+                          <button
+                            onClick={() => navigateToModule("compare")}
+                            className={`group flex w-full items-start gap-2 rounded-xl px-3 py-2 text-sm text-left transition-all duration-200 hover:-translate-y-0.5 ${
+                              currentModule === "compare"
+                                ? "bg-blue-600 text-white shadow-lg shadow-blue-500/30"
+                                : "text-slate-700 dark:text-slate-100 hover:bg-slate-100/80 dark:hover:bg-slate-800/70"
+                            }`}
+                          >
+                            <div className="flex flex-col gap-0.5">
+                              <span className="font-semibold">Comparativa</span>
+                              <span className="text-xs text-slate-500 dark:text-slate-300">Contrasta escenarios</span>
+                            </div>
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
                     {user?.role === "admin" && (
                       <button
                         onClick={() => navigateTo("config")}
-                        className={`flex-1 px-4 py-2 rounded-md text-sm font-semibold transition ${
+                        className={`group flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold transition-all duration-200 ${
                           activePage === "config"
-                            ? "bg-blue-600 text-white shadow"
-                            : "text-gray-700 dark:text-slate-100 hover:bg-gray-100 dark:hover:bg-slate-700"
+                            ? "bg-slate-900 text-white shadow-lg shadow-slate-900/30"
+                            : "text-slate-700 dark:text-slate-100 hover:bg-slate-100/70 dark:hover:bg-slate-800/70"
                         }`}
                       >
+                        <GearIcon className="h-4 w-4 transition-transform duration-200 group-hover:-translate-y-0.5" />
                         Configuración
                       </button>
                     )}
+                  </nav>
+
+                  <div className="hidden sm:flex items-center gap-3 sm:ml-auto">
+                    <div className="text-right leading-tight">
+                      <p className="text-sm font-semibold text-slate-800 dark:text-slate-50">
+                        Hola, {user.username} 👋
+                      </p>
+                      <p className="text-xs text-slate-500 dark:text-slate-300">Sesión activa y segura</p>
+                    </div>
+
+                    <button
+                      onClick={toggleTheme}
+                      aria-pressed={theme === "dark"}
+                      className="relative inline-flex items-center gap-2 rounded-full border border-white/70 dark:border-slate-700 bg-slate-100/80 dark:bg-slate-800/70 px-2 py-1 text-xs font-semibold text-slate-700 dark:text-slate-100 shadow-inner shadow-white/60 dark:shadow-none transition-all duration-300 hover:shadow-md hover:-translate-y-0.5"
+                    >
+                      <span
+                        className={`flex items-center justify-center h-6 w-6 rounded-full bg-white/90 dark:bg-slate-700 text-slate-800 dark:text-amber-100 shadow-sm transition-transform duration-300 ${
+                          theme === "dark" ? "translate-x-8" : "translate-x-0"
+                        }`}
+                      >
+                        {theme === "dark" ? (
+                          <MoonIcon className="h-3.5 w-3.5" />
+                        ) : (
+                          <SunIcon className="h-3.5 w-3.5" />
+                        )}
+                      </span>
+                      <span className="px-2">{theme === "dark" ? "Modo oscuro" : "Modo claro"}</span>
+                    </button>
+
+                    <button
+                      onClick={handleLogout}
+                      className="group inline-flex items-center gap-2 rounded-xl border border-slate-200 dark:border-slate-700 px-3 py-2 text-sm font-semibold text-slate-700 dark:text-slate-100 bg-white/70 dark:bg-slate-800/70 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md"
+                    >
+                      <LogoutIcon className="h-4 w-4 opacity-80 transition-transform duration-200 group-hover:-translate-y-0.5" />
+                      Cerrar sesión
+                    </button>
                   </div>
 
                   <button
-                    onClick={toggleTheme}
-                    className="flex items-center justify-between px-4 py-2 rounded-lg border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 text-gray-700 dark:text-slate-100 shadow-sm hover:shadow-md transition"
-                    aria-pressed={theme === "dark"}
-                  >
-                    <span className="flex items-center gap-2 text-sm font-semibold">
-                      <span className="text-lg" role="img" aria-hidden="true">
-                        {theme === "dark" ? "🌙" : "☀️"}
-                      </span>
-                      Modo oscuro
-                    </span>
-                    <span className="text-xs text-gray-500 dark:text-slate-300">
-                      {theme === "dark" ? "Activo" : "Desactivado"}
-                    </span>
-                  </button>
-
-                  <button
+                    className="inline-flex items-center justify-center rounded-xl border border-white/70 dark:border-slate-700 bg-white/70 dark:bg-slate-800/70 text-slate-700 dark:text-slate-100 p-2 shadow-sm hover:shadow-md transition lg:hidden ml-auto"
                     onClick={() => {
-                      setMenuOpen(false);
-                      handleLogout();
+                      setMenuOpen((prev) => !prev);
+                      setModulesOpen(false);
                     }}
-                    className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg transition-all duration-200"
+                    aria-expanded={menuOpen}
+                    aria-label="Abrir menú"
                   >
-                    Cerrar sesión
+                    <span className="text-lg" aria-hidden="true">
+                      ☰
+                    </span>
                   </button>
                 </div>
               </div>
-            )}
+            </div>
           </header>
 
-          {/* MAIN */}
-          <main className="space-y-10">
-            {activePage === "config" && user?.role === "admin" ? (
-              <ConfigurationPage
-                user={user}
-                onUnauthorized={handleUnauthorized}
+          {menuOpen && (
+            <div className="fixed inset-0 z-30 lg:hidden">
+              <div
+                className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
+                onClick={() => setMenuOpen(false)}
               />
-            ) : (
-              <>
-                <HomeModules
+              <div className="absolute right-4 top-4 w-72 rounded-2xl border border-white/70 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl shadow-2xl p-4 space-y-3 transform transition duration-200">
+                <div className="flex items-center gap-3 pb-2 border-b border-slate-200/70 dark:border-slate-800">
+                  <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-blue-500 via-indigo-500 to-cyan-400 text-white flex items-center justify-center shadow-lg shadow-blue-500/25">
+                    <span aria-hidden="true">✨</span>
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-slate-900 dark:text-white">InformeBF</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-300">AI Data Visualizer</p>
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => navigateTo("home")}
+                  className={`flex items-center gap-2 w-full rounded-xl px-3 py-2 text-sm font-semibold transition-all duration-200 hover:-translate-y-0.5 ${
+                    activePage === "home"
+                      ? "bg-blue-600 text-white shadow-lg shadow-blue-500/30"
+                      : "text-slate-800 dark:text-slate-100 bg-slate-100/80 dark:bg-slate-800/70"
+                  }`}
+                >
+                  <HomeIcon className="h-4 w-4" />
+                  Inicio
+                </button>
+
+                <div className="space-y-1">
+                  <p className="text-[11px] uppercase tracking-wide text-slate-400 dark:text-slate-500">Módulos</p>
+                  <button
+                    onClick={() => navigateToModule("analyze")}
+                    className={`flex items-center gap-2 w-full rounded-xl px-3 py-2 text-sm font-semibold transition-all duration-200 hover:-translate-y-0.5 ${
+                      currentModule === "analyze"
+                        ? "bg-blue-600 text-white shadow-lg shadow-blue-500/30"
+                        : "text-slate-800 dark:text-slate-100 bg-slate-100/80 dark:bg-slate-800/70"
+                    }`}
+                  >
+                    <span className="flex-1 text-left">Carga y análisis</span>
+                    <span className="rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-200 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide">
+                      Recomendado
+                    </span>
+                  </button>
+                  <button
+                    onClick={() => navigateToModule("movie")}
+                    className={`flex items-center gap-2 w-full rounded-xl px-3 py-2 text-sm font-semibold transition-all duration-200 hover:-translate-y-0.5 ${
+                      currentModule === "movie"
+                        ? "bg-blue-600 text-white shadow-lg shadow-blue-500/30"
+                        : "text-slate-800 dark:text-slate-100 bg-slate-100/80 dark:bg-slate-800/70"
+                    }`}
+                  >
+                    <span className="flex-1 text-left">Película de datos</span>
+                  </button>
+                  <button
+                    onClick={() => navigateToModule("compare")}
+                    className={`flex items-center gap-2 w-full rounded-xl px-3 py-2 text-sm font-semibold transition-all duration-200 hover:-translate-y-0.5 ${
+                      currentModule === "compare"
+                        ? "bg-blue-600 text-white shadow-lg shadow-blue-500/30"
+                        : "text-slate-800 dark:text-slate-100 bg-slate-100/80 dark:bg-slate-800/70"
+                    }`}
+                  >
+                    <span className="flex-1 text-left">Comparativa</span>
+                  </button>
+                </div>
+
+                {user?.role === "admin" && (
+                  <button
+                    onClick={() => navigateTo("config")}
+                    className={`flex items-center gap-2 w-full rounded-xl px-3 py-2 text-sm font-semibold transition-all duration-200 hover:-translate-y-0.5 ${
+                      activePage === "config"
+                        ? "bg-slate-900 text-white shadow-lg shadow-slate-900/30"
+                        : "text-slate-800 dark:text-slate-100 bg-slate-100/80 dark:bg-slate-800/70"
+                    }`}
+                  >
+                    <GearIcon className="h-4 w-4" />
+                    Configuración
+                  </button>
+                )}
+
+                <button
+                  onClick={toggleTheme}
+                  aria-pressed={theme === "dark"}
+                  className="flex items-center justify-between w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-100/80 dark:bg-slate-800/70 px-3 py-2 text-sm font-semibold text-slate-800 dark:text-slate-100 transition-all duration-200 hover:-translate-y-0.5"
+                >
+                  <span className="flex items-center gap-2">
+                    {theme === "dark" ? <MoonIcon className="h-4 w-4" /> : <SunIcon className="h-4 w-4" />}
+                    {theme === "dark" ? "Modo oscuro" : "Modo claro"}
+                  </span>
+                  <span className="text-xs text-slate-500 dark:text-slate-300">
+                    {theme === "dark" ? "Activo" : "Desactivado"}
+                  </span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    setMenuOpen(false);
+                    handleLogout();
+                  }}
+                  className="group flex items-center gap-2 w-full rounded-xl border border-slate-200 dark:border-slate-700 px-3 py-2 text-sm font-semibold text-slate-700 dark:text-slate-100 bg-white/70 dark:bg-slate-800/70 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md"
+                >
+                  <LogoutIcon className="h-4 w-4 opacity-80 transition-transform duration-200 group-hover:-translate-y-0.5" />
+                  Cerrar sesión
+                </button>
+              </div>
+            </div>
+          )}
+
+          <div className="w-full max-w-6xl p-8 bg-white/85 dark:bg-slate-900/80 backdrop-blur-lg rounded-3xl shadow-[0_25px_70px_-30px_rgba(15,23,42,0.45)] border border-white/70 dark:border-slate-800 transition-all duration-300 mt-6">
+            <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-6">
+              <div className="space-y-2">
+                <div className="inline-flex items-center gap-2 rounded-full bg-blue-50 text-blue-700 px-3 py-1 text-xs font-semibold dark:bg-blue-900/40 dark:text-blue-100 shadow-sm">
+                  <span aria-hidden="true">✨</span> Navegación cálida y clara
+                </div>
+                <h1 className="text-3xl font-bold tracking-tight text-slate-900 dark:text-white">InformeBF</h1>
+                <p className="text-base text-slate-600 dark:text-slate-300 max-w-2xl">
+                  Menú superior estilo SaaS para PYMES: limpio, amigable y con interacciones suaves que inspiran confianza en cada módulo.
+                </p>
+              </div>
+              <div className="rounded-2xl bg-slate-50/80 dark:bg-slate-800/70 border border-slate-200/80 dark:border-slate-700 px-4 py-3 text-sm text-slate-600 dark:text-slate-200 shadow-sm">
+                <p className="font-semibold text-slate-800 dark:text-white">Hola, {user.username} 👋</p>
+                <p className="text-xs text-slate-500 dark:text-slate-300">Disfruta de una navegación cuidada y responsiva</p>
+              </div>
+            </header>
+
+            <main className="space-y-10">
+              {activePage === "config" && user?.role === "admin" ? (
+                <ConfigurationPage
                   user={user}
                   onUnauthorized={handleUnauthorized}
-                  onDataReceived={(data) =>
-                    console.log("📈 Resultado del análisis:", data)
-                  }
-                  onNavigateModule={navigateToModule}
-                  currentModule={currentModule}
                 />
+              ) : (
+                <>
+                  <HomeModules
+                    user={user}
+                    onUnauthorized={handleUnauthorized}
+                    onDataReceived={(data) => console.log("📈 Resultado del análisis:", data)}
+                    onNavigateModule={navigateToModule}
+                    currentModule={currentModule}
+                  />
 
-                {renderModuleContent()}
-              </>
-            )}
-          </main>
+                  {renderModuleContent()}
+                </>
+              )}
+            </main>
 
-          {/* FOOTER */}
-          <footer className="mt-8 text-center text-gray-400 dark:text-slate-500 text-sm border-t border-gray-200 dark:border-slate-800 pt-4">
-            © {new Date().getFullYear()} InformeBF — Desarrollado con ❤️ y IA.
-          </footer>
-        </div>
+            <footer className="mt-8 text-center text-gray-400 dark:text-slate-500 text-sm border-t border-gray-200 dark:border-slate-800 pt-4">
+              © {new Date().getFullYear()} InformeBF — Desarrollado con ❤️ y IA.
+            </footer>
+          </div>
+        </>
       )}
     </div>
   );
