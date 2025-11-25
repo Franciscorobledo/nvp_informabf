@@ -253,9 +253,17 @@ def decode_access_token(token: str) -> dict:
     try:
         return jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
     except jwt.ExpiredSignatureError:
-        raise HTTPException(status_code=401, detail="El token ha expirado")
+        raise HTTPException(
+            status_code=401,
+            detail="El token ha expirado",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
     except jwt.InvalidTokenError:
-        raise HTTPException(status_code=401, detail="Token inválido")
+        raise HTTPException(
+            status_code=401,
+            detail="Token inválido",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
 
 
 def get_current_user(
@@ -265,11 +273,19 @@ def get_current_user(
     payload = decode_access_token(credentials.credentials)
     username = payload.get("sub")
     if not username:
-        raise HTTPException(status_code=401, detail="Token sin usuario válido")
+        raise HTTPException(
+            status_code=401,
+            detail="Token sin usuario válido",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
 
     user = get_user_by_username(db, username)
     if not user:
-        raise HTTPException(status_code=401, detail="Usuario no encontrado")
+        raise HTTPException(
+            status_code=401,
+            detail="Usuario no encontrado",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
 
     if not user.is_active:
         raise HTTPException(status_code=403, detail="La cuenta está desactivada")

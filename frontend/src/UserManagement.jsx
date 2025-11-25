@@ -29,6 +29,21 @@ const UserManagement = ({ onUnauthorized }) => {
     [token]
   );
 
+  const parseBackendMessage = async (response, fallbackMessage) => {
+    try {
+      const body = await response.json();
+      return body?.detail || body?.message || fallbackMessage;
+    } catch (err) {
+      try {
+        const text = await response.text();
+        return text || fallbackMessage;
+      } catch {
+        console.warn("No se pudo leer el detalle de error", err);
+        return fallbackMessage;
+      }
+    }
+  };
+
   const fetchUsers = async () => {
     if (!token) {
       onUnauthorized?.("Tu sesión expiró. Inicia sesión nuevamente.");
@@ -47,7 +62,11 @@ const UserManagement = ({ onUnauthorized }) => {
 
       if (!response.ok) {
         if ([401, 403].includes(response.status)) {
-          onUnauthorized?.("La sesión expiró. Vuelve a iniciar sesión.");
+          const detail = await parseBackendMessage(
+            response,
+            "La sesión expiró. Vuelve a iniciar sesión."
+          );
+          onUnauthorized?.(detail);
           return;
         }
 
@@ -130,7 +149,11 @@ const UserManagement = ({ onUnauthorized }) => {
 
       if (!response.ok) {
         if ([401, 403].includes(response.status)) {
-          onUnauthorized?.("La sesión expiró. Vuelve a iniciar sesión.");
+          const detail = await parseBackendMessage(
+            response,
+            "La sesión expiró. Vuelve a iniciar sesión."
+          );
+          onUnauthorized?.(detail);
           return;
         }
 
@@ -177,7 +200,11 @@ const UserManagement = ({ onUnauthorized }) => {
 
       if (!response.ok) {
         if ([401, 403].includes(response.status)) {
-          onUnauthorized?.("La sesión expiró. Vuelve a iniciar sesión.");
+          const detail = await parseBackendMessage(
+            response,
+            "La sesión expiró. Vuelve a iniciar sesión."
+          );
+          onUnauthorized?.(detail);
           return;
         }
 
@@ -215,7 +242,11 @@ const UserManagement = ({ onUnauthorized }) => {
 
       if (!response.ok) {
         if ([401, 403].includes(response.status)) {
-          onUnauthorized?.("La sesión expiró. Vuelve a iniciar sesión.");
+          const detail = await parseBackendMessage(
+            response,
+            "La sesión expiró. Vuelve a iniciar sesión."
+          );
+          onUnauthorized?.(detail);
           return;
         }
 
@@ -293,7 +324,11 @@ const UserManagement = ({ onUnauthorized }) => {
 
       if (!response.ok) {
         if ([401, 403].includes(response.status)) {
-          onUnauthorized?.("La sesión expiró. Vuelve a iniciar sesión.");
+          const detail = await parseBackendMessage(
+            response,
+            "La sesión expiró. Vuelve a iniciar sesión."
+          );
+          onUnauthorized?.(detail);
           return;
         }
 

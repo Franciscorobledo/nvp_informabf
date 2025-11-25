@@ -21,6 +21,21 @@ const AdminOpenAIUsage = ({ onUnauthorized }) => {
   const [usageSummary, setUsageSummary] = useState(null);
   const [summaryLoading, setSummaryLoading] = useState(false);
 
+  const parseBackendMessage = async (response, fallbackMessage) => {
+    try {
+      const body = await response.json();
+      return body?.detail || body?.message || fallbackMessage;
+    } catch (err) {
+      try {
+        const text = await response.text();
+        return text || fallbackMessage;
+      } catch {
+        console.warn("No se pudo leer el detalle de error", err);
+        return fallbackMessage;
+      }
+    }
+  };
+
   const fetchStatus = useCallback(async () => {
     const token = localStorage.getItem("token");
     if (!token) {
@@ -42,7 +57,11 @@ const AdminOpenAIUsage = ({ onUnauthorized }) => {
 
       if (!response.ok) {
         if ([401, 403].includes(response.status)) {
-          onUnauthorized?.("La sesión expiró. Vuelve a iniciar sesión.");
+          const detail = await parseBackendMessage(
+            response,
+            "La sesión expiró. Vuelve a iniciar sesión."
+          );
+          onUnauthorized?.(detail);
           return;
         }
 
@@ -85,7 +104,11 @@ const AdminOpenAIUsage = ({ onUnauthorized }) => {
 
       if (!response.ok) {
         if ([401, 403].includes(response.status)) {
-          onUnauthorized?.("La sesión expiró. Vuelve a iniciar sesión.");
+          const detail = await parseBackendMessage(
+            response,
+            "La sesión expiró. Vuelve a iniciar sesión."
+          );
+          onUnauthorized?.(detail);
           return;
         }
 
@@ -141,7 +164,11 @@ const AdminOpenAIUsage = ({ onUnauthorized }) => {
 
       if (!response.ok) {
         if ([401, 403].includes(response.status)) {
-          onUnauthorized?.("La sesión expiró. Vuelve a iniciar sesión.");
+          const detail = await parseBackendMessage(
+            response,
+            "La sesión expiró. Vuelve a iniciar sesión."
+          );
+          onUnauthorized?.(detail);
           return;
         }
 
