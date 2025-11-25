@@ -198,7 +198,7 @@ def _infer_dataset_purpose(df: pd.DataFrame) -> str:
         "financiero": ["gasto", "costo", "ingreso", "presupuesto", "margen"],
     }
 
-    lower_columns = " ".join(df.columns.str.lower())
+    lower_columns = " ".join(str(column).lower() for column in df.columns)
     for purpose, keywords in purpose_keywords.items():
         if any(keyword in lower_columns for keyword in keywords):
             return purpose
@@ -624,8 +624,9 @@ def _get_numeric_series(df, *candidates):
     return None
 
 
-def _normalize(text: str) -> str:
-    normalized = unicodedata.normalize("NFD", text)
+def _normalize(text: str | int | float) -> str:
+    safe_text = "" if text is None else str(text)
+    normalized = unicodedata.normalize("NFD", safe_text)
     without_accents = "".join(ch for ch in normalized if unicodedata.category(ch) != "Mn")
     return without_accents.lower()
 
