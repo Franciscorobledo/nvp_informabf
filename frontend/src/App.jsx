@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import Login from "./Login";
 import HomeModules from "../components/HomeModules";
 import ConfigurationPage from "./ConfigurationPage";
@@ -18,6 +18,7 @@ const App = () => {
   const [theme, setTheme] = useState("light");
   const [menuOpen, setMenuOpen] = useState(false);
   const [modulesOpen, setModulesOpen] = useState(false);
+  const moduleContentRef = useRef(null);
 
   const HomeIcon = ({ className = "" }) => (
     <svg
@@ -277,6 +278,16 @@ const App = () => {
     }
   };
 
+  const scrollToModuleContent = () => {
+    if (!moduleContentRef.current) return;
+
+    const offset = 100;
+    const targetPosition =
+      moduleContentRef.current.getBoundingClientRect().top + window.scrollY - offset;
+
+    window.scrollTo({ top: targetPosition, behavior: "smooth" });
+  };
+
   const navigateToModule = (moduleId) => {
     const moduleRoutes = {
       analyze: "/modules/analyze",
@@ -289,6 +300,7 @@ const App = () => {
     setMenuOpen(false);
     setModulesOpen(false);
     window.history.pushState({ module: moduleId }, "", moduleRoutes[moduleId] || "/");
+    scrollToModuleContent();
   };
 
   useEffect(() => {
@@ -299,6 +311,13 @@ const App = () => {
       window.history.replaceState({ page: "home" }, "", "/");
     }
   }, [user]);
+
+  useEffect(() => {
+    if (currentModule === "home") return;
+
+    const timeoutId = setTimeout(scrollToModuleContent, 50);
+    return () => clearTimeout(timeoutId);
+  }, [currentModule]);
 
   if (loading) {
     return (
@@ -638,7 +657,7 @@ const App = () => {
                     currentModule={currentModule}
                   />
 
-                  {renderModuleContent()}
+                  <div ref={moduleContentRef}>{renderModuleContent()}</div>
                 </>
               )}
             </main>
