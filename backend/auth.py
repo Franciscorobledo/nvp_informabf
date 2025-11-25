@@ -160,6 +160,16 @@ def _is_user_expired(user: User) -> bool:
         return False
 
     expires_at = user.expires_at
+
+    # Algunas importaciones históricas guardaron la fecha como str, lo que rompía el login
+    # de usuarios no-admin al evaluar tzinfo. Normalizamos antes de comparar.
+    if isinstance(expires_at, str):
+        parsed = _parse_expiration(expires_at)
+        if not parsed:
+            logging.warning("Formato de expiración inválido para usuario %s", user.username)
+            return False
+        expires_at = parsed
+
     if expires_at.tzinfo is None:
         expires_at = expires_at.replace(tzinfo=timezone.utc)
 
