@@ -17,6 +17,40 @@ import VisualizationExplorer from "./VisualizationExplorer";
 import AppButton from "./AppButton";
 
 const FileUpload = ({ onDataReceived, onUnauthorized, onNavigateModule }) => {
+  const PANEL_CONFIG = [
+    {
+      key: "csv",
+      title: "CSV estandarizados",
+      description: "Exportaciones de ERP, CRM o herramientas BI",
+      extensions: [".csv"],
+      icon: "🗂️",
+      badge: "Texto plano",
+    },
+    {
+      key: "xlsx",
+      title: "Excel empresarial",
+      description: "Plantillas contables y reportes de gestión",
+      extensions: [".xlsx", ".xls"],
+      icon: "📑",
+      badge: "Libro XLSX/XLS",
+    },
+    {
+      key: "zip",
+      title: "Paquetes comprimidos",
+      description: "Múltiples archivos CSV o Excel en un ZIP",
+      extensions: [".zip"],
+      icon: "🗜️",
+      badge: "ZIP seguro",
+    },
+  ];
+
+  const ACCEPTED_TYPES = {
+    general: [".csv", ".xlsx", ".xls", ".zip"],
+    csv: [".csv"],
+    xlsx: [".xlsx", ".xls"],
+    zip: [".zip"],
+  };
+
   const [files, setFiles] = useState([]);
   const [loading, setLoading] = useState(false);
   const [analysis, setAnalysis] = useState(null);
@@ -47,6 +81,8 @@ const FileUpload = ({ onDataReceived, onUnauthorized, onNavigateModule }) => {
   const [galleryMode, setGalleryMode] = useState("static");
   const [interactiveLimit, setInteractiveLimit] = useState(10);
   const filterSelectRef = useRef(null);
+  const fileInputsRef = useRef({});
+  const [activeDropZone, setActiveDropZone] = useState(null);
 
   const goToMovieModule = () => onNavigateModule?.("movie");
   const goToCompareModule = () => onNavigateModule?.("compare");
@@ -584,10 +620,49 @@ const FileUpload = ({ onDataReceived, onUnauthorized, onNavigateModule }) => {
     return charts.slice(0, 2);
   };
 
-  const handleFileChange = (e) => {
+  const normalizeExtensions = (type = "general") =>
+    (ACCEPTED_TYPES[type] || ACCEPTED_TYPES.general).map((ext) =>
+      ext.toLowerCase()
+    );
+
+  const handleFileSelection = (fileList, type = "general") => {
+    const allowedExtensions = normalizeExtensions(type);
+    const selectedFiles = Array.from(fileList || []);
+
+    const validFiles = selectedFiles.filter((file) =>
+      allowedExtensions.some((ext) => file.name.toLowerCase().endsWith(ext))
+    );
+
+    if (!validFiles.length) {
+      alert(
+        `Solo se aceptan archivos ${allowedExtensions.join(", ")} en este panel.`
+      );
+      return;
+    }
+
     setDemoMetadata(null);
-    setFiles(Array.from(e.target.files || []));
+    setFiles(validFiles);
+    setResultNotice("");
   };
+
+  const handleFileChange = (e, type = "general") => {
+    handleFileSelection(e.target.files, type);
+    e.target.value = "";
+  };
+
+  const handleDrop = (event, type = "general") => {
+    event.preventDefault();
+    setActiveDropZone(null);
+    handleFileSelection(event.dataTransfer?.files, type);
+  };
+
+  const handleDragOver = (event, type) => {
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "copy";
+    setActiveDropZone(type);
+  };
+
+  const handleDragLeave = () => setActiveDropZone(null);
 
   const downloadDriveFile = async (fileId, accessToken, suggestedName) => {
     try {
@@ -1032,7 +1107,7 @@ const FileUpload = ({ onDataReceived, onUnauthorized, onNavigateModule }) => {
       </div>
 
       {/* Subida de archivo */}
-      <div className="flex flex-col items-stretch sm:items-center gap-3 w-full px-2">
+      <div className="flex flex-col items-stretch sm:items-center gap-4 w-full px-2">
         <div className="flex flex-wrap gap-2 justify-center">
           <button
             onClick={() => setUploadMode("local")}
@@ -1064,28 +1139,100 @@ const FileUpload = ({ onDataReceived, onUnauthorized, onNavigateModule }) => {
         </div>
 
         {uploadMode === "local" ? (
-          <>
-            <label
-              htmlFor="fileInput"
-              className="w-full sm:w-auto text-sm font-medium text-gray-700 dark:text-slate-200 text-center"
-            >
-              Selecciona uno o varios archivos (.csv, .xlsx o .zip)
-            </label>
-            <input
-              id="fileInput"
-              type="file"
-              onChange={handleFileChange}
-              accept=".csv, .xlsx, .zip"
-              multiple
-              disabled={demoMetadata?.is_demo}
-              className="w-full sm:w-auto border border-gray-300 dark:border-slate-700 p-3 rounded-lg shadow-sm focus:ring focus:ring-blue-300 bg-white dark:bg-slate-900 dark:text-slate-100 dark:placeholder-slate-400"
-            />
+          <div className="w-full space-y-4 rounded-2xl border border-gray-200 bg-gradient-to-b from-white via-blue-50/60 to-white p-5 shadow-sm dark:border-slate-800 dark:from-slate-900 dark:via-slate-900/60 dark:to-slate-900">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-600 dark:text-blue-300">
+                  Carga corporativa segura
+                </p>
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                  Arrastra o selecciona tus archivos para analizarlos con IA
+                </h3>
+                <p className="text-sm text-gray-600 dark:text-slate-300">
+                  Admitimos CSV, Excel y ZIP. Procesamos varios archivos en un solo flujo y mantenemos la consistencia de un diseño empresarial.
+                </p>
+              </div>
+              <div className="inline-flex items-center gap-2 rounded-full bg-blue-100 px-4 py-2 text-xs font-semibold text-blue-700 shadow-sm dark:bg-blue-900/40 dark:text-blue-100">
+                <span className="h-2 w-2 rounded-full bg-green-500" aria-hidden="true" />
+                Listo para SAS empresarial
+              </div>
+            </div>
+
+            <div className="grid w-full gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {PANEL_CONFIG.map((panel) => {
+                const isActive = activeDropZone === panel.key;
+                const isDisabled = Boolean(demoMetadata?.is_demo);
+
+                return (
+                  <div
+                    key={panel.key}
+                    onClick={() => {
+                      if (isDisabled) return;
+                      fileInputsRef.current?.[panel.key]?.click();
+                    }}
+                    onDrop={(event) => handleDrop(event, panel.key)}
+                    onDragOver={(event) => handleDragOver(event, panel.key)}
+                    onDragLeave={handleDragLeave}
+                    className={`group relative flex h-full cursor-pointer flex-col gap-3 rounded-xl border-2 border-dashed p-4 text-left transition-all duration-200 ${
+                      isActive
+                        ? "border-blue-500 bg-blue-50/60 shadow-md dark:border-blue-400 dark:bg-blue-900/30"
+                        : "border-gray-200 bg-white hover:-translate-y-0.5 hover:shadow-lg dark:border-slate-800 dark:bg-slate-900"
+                    } ${isDisabled ? "cursor-not-allowed opacity-60" : ""}`}
+                  >
+                    <input
+                      type="file"
+                      multiple
+                      accept={panel.extensions.join(",")}
+                      disabled={isDisabled}
+                      className="sr-only"
+                      ref={(el) => (fileInputsRef.current[panel.key] = el)}
+                      onChange={(event) => handleFileChange(event, panel.key)}
+                    />
+
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex items-start gap-3">
+                        <span className="flex h-11 w-11 items-center justify-center rounded-lg bg-blue-50 text-xl text-blue-700 shadow-sm dark:bg-blue-900/40 dark:text-blue-100">
+                          {panel.icon}
+                        </span>
+                        <div>
+                          <p className="text-sm font-semibold text-gray-900 dark:text-white">
+                            {panel.title}
+                          </p>
+                          <p className="text-xs text-gray-600 dark:text-slate-300">
+                            {panel.description}
+                          </p>
+                        </div>
+                      </div>
+                      <span className="rounded-full bg-gray-100 px-3 py-1 text-[11px] font-semibold text-gray-700 dark:bg-slate-800 dark:text-slate-100">
+                        {panel.badge}
+                      </span>
+                    </div>
+
+                    <div className="space-y-1 rounded-lg bg-gray-50 p-3 text-xs text-gray-700 transition group-hover:bg-white/70 dark:bg-slate-800 dark:text-slate-200">
+                      <p className="flex items-center gap-2 font-semibold text-blue-700 dark:text-blue-200">
+                        <span className="text-lg" aria-hidden="true">
+                          ⬆️
+                        </span>
+                        Arrastra y suelta o haz clic para elegir
+                      </p>
+                      <p className="text-[11px] text-gray-600 dark:text-slate-300">
+                        Formatos permitidos: {panel.extensions.join(", ")} — carga uno o varios archivos.
+                      </p>
+                      <p className="text-[11px] text-gray-500 dark:text-slate-400">
+                        Alineado con estándares corporativos: cifrado en tránsito y trazabilidad de la carga.
+                      </p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
             {demoMetadata?.is_demo && (
-              <p className="text-xs text-amber-600 dark:text-amber-300 text-center">
+              <p className="text-xs font-medium text-amber-600 dark:text-amber-300">
                 Estás viendo datos de ejemplo. Inicia un análisis real para reemplazarlos.
               </p>
             )}
-          </>
+          </div>
         ) : (
           <div className="w-full space-y-2 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-xl p-4 shadow-sm">
             <p className="text-sm text-gray-700 dark:text-slate-200 font-medium">
@@ -1116,7 +1263,7 @@ const FileUpload = ({ onDataReceived, onUnauthorized, onNavigateModule }) => {
         )}
 
         {files.length > 0 && (
-          <p className="text-xs text-gray-500 dark:text-slate-400 text-center sm:text-left">
+          <p className="text-xs text-gray-600 dark:text-slate-300 text-center sm:text-left">
             {files.length === 1
               ? `Archivo listo: ${files[0].name}`
               : `${files.length} archivos listos para analizar`}
