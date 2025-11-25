@@ -630,10 +630,6 @@ const App = () => {
                   Menú superior estilo SaaS para PYMES: limpio, amigable y con interacciones suaves que inspiran confianza en cada módulo.
                 </p>
               </div>
-              <div className="rounded-2xl bg-slate-50/80 dark:bg-slate-800/70 border border-slate-200/80 dark:border-slate-700 px-4 py-3 text-sm text-slate-600 dark:text-slate-200 shadow-sm">
-                <p className="font-semibold text-slate-800 dark:text-white">Hola, {user.username} 👋</p>
-                <p className="text-xs text-slate-500 dark:text-slate-300">Disfruta de una navegación cuidada y responsiva</p>
-              </div>
             </header>
 
             <main className="space-y-10">
