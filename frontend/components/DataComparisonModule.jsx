@@ -15,6 +15,7 @@ import {
 import axios from "axios";
 import API_URL from "../src/api";
 import AppButton from "./AppButton";
+import LoadingBar from "./LoadingBar";
 
 const focusOptions = [
   { value: "todo", label: "Todo" },
@@ -24,42 +25,22 @@ const focusOptions = [
   { value: "reportes", label: "Reportes" },
 ];
 
+const stepMessages = {
+  subiendo_archivos: "Subiendo archivos…",
+  preparando_datos: "Preparando datos…",
+  leyendo_archivos: "Leyendo datasets…",
+  comparando_datasets: "Comparando datasets…",
+  generando_insights: "Generando insights…",
+  completo: "Comparativa lista",
+  error: "Ocurrió un error en la comparación",
+};
+
 const SummaryStat = ({ label, value, accent }) => (
   <div className="rounded-xl border border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-800/60 p-4 space-y-1">
     <p className="text-xs uppercase tracking-wide text-gray-500 dark:text-slate-400">{label}</p>
     <p className={`text-2xl font-bold ${accent ?? "text-gray-900 dark:text-white"}`}>{value}</p>
   </div>
 );
-
-const ProgressBar = ({ progress, step }) => {
-  const stepMessages = {
-    subiendo_archivos: "Subiendo archivos…",
-    preparando_datos: "Preparando datos…",
-    leyendo_archivos: "Leyendo datasets…",
-    comparando_datasets: "Comparando datasets…",
-    generando_insights: "Generando insights…",
-    completo: "Comparativa lista.",
-    error: "Ocurrió un error en la comparación.",
-  };
-
-  return (
-    <div className="space-y-2 rounded-xl border border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4">
-      <div className="flex items-center justify-between text-sm font-semibold text-gray-700 dark:text-slate-200">
-        <span>{stepMessages[step] || "Procesando…"}</span>
-        <span>{Math.round(progress)}%</span>
-      </div>
-      <div className="h-3 overflow-hidden rounded-full bg-gray-100 dark:bg-slate-800">
-        <div
-          className="h-full rounded-full bg-blue-600 transition-all duration-500"
-          style={{ width: `${Math.min(progress, 100)}%` }}
-          aria-valuenow={progress}
-          aria-valuemin={0}
-          aria-valuemax={100}
-        />
-      </div>
-    </div>
-  );
-};
 
 const DataComparisonModule = ({ onUnauthorized }) => {
   const [fileA, setFileA] = useState(null);
@@ -442,11 +423,19 @@ const DataComparisonModule = ({ onUnauthorized }) => {
       </form>
 
       {isUploading && (
-        <ProgressBar progress={uploadProgress} step="subiendo_archivos" />
+        <LoadingBar
+          progress={uploadProgress}
+          label={stepMessages.subiendo_archivos}
+          helperText="Estamos asegurando que ambos archivos se suban correctamente."
+        />
       )}
 
       {!isUploading && isComparing && (
-        <ProgressBar progress={compareProgress} step={compareStep} />
+        <LoadingBar
+          progress={compareProgress}
+          label={stepMessages[compareStep] || "Procesando comparativa…"}
+          helperText="Generando comparativa inteligente con IA."
+        />
       )}
 
       {preSummary && (

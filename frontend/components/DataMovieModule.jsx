@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from "react";
 import DataMoviePlayer from "./DataMoviePlayer";
 import AppButton from "./AppButton";
+import LoadingBar from "./LoadingBar";
 
 const focusOptions = [
   { value: "todos", label: "🔎 Todo / sin filtro" },
@@ -195,6 +196,15 @@ const DataMovieModule = ({ onUnauthorized }) => {
           Probar película con datos de ejemplo
         </AppButton>
       </div>
+
+      {isLoading && (
+        <LoadingBar
+          indeterminate
+          progress={64}
+          label="Generando tu película de datos"
+          helperText="Estamos analizando los KPIs y armando la narrativa visual."
+        />
+      )}
 
       {response && (
         <div className="rounded-3xl border border-slate-800 bg-slate-950/80 p-4">

@@ -15,6 +15,7 @@ import {
 import DatasetSummaryPanel from "./DatasetSummaryPanel";
 import VisualizationExplorer from "./VisualizationExplorer";
 import AppButton from "./AppButton";
+import LoadingBar from "./LoadingBar";
 
 const FileUpload = ({ onDataReceived, onUnauthorized, onNavigateModule }) => {
   const [files, setFiles] = useState([]);
@@ -1264,46 +1265,32 @@ const FileUpload = ({ onDataReceived, onUnauthorized, onNavigateModule }) => {
                   {getStepLabel(analysisStep)}
                 </h3>
               </div>
+            </div>
+
+            <div className="space-y-3">
+              {uploadProgress > 0 && (
+                <LoadingBar
+                  progress={uploadProgress}
+                  label="Subiendo archivo(s)…"
+                  helperText={
+                    uploadProgress < 100
+                      ? "Cifrando y verificando tus archivos antes de analizarlos."
+                      : "Subida completada. Iniciando análisis completo."
+                  }
+                />
+              )}
+
               {displayProgress < 100 && (
-                <span className="text-sm font-semibold text-blue-600 dark:text-blue-300">
-                  {Math.round(displayProgress)}%
-                </span>
+                <LoadingBar
+                  progress={displayProgress}
+                  label={getStepLabel(analysisStep)}
+                  helperText={
+                    statusMessage ||
+                    "El asistente está limpiando, conectando y resumiendo tu dataset."
+                  }
+                />
               )}
             </div>
-            {uploadProgress > 0 && (
-              <div className="space-y-2 mb-4">
-                <p className="text-xs font-semibold text-gray-600 dark:text-slate-300">
-                  Progreso de subida
-                </p>
-                <div className="w-full h-2.5 rounded-full bg-gray-100 dark:bg-slate-800 overflow-hidden">
-                  <div
-                    className="h-full bg-gradient-to-r from-amber-400 via-orange-500 to-amber-600 transition-all duration-500"
-                    style={{ width: `${Math.min(uploadProgress, 100)}%` }}
-                  />
-                </div>
-                <p className="text-xs text-gray-600 dark:text-slate-300">
-                  {uploadProgress < 100
-                    ? "Preparando archivo…"
-                    : "Subida completada. Iniciando análisis completo…"}
-                </p>
-              </div>
-            )}
-            {displayProgress < 100 && (
-              <div className="space-y-2">
-                <p className="text-xs font-semibold text-gray-600 dark:text-slate-300">
-                  Progreso del análisis
-                </p>
-                <div className="w-full h-3 rounded-full bg-gray-100 dark:bg-slate-800 overflow-hidden">
-                  <div
-                    className="h-full bg-gradient-to-r from-blue-500 via-indigo-500 to-emerald-400 transition-all duration-500"
-                    style={{ width: `${Math.min(displayProgress, 100)}%` }}
-                  />
-                </div>
-              </div>
-            )}
-            {statusMessage && (
-              <p className="text-xs text-gray-600 dark:text-slate-300 mt-2">{statusMessage}</p>
-            )}
           </div>
 
           {(analysisError || resultNotice) && (
