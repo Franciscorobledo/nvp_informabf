@@ -128,7 +128,8 @@ const App = () => {
     setActivePage("home");
     setCurrentModule("home");
     setMenuOpen(false);
-    window.history.pushState({ page: "home" }, "", "/");
+    window.history.replaceState({ page: "home" }, "", "/");
+    window.scrollTo(0, 0);
   };
 
   const handleUnauthorized = (message) => {
@@ -176,6 +177,15 @@ const App = () => {
     setMenuOpen(false);
     window.history.pushState({ module: moduleId }, "", moduleRoutes[moduleId] || "/");
   };
+
+  useEffect(() => {
+    if (!user) {
+      setActivePage("home");
+      setCurrentModule("home");
+      setMenuOpen(false);
+      window.history.replaceState({ page: "home" }, "", "/");
+    }
+  }, [user]);
 
   // ⏳ Pantalla de carga inicial
   if (loading) {
