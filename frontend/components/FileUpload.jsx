@@ -14,6 +14,7 @@ import {
 } from "recharts";
 import DatasetSummaryPanel from "./DatasetSummaryPanel";
 import VisualizationExplorer from "./VisualizationExplorer";
+import AppButton from "./AppButton";
 
 const FileUpload = ({ onDataReceived, onUnauthorized, onNavigateModule }) => {
   const [files, setFiles] = useState([]);
@@ -1122,26 +1123,29 @@ const FileUpload = ({ onDataReceived, onUnauthorized, onNavigateModule }) => {
           </p>
         )}
 
-        <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
-          <button
+        <div className="flex flex-col sm:flex-row gap-3 w-full">
+          <AppButton
             onClick={handleUpload}
-            disabled={loading || isAnalyzing || files.length === 0 || demoMetadata?.is_demo}
-            className={`flex-1 px-6 py-3 rounded-lg font-semibold transition-all duration-300 ${
-              loading || isAnalyzing || files.length === 0 || demoMetadata?.is_demo
-                ? "bg-gray-400 text-white cursor-not-allowed"
-                : "bg-blue-600 hover:bg-blue-700 text-white shadow"
-            }`}
+            disabled={files.length === 0 || demoMetadata?.is_demo}
+            loading={loading || isAnalyzing}
+            loadingText="Analizando..."
+            fullWidth
+            className="sm:flex-1"
           >
-            {loading || isAnalyzing ? "Analizando..." : "Analizar archivo(s)"}
-          </button>
+            Analizar archivo(s)
+          </AppButton>
 
-          <button
+          <AppButton
             onClick={handleDemoAnalyze}
             disabled={isAnalyzing}
-            className="flex-1 px-6 py-3 rounded-lg font-semibold border border-emerald-300 text-emerald-700 dark:text-emerald-200 bg-emerald-50 dark:bg-emerald-900/30 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 transition shadow-sm"
+            loading={isAnalyzing && !analysis}
+            loadingText="Cargando demo…"
+            variant="secondary"
+            fullWidth
+            className="sm:flex-1"
           >
-            {isAnalyzing && !analysis ? "Cargando demo…" : "Probar con datos de ejemplo"}
-          </button>
+            Probar con datos de ejemplo
+          </AppButton>
         </div>
       </div>
 

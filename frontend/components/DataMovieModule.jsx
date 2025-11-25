@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from "react";
 import DataMoviePlayer from "./DataMoviePlayer";
+import AppButton from "./AppButton";
 
 const focusOptions = [
   { value: "todos", label: "🔎 Todo / sin filtro" },
@@ -173,23 +174,26 @@ const DataMovieModule = ({ onUnauthorized }) => {
       )}
 
       <div className="flex flex-col sm:flex-row gap-3">
-        <button
+        <AppButton
           onClick={handleSubmit}
-          disabled={isLoading}
-          className={`flex-1 inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl font-semibold text-white shadow-md transition focus:outline-none focus:ring-4 focus:ring-emerald-200 ${
-            isLoading ? "bg-emerald-400 cursor-not-allowed" : "bg-emerald-600 hover:bg-emerald-700"
-          }`}
+          loading={isLoading}
+          loadingText="Generando…"
+          fullWidth
+          className="sm:flex-1"
         >
-          {isLoading ? "Generando…" : "Generar película de datos"}
-        </button>
+          Generar película de datos
+        </AppButton>
 
-        <button
+        <AppButton
           onClick={handleDemoMovie}
-          disabled={isLoading}
-          className="flex-1 inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl font-semibold border border-amber-300 text-amber-800 dark:text-amber-200 bg-amber-50 dark:bg-amber-900/30 hover:bg-amber-100 dark:hover:bg-amber-900/50 transition"
+          loading={isLoading}
+          loadingText="Cargando demo…"
+          variant="secondary"
+          fullWidth
+          className="sm:flex-1"
         >
-          {isLoading ? "Cargando demo…" : "Probar película con datos de ejemplo"}
-        </button>
+          Probar película con datos de ejemplo
+        </AppButton>
       </div>
 
       {response && (
