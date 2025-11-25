@@ -117,12 +117,21 @@ const App = () => {
   };
 
   // 🔒 Cierre de sesión
-  const handleLogout = (message = "") => {
+  const handleLogout = (eventOrMessage = "") => {
     console.log("👋 Cerrando sesión...");
+
+    const isEvent =
+      eventOrMessage && typeof eventOrMessage === "object" && "preventDefault" in eventOrMessage;
+
+    if (isEvent) {
+      eventOrMessage.preventDefault();
+    }
+
     clearStoredSession();
+
+    const message = typeof eventOrMessage === "string" ? eventOrMessage : "";
     setSessionMessage(
-      message ||
-        "Sesión cerrada. Vuelve a iniciar sesión para continuar."
+      message || "Sesión cerrada. Vuelve a iniciar sesión para continuar."
     );
     setUser(null);
     setActivePage("home");
