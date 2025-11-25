@@ -329,7 +329,7 @@ const App = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50/60 dark:from-slate-950 dark:via-slate-950 dark:to-slate-900 flex flex-col items-center font-sans px-4 py-6 text-gray-900 dark:text-slate-100 transition-colors duration-300">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50/60 dark:from-slate-950 dark:via-slate-950 dark:to-slate-900 flex flex-col items-center font-sans px-4 pt-28 pb-10 text-gray-900 dark:text-slate-100 transition-colors duration-300">
       {!user ? (
         <>
           {sessionMessage && (
@@ -344,7 +344,7 @@ const App = () => {
         </>
       ) : (
         <>
-          <header className="sticky top-4 z-40 w-full flex justify-center">
+          <header className="fixed top-0 left-0 right-0 z-40 w-full flex justify-center px-2 sm:px-0">
             <div className="w-full max-w-6xl px-3">
               <div className="relative overflow-hidden rounded-2xl border border-white/70 dark:border-slate-800 bg-white/70 dark:bg-slate-900/70 backdrop-blur-2xl shadow-[0_20px_70px_-35px_rgba(15,23,42,0.6)]">
                 <div
@@ -625,9 +625,6 @@ const App = () => {
           <div className="w-full max-w-6xl p-8 bg-white/85 dark:bg-slate-900/80 backdrop-blur-lg rounded-3xl shadow-[0_25px_70px_-30px_rgba(15,23,42,0.45)] border border-white/70 dark:border-slate-800 transition-all duration-300 mt-6">
             <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-6">
               <div className="space-y-2">
-                <div className="inline-flex items-center gap-2 rounded-full bg-blue-50 text-blue-700 px-3 py-1 text-xs font-semibold dark:bg-blue-900/40 dark:text-blue-100 shadow-sm">
-                  <span aria-hidden="true">✨</span> Navegación cálida y clara
-                </div>
                 <h1 className="text-3xl font-bold tracking-tight text-slate-900 dark:text-white">InformeBF</h1>
                 <p className="text-base text-slate-600 dark:text-slate-300 max-w-2xl">
                   Menú superior estilo SaaS para PYMES: limpio, amigable y con interacciones suaves que inspiran confianza en cada módulo.
