@@ -1,7 +1,5 @@
 import React from "react";
 import FileUpload from "./FileUpload";
-import UserManagement from "../src/UserManagement";
-import AdminOpenAIUsage from "../src/AdminOpenAIUsage";
 
 const DataUploadAnalysis = ({
   user,
@@ -26,16 +24,6 @@ const DataUploadAnalysis = ({
         onDataReceived={onDataReceived}
         onNavigateModule={onNavigateModule}
       />
-
-      {user?.role === "admin" && (
-        <div className="mt-6 space-y-3">
-          <h3 className="text-lg font-semibold text-gray-700 dark:text-slate-100 text-center">
-            👤 Administración de usuarios
-          </h3>
-          <UserManagement onUnauthorized={onUnauthorized} />
-          <AdminOpenAIUsage onUnauthorized={onUnauthorized} />
-        </div>
-      )}
 
       <div className="text-gray-600 dark:text-slate-300 text-sm text-center italic">
         Carga tus archivos .CSV o .XLSX para generar visualizaciones automáticas.
