@@ -312,6 +312,20 @@ const DataMoviePlayer = ({ dataMovie }) => {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const playerRef = useRef(null);
 
+  const goToScene = useCallback(
+    (idx, shouldPlay = null) => {
+      if (!scenes.length) return;
+      const clamped = Math.min(Math.max(idx, 0), scenes.length - 1);
+      setCurrentSceneIndex(clamped);
+      if (typeof shouldPlay === "boolean") {
+        setIsPlaying(shouldPlay);
+      }
+    },
+    [scenes.length]
+  );
+
+  const hasScenes = hasPlayableDataMovie(dataMovie) && scenes.length > 0;
+  
   useEffect(() => {
     if (!scenes.length) return;
     setCurrentSceneIndex(0);
@@ -381,22 +395,8 @@ const DataMoviePlayer = ({ dataMovie }) => {
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [currentSceneIndex, goToScene, hasScenes]);
-
-  const hasScenes = hasPlayableDataMovie(dataMovie) && scenes.length > 0;
   const currentScene = scenes[currentSceneIndex] || {};
   const currentDefinition = SCENE_REGISTRY[currentScene.type] || SCENE_REGISTRY.fallback;
-
-  const goToScene = useCallback(
-    (idx, shouldPlay = null) => {
-      if (!scenes.length) return;
-      const clamped = Math.min(Math.max(idx, 0), scenes.length - 1);
-      setCurrentSceneIndex(clamped);
-      if (typeof shouldPlay === "boolean") {
-        setIsPlaying(shouldPlay);
-      }
-    },
-    [scenes.length]
-  );
 
   const toggleFullscreen = async () => {
     if (!playerRef.current) return;

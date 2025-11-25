@@ -24,6 +24,7 @@ const DataMovieModule = ({ onUnauthorized }) => {
 
   const handleSubmit = async () => {
     setError("");
+    setResponse(null);
     if (!file) {
       setError("Selecciona un archivo para generar la película de datos.");
       return;
@@ -60,6 +61,11 @@ const DataMovieModule = ({ onUnauthorized }) => {
       }
 
       const data = await res.json();
+      if (!data?.data_movie) {
+        throw new Error(
+          "La respuesta no contiene la película de datos. Intenta nuevamente o usa el modo demo."
+        );
+      }
       setResponse(data);
     } catch (err) {
       console.error("Error al generar película de datos", err);
@@ -91,6 +97,9 @@ const DataMovieModule = ({ onUnauthorized }) => {
       }
 
       const data = await res.json();
+      if (!data?.data_movie) {
+        throw new Error("No se pudo cargar la película demo. Intenta más tarde.");
+      }
       setResponse(data);
     } catch (err) {
       console.error("Error al generar película demo", err);
