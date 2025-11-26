@@ -418,7 +418,7 @@ const App = () => {
         <>
           <header className="fixed top-0 left-0 right-0 z-40 w-full flex justify-center px-2 sm:px-0">
             <div className="w-full max-w-6xl px-3">
-              <div className="relative overflow-hidden rounded-2xl border border-white/70 dark:border-slate-800 bg-white/70 dark:bg-slate-900/70 backdrop-blur-2xl shadow-[0_20px_70px_-35px_rgba(15,23,42,0.6)]">
+              <div className="relative overflow-hidden lg:overflow-visible rounded-2xl border border-white/70 dark:border-slate-800 bg-white/70 dark:bg-slate-900/70 backdrop-blur-2xl shadow-[0_20px_70px_-35px_rgba(15,23,42,0.6)]">
                 <div
                   className="pointer-events-none absolute inset-0 bg-gradient-to-r from-blue-50/60 via-white/0 to-indigo-100/40 dark:from-slate-800/50 dark:via-slate-950/20 dark:to-indigo-900/50"
                   aria-hidden="true"
@@ -704,34 +704,6 @@ const App = () => {
                   <span className="inline-flex items-center gap-2 rounded-full border border-emerald-200/80 dark:border-emerald-900/50 bg-emerald-50/70 dark:bg-emerald-900/30 px-3 py-1 text-xs font-semibold text-emerald-700 dark:text-emerald-100 shadow-sm">
                     <ClockIcon className="h-4 w-4" /> Listo en minutos
                   </span>
-                </div>
-
-                <h1 className="text-3xl sm:text-4xl font-bold tracking-tight text-slate-900 dark:text-white leading-tight">
-                  Tus datos, explicados en minutos
-                </h1>
-                <p className="text-base text-slate-600 dark:text-slate-300 max-w-2xl">
-                  Panel SaaS directo al grano: sube, anima o compara tus datos sin textos de más.
-                </p>
-
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
-                  <div className="flex items-start gap-3 rounded-2xl border border-white/80 dark:border-slate-800 bg-white/80 dark:bg-slate-900/60 px-4 py-3 shadow-sm">
-                    <BoxIcon className="h-5 w-5 text-blue-600 dark:text-blue-300" />
-                    <div className="space-y-0.5">
-                      <p className="text-sm font-semibold text-slate-900 dark:text-white">Arquitectura modular</p>
-                    </div>
-                  </div>
-                  <div className="flex items-start gap-3 rounded-2xl border border-white/80 dark:border-slate-800 bg-white/80 dark:bg-slate-900/60 px-4 py-3 shadow-sm">
-                    <ClockIcon className="h-5 w-5 text-amber-500 dark:text-amber-300" />
-                    <div className="space-y-0.5">
-                      <p className="text-sm font-semibold text-slate-900 dark:text-white">Velocidad inmediata</p>
-                    </div>
-                  </div>
-                  <div className="flex items-start gap-3 rounded-2xl border border-white/80 dark:border-slate-800 bg-white/80 dark:bg-slate-900/60 px-4 py-3 shadow-sm">
-                    <ShieldIcon className="h-5 w-5 text-emerald-600 dark:text-emerald-300" />
-                    <div className="space-y-0.5">
-                      <p className="text-sm font-semibold text-slate-900 dark:text-white">Confianza asegurada</p>
-                    </div>
-                  </div>
                 </div>
               </div>
             </header>
