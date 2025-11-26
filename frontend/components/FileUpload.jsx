@@ -1431,7 +1431,10 @@ const FileUpload = ({ onDataReceived, onUnauthorized, onNavigateModule }) => {
                         Datos listos para compartir
                       </span>
                     </div>
-                    <DatasetSummaryPanel summary={filterSummaryByCategory(analysis.summary)} />
+                    <DatasetSummaryPanel
+                      summary={filterSummaryByCategory(analysis.summary)}
+                      headlessCoreKpi={analysis?.data_health?.health_score}
+                    />
                   </div>
                 </div>
               )}
