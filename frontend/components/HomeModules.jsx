@@ -1,5 +1,64 @@
 import React, { useMemo, useState, useEffect } from "react";
 
+const BoxIcon = ({ className = "" }) => (
+  <svg
+    className={className}
+    viewBox="0 0 24 24"
+    fill="none"
+    xmlns="http://www.w3.org/2000/svg"
+  >
+    <path
+      d="m4.5 7 7.5 4.25L19.5 7m-15 0L12 2.75 19.5 7m-15 0v10.25L12 22l7.5-4.75V7"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </svg>
+);
+
+const ClockIcon = ({ className = "" }) => (
+  <svg
+    className={className}
+    viewBox="0 0 24 24"
+    fill="none"
+    xmlns="http://www.w3.org/2000/svg"
+  >
+    <circle cx="12" cy="12" r="8.5" stroke="currentColor" strokeWidth="1.6" />
+    <path
+      d="M12 7.5V12l2.5 1.5"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </svg>
+);
+
+const ShieldIcon = ({ className = "" }) => (
+  <svg
+    className={className}
+    viewBox="0 0 24 24"
+    fill="none"
+    xmlns="http://www.w3.org/2000/svg"
+  >
+    <path
+      d="M12 21s7-3.5 7-10.5V6.25L12 3 5 6.25V10.5C5 17.5 12 21 12 21Z"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    <path
+      d="m9.5 12.25 1.75 1.75 3.25-3.5"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </svg>
+);
+
 const moduleDefinitions = [
   {
     id: "analyze",
@@ -49,19 +108,43 @@ const HomeModules = ({ currentModule = "home", onNavigateModule }) => {
 
   return (
     <div className="space-y-10">
-      <div className="space-y-3 text-center">
-        <div className="mx-auto inline-flex items-center gap-2 rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700 ring-1 ring-blue-100 dark:bg-blue-900/40 dark:text-blue-100 dark:ring-blue-800/70">
-          <span aria-hidden="true">●</span> Herramientas listas para tu negocio
+      <div className="space-y-4 text-center">
+        <div className="flex flex-wrap items-center justify-center gap-3">
+          {[
+            { label: "Motor IA", tone: "from-blue-500/90 to-indigo-500/90", icon: "⚡" },
+            { label: "Flujos automatizados", tone: "from-cyan-500/90 to-blue-500/90", icon: "🛰️" },
+            { label: "Cifrado cloud", tone: "from-emerald-500/90 to-teal-500/90", icon: "🔒" },
+          ].map((pill) => (
+            <span
+              key={pill.label}
+              className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-[11px] font-semibold text-white shadow-sm ring-1 ring-white/70 bg-gradient-to-r ${pill.tone}`}
+            >
+              <span aria-hidden="true" className="text-base">
+                {pill.icon}
+              </span>
+              {pill.label}
+            </span>
+          ))}
         </div>
-        <h2 className="text-3xl font-semibold tracking-tight text-gray-900 dark:text-white">
-          Conoce tus datos en minutos
-        </h2>
-        <p className="mx-auto max-w-2xl text-base text-gray-600 dark:text-slate-300">
-          Activa el módulo que necesitas y obtén resultados sin rodeos.
-        </p>
+
+        <div className="flex flex-col items-center gap-3">
+          <div className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-500 text-white shadow-lg shadow-blue-500/30">
+            <span aria-hidden="true" className="text-xl">
+              ✨
+            </span>
+          </div>
+          <div className="space-y-2">
+            <h2 className="text-3xl font-semibold tracking-tight text-transparent bg-gradient-to-r from-sky-500 via-indigo-600 to-purple-600 bg-clip-text sm:text-4xl">
+              Conoce tus datos en minutos
+            </h2>
+            <p className="mx-auto max-w-2xl text-base text-gray-600 dark:text-slate-300">
+              Panel inteligente con micro‑interacciones, animación y comparativas listas para activar con un clic.
+            </p>
+          </div>
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-8 md:grid-cols-2 xl:grid-cols-2">
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
         {cards.map((module) => (
           <div
             key={module.id}
@@ -128,6 +211,30 @@ const HomeModules = ({ currentModule = "home", onNavigateModule }) => {
             </div>
           </div>
         ))}
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 rounded-2xl border border-slate-200/70 bg-white/80 p-5 shadow-[0_20px_60px_-35px_rgba(15,23,42,0.35)] dark:border-slate-800 dark:bg-slate-900/70 md:grid-cols-3">
+        <div className="flex items-start gap-3 rounded-xl border border-slate-100/80 bg-white/70 px-4 py-3 shadow-sm dark:border-slate-800 dark:bg-slate-800/60">
+          <BoxIcon className="h-5 w-5 text-blue-600 dark:text-blue-300" />
+          <div className="space-y-0.5 text-left">
+            <p className="text-sm font-semibold text-slate-900 dark:text-white">Arquitectura modular</p>
+            <p className="text-xs text-slate-500 dark:text-slate-300">Activa solo los módulos que necesitas.</p>
+          </div>
+        </div>
+        <div className="flex items-start gap-3 rounded-xl border border-slate-100/80 bg-white/70 px-4 py-3 shadow-sm dark:border-slate-800 dark:bg-slate-800/60">
+          <ClockIcon className="h-5 w-5 text-amber-500 dark:text-amber-300" />
+          <div className="space-y-0.5 text-left">
+            <p className="text-sm font-semibold text-slate-900 dark:text-white">Velocidad inmediata</p>
+            <p className="text-xs text-slate-500 dark:text-slate-300">Insights listos en cuestión de minutos.</p>
+          </div>
+        </div>
+        <div className="flex items-start gap-3 rounded-xl border border-slate-100/80 bg-white/70 px-4 py-3 shadow-sm dark:border-slate-800 dark:bg-slate-800/60">
+          <ShieldIcon className="h-5 w-5 text-emerald-600 dark:text-emerald-300" />
+          <div className="space-y-0.5 text-left">
+            <p className="text-sm font-semibold text-slate-900 dark:text-white">Confianza asegurada</p>
+            <p className="text-xs text-slate-500 dark:text-slate-300">Protección y gobernanza desde el inicio.</p>
+          </div>
+        </div>
       </div>
     </div>
   );
