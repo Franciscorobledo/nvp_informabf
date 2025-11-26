@@ -45,6 +45,7 @@ from utils.openai_monitor import get_usage_snapshot
 from usage_api import router as usage_router
 from utils.job_store import JobStore
 from utils.compare_job_store import CompareJobStore
+from utils.data_movie_store import DataMovieStore
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
@@ -85,6 +86,7 @@ logging.info("🔐 OPENAI_API_KEY presente: %s", "sí" if get_openai_api_key() e
 app = FastAPI(title="InformeBF - Intelligent Data Visualizer")
 job_store = JobStore()
 compare_job_store = CompareJobStore()
+data_movie_store = DataMovieStore()
 
 
 class OpenAITokenPayload(BaseModel):
@@ -203,6 +205,90 @@ def clean_base64_image(image_data: str):
         return base64.b64decode(image_data)
     except Exception:
         return None
+
+
+def _movie_to_pdf(data_movie: dict) -> io.BytesIO:
+    """Genera un PDF simple a partir de las escenas de la película."""
+
+    buffer = io.BytesIO()
+    pdf = canvas.Canvas(buffer, pagesize=letter)
+    width, height = letter
+
+    title = data_movie.get("movie_title") or "Película de datos"
+    subtitle = data_movie.get("movie_subtitle") or "Narrativa automática"
+
+    pdf.setTitle(title)
+    pdf.setFont("Helvetica-Bold", 16)
+    pdf.drawString(40, height - 50, title)
+    pdf.setFont("Helvetica", 12)
+    pdf.drawString(40, height - 70, subtitle)
+
+    y = height - 100
+    scenes = data_movie.get("scenes") or []
+    for scene in scenes:
+        pdf.setFont("Helvetica-Bold", 13)
+        pdf.drawString(40, y, f"Escena: {scene.get('title') or scene.get('id')}")
+        y -= 18
+        pdf.setFont("Helvetica", 11)
+        narration = scene.get("narration") or ""
+        for line in textwrap.wrap(narration, width=95):
+            pdf.drawString(40, y, line)
+            y -= 14
+        bullets = scene.get("bullets") or scene.get("recommendations") or []
+        for bullet in bullets:
+            for line in textwrap.wrap(f"• {bullet}", width=93):
+                pdf.drawString(50, y, line)
+                y -= 14
+
+        alerts = scene.get("alerts") or []
+        for alert in alerts:
+            for line in textwrap.wrap(f"⚠️ {alert}", width=90):
+                pdf.drawString(50, y, line)
+                y -= 14
+
+        y -= 10
+        if y < 120:
+            pdf.showPage()
+            y = height - 60
+
+    pdf.showPage()
+    pdf.save()
+    buffer.seek(0)
+    return buffer
+
+
+def _movie_charts_zip(data_movie: dict) -> io.BytesIO:
+    """Crea un ZIP con descripciones de gráficas para descarga."""
+
+    buffer = io.BytesIO()
+    scenes = data_movie.get("scenes") or []
+    chart_payload = []
+
+    for scene in scenes:
+        chart_payload.append(
+            {
+                "id": scene.get("id"),
+                "type": scene.get("type"),
+                "chart_data": scene.get("chart_data"),
+                "entities": scene.get("entities"),
+                "alerts": scene.get("alerts"),
+                "title": scene.get("title"),
+                "narration": scene.get("narration"),
+            }
+        )
+
+    with zipfile.ZipFile(buffer, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+        zf.writestr(
+            "charts.json",
+            json.dumps(chart_payload, ensure_ascii=False, indent=2),
+        )
+        zf.writestr(
+            "data_movie.json",
+            json.dumps(data_movie, ensure_ascii=False, indent=2),
+        )
+
+    buffer.seek(0)
+    return buffer
 
 
 def _ensure_job_dir(job_id: str) -> str:
@@ -1239,6 +1325,16 @@ async def demo_movie(scenario: str = "ventas_demo", current_user=Depends(get_cur
     try:
         payload = generate_data_movie_payload(df)
         payload["demo_metadata"] = {"is_demo": True, "scenario": scenario}
+        analysis_id = str(uuid.uuid4())
+        data_movie_store.save_movie(
+            analysis_id,
+            {
+                "payload": payload,
+                "data_movie": payload.get("data_movie"),
+                "dataset_csv": df.to_csv(index=False),
+            },
+        )
+        payload["analysis_id"] = analysis_id
         return JSONResponse(content=json_safe_deep(payload))
     except Exception as exc:  # noqa: BLE001
         logging.error("❌ Error generando película de datos demo: %s", exc)
@@ -1493,10 +1589,71 @@ async def analyze_data_movie(
 
     try:
         payload = generate_data_movie_payload(df, focus=user_focus, date_field=date_field)
+        analysis_id = str(uuid.uuid4())
+        data_movie_store.save_movie(
+            analysis_id,
+            {
+                "payload": payload,
+                "data_movie": payload.get("data_movie"),
+                "dataset_csv": df.to_csv(index=False),
+            },
+        )
+        payload["analysis_id"] = analysis_id
         return JSONResponse(content=json_safe_deep(payload))
     except Exception as exc:
         logging.error("❌ Error generando película de datos: %s", exc)
         raise HTTPException(status_code=500, detail=f"Error al generar la película de datos: {exc}")
+
+
+@app.get("/api/movie/report/pdf/{analysis_id}")
+async def download_movie_pdf(analysis_id: str):
+    stored = data_movie_store.get_movie(analysis_id)
+    if not stored:
+        raise HTTPException(status_code=404, detail="Película no encontrada para este ID")
+
+    data_movie = stored.get("data_movie") or (stored.get("payload") or {}).get("data_movie")
+    if not data_movie:
+        raise HTTPException(status_code=404, detail="No hay escenas guardadas para este análisis")
+
+    pdf_buffer = _movie_to_pdf(data_movie)
+    headers = {
+        "Content-Disposition": f"attachment; filename=movie-report-{analysis_id}.pdf"
+    }
+    return StreamingResponse(pdf_buffer, media_type="application/pdf", headers=headers)
+
+
+@app.get("/api/movie/report/charts-zip/{analysis_id}")
+async def download_movie_charts(analysis_id: str):
+    stored = data_movie_store.get_movie(analysis_id)
+    if not stored:
+        raise HTTPException(status_code=404, detail="Película no encontrada para este ID")
+
+    data_movie = stored.get("data_movie") or (stored.get("payload") or {}).get("data_movie")
+    if not data_movie:
+        raise HTTPException(status_code=404, detail="No hay escenas guardadas para este análisis")
+
+    zip_buffer = _movie_charts_zip(data_movie)
+    headers = {
+        "Content-Disposition": f"attachment; filename=movie-charts-{analysis_id}.zip"
+    }
+    return StreamingResponse(zip_buffer, media_type="application/zip", headers=headers)
+
+
+@app.get("/api/movie/report/dataset/{analysis_id}")
+async def download_movie_dataset(analysis_id: str):
+    stored = data_movie_store.get_movie(analysis_id)
+    if not stored:
+        raise HTTPException(status_code=404, detail="Película no encontrada para este ID")
+
+    dataset_csv = stored.get("dataset_csv")
+    if not dataset_csv:
+        raise HTTPException(status_code=404, detail="No hay dataset disponible para este análisis")
+
+    buffer = io.BytesIO(dataset_csv.encode("utf-8"))
+    headers = {
+        "Content-Disposition": f"attachment; filename=dataset-{analysis_id}.csv"
+    }
+    return StreamingResponse(buffer, media_type="text/csv", headers=headers)
 
 
 @app.post("/analyze/compare")

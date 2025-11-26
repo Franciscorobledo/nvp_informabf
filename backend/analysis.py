@@ -1,8 +1,10 @@
+import copy
 import io
 import json
 import os
 import base64
 import unicodedata
+import logging
 import pandas as pd
 import numpy as np
 import seaborn as sns
@@ -10,7 +12,11 @@ import matplotlib.pyplot as plt
 from datetime import datetime
 from pandas.api.types import is_datetime64_any_dtype, is_numeric_dtype
 
-from ai_module import generate_ai_insights, infer_dataset_schema_with_ai
+from ai_module import (
+    generate_ai_insights,
+    generate_movie_script_with_ai,
+    infer_dataset_schema_with_ai,
+)
 
 # ---------------------------------------------------------------------
 # 🧩 CONFIGURACIÓN GLOBAL DE PLOTS (Render-safe)
@@ -36,6 +42,137 @@ def fig_to_base64(fig):
     plt.close(fig)
     buffer.seek(0)
     return "data:image/png;base64," + base64.b64encode(buffer.read()).decode("utf-8")
+
+
+# ---------------------------------------------------------------------
+# 🎬 Utilidades para la película de datos (Módulo premium IA)
+# ---------------------------------------------------------------------
+def _compact_value_preview(series, detected_type: str) -> str:
+    """Devuelve una vista corta de una serie para el prompt de IA."""
+
+    if series is None:
+        return ""
+
+    try:
+        if detected_type == "numeric":
+            stats = series.describe()
+            return (
+                f"min={stats.get('min', 0):.2f}, max={stats.get('max', 0):.2f}, "
+                f"media={stats.get('mean', 0):.2f}"
+            )
+        if detected_type == "categorical":
+            counts = series.value_counts(dropna=True).head(3)
+            if counts.empty:
+                return "sin valores destacados"
+            return " | ".join(
+                [f"{idx} ({int(val)})" for idx, val in counts.items()]
+            )
+        if detected_type == "date":
+            parsed = pd.to_datetime(series, errors="coerce").dropna()
+            if parsed.empty:
+                return "sin fechas válidas"
+            return f"rango={parsed.min().date()}→{parsed.max().date()}"
+    except Exception:  # noqa: BLE001
+        return ""
+
+    sample_values = series.dropna().astype(str).head(3).tolist()
+    return ", ".join(sample_values)
+
+
+def _build_movie_dataset_summary(
+    df: pd.DataFrame,
+    column_types: dict,
+    ai_schema: dict | None,
+    max_columns: int = 12,
+    sample_rows: int = 2,
+) -> str:
+    """Resume el dataset en pocas líneas para ahorrar tokens."""
+
+    lines: list[str] = []
+    dataset_purpose = (ai_schema or {}).get("dataset_purpose")
+    lines.append(
+        f"Filas: {len(df)} | Columnas: {len(df.columns)} | Dominio inferido: {dataset_purpose or 'desconocido'}"
+    )
+
+    if ai_schema and ai_schema.get("ai_notes"):
+        trimmed_notes = (ai_schema.get("ai_notes") or "")[:500]
+        lines.append(f"Notas IA previas: {trimmed_notes}")
+
+    prioritized_columns = list(df.columns)[:max_columns]
+    for col in prioritized_columns:
+        detected = column_types.get(col, "desconocido")
+        preview = _compact_value_preview(df[col], detected)
+        lines.append(f"- {col} [{detected}]: {preview}")
+
+    if sample_rows:
+        sample_df = df.head(sample_rows).copy()
+        sample_df = sample_df.applymap(json_safe)
+        lines.append("Muestras JSON (compactas):")
+        lines.append(json.dumps(sample_df.to_dict(orient="records"), ensure_ascii=False))
+
+    return "\n".join(lines)
+
+
+def _build_movie_template(data_movie: dict) -> dict:
+    """Genera una plantilla base para IA sin alterar contratos públicos."""
+
+    template = copy.deepcopy(data_movie) if data_movie else {}
+    template.setdefault("report", {"summary": "TODO"})
+
+    for scene in template.get("scenes", []) or []:
+        scene.setdefault("title", "TODO")
+        if "narration" in scene:
+            scene["narration"] = "TODO narración"
+        if scene.get("alerts") is not None:
+            scene["alerts"] = scene.get("alerts") or ["TODO alerta"]
+        if scene.get("recommendations") is not None:
+            scene["recommendations"] = scene.get("recommendations") or ["TODO recomendación"]
+        scene.setdefault("bullets", [])
+
+    return template
+
+
+def _apply_ai_movie_response(base_movie: dict, ai_response: str) -> dict:
+    """Fusiona la respuesta de IA con la película base."""
+
+    if not ai_response:
+        return base_movie
+
+    cleaned = ai_response.strip()
+    if cleaned.startswith("```"):
+        cleaned = cleaned.strip("`")
+        cleaned = cleaned.replace("json", "", 1).strip()
+
+    try:
+        parsed = json.loads(cleaned)
+    except Exception as exc:  # noqa: BLE001
+        logging.warning("⚠️ No se pudo parsear la respuesta de IA para película: %s", exc)
+        return base_movie
+
+    if not isinstance(parsed, dict) or "scenes" not in parsed:
+        return base_movie
+
+    merged = copy.deepcopy(base_movie) if base_movie else {}
+    base_scenes = {scene.get("id"): scene for scene in (base_movie or {}).get("scenes", [])}
+    enhanced_scenes: list[dict] = []
+
+    for scene in parsed.get("scenes", []):
+        scene_id = scene.get("id")
+        existing = base_scenes.get(scene_id, {})
+        combined = existing.copy()
+        combined.update({k: v for k, v in scene.items() if v is not None})
+        enhanced_scenes.append(combined)
+
+    if enhanced_scenes:
+        merged["scenes"] = enhanced_scenes
+
+    for key, value in parsed.items():
+        if key == "scenes":
+            continue
+        if value is not None:
+            merged[key] = value
+
+    return merged
 
 
 def detect_column_types(df):
@@ -603,6 +740,16 @@ def generate_data_movie_payload(
         ai_schema["ai_notes"] = ai_notes
 
     data_movie = build_data_movie(cleaned, ai_schema, date_decision=date_decision)
+
+    # 🔮 Narrativa premium con IA (sin romper contratos existentes)
+    dataset_summary = _build_movie_dataset_summary(cleaned, column_types, ai_schema)
+    movie_template = _build_movie_template(data_movie)
+    ai_movie_response = generate_movie_script_with_ai(
+        dataset_summary,
+        json.dumps(movie_template, ensure_ascii=False),
+        usage_context={"source": "data_movie"},
+    )
+    data_movie = _apply_ai_movie_response(data_movie, ai_movie_response)
 
     basic_summary = {
         "rows": int(len(cleaned)),
