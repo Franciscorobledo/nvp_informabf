@@ -477,7 +477,7 @@ const App = () => {
                           >
                             <div className="flex flex-col gap-0.5">
                               <span className="font-semibold">Carga y análisis</span>
-                              <span className="text-xs text-slate-500 dark:text-slate-300">Explora tus datos con IA</span>
+                              <span className="text-xs text-slate-500 dark:text-slate-300">Análisis rápido</span>
                             </div>
                             <span className="rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-200 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide">
                               Recomendado
@@ -493,7 +493,7 @@ const App = () => {
                           >
                             <div className="flex flex-col gap-0.5">
                               <span className="font-semibold">Película de datos</span>
-                              <span className="text-xs text-slate-500 dark:text-slate-300">Historias dinámicas</span>
+                              <span className="text-xs text-slate-500 dark:text-slate-300">Animaciones</span>
                             </div>
                           </button>
                           <button
@@ -506,7 +506,7 @@ const App = () => {
                           >
                             <div className="flex flex-col gap-0.5">
                               <span className="font-semibold">Comparativa</span>
-                              <span className="text-xs text-slate-500 dark:text-slate-300">Contrasta escenarios</span>
+                              <span className="text-xs text-slate-500 dark:text-slate-300">Resultados lado a lado</span>
                             </div>
                           </button>
                         </div>
@@ -705,8 +705,8 @@ const App = () => {
                 <h1 className="text-3xl sm:text-4xl font-bold tracking-tight text-slate-900 dark:text-white leading-tight">
                   Tus datos, explicados en minutos
                 </h1>
-                <p className="text-base text-slate-600 dark:text-slate-300 max-w-3xl">
-                  Un panel estilo SaaS pensado para PYMES: limpio, amable y con micro-interacciones que inspiran confianza mientras navegas por cada módulo.
+                <p className="text-base text-slate-600 dark:text-slate-300 max-w-2xl">
+                  Panel SaaS directo al grano: sube, anima o compara tus datos sin textos de más.
                 </p>
 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
@@ -714,21 +714,18 @@ const App = () => {
                     <BoxIcon className="h-5 w-5 text-blue-600 dark:text-blue-300" />
                     <div className="space-y-0.5">
                       <p className="text-sm font-semibold text-slate-900 dark:text-white">Arquitectura modular</p>
-                      <p className="text-xs text-slate-500 dark:text-slate-400">Cambia de módulo sin perder contexto ni ritmo.</p>
                     </div>
                   </div>
                   <div className="flex items-start gap-3 rounded-2xl border border-white/80 dark:border-slate-800 bg-white/80 dark:bg-slate-900/60 px-4 py-3 shadow-sm">
                     <ClockIcon className="h-5 w-5 text-amber-500 dark:text-amber-300" />
                     <div className="space-y-0.5">
                       <p className="text-sm font-semibold text-slate-900 dark:text-white">Velocidad inmediata</p>
-                      <p className="text-xs text-slate-500 dark:text-slate-400">Carga datos y obtén insights guiados en minutos.</p>
                     </div>
                   </div>
                   <div className="flex items-start gap-3 rounded-2xl border border-white/80 dark:border-slate-800 bg-white/80 dark:bg-slate-900/60 px-4 py-3 shadow-sm">
                     <ShieldIcon className="h-5 w-5 text-emerald-600 dark:text-emerald-300" />
                     <div className="space-y-0.5">
                       <p className="text-sm font-semibold text-slate-900 dark:text-white">Confianza asegurada</p>
-                      <p className="text-xs text-slate-500 dark:text-slate-400">Controles claros y mensajes cálidos en cada paso.</p>
                     </div>
                   </div>
                 </div>

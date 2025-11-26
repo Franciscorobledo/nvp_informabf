@@ -4,24 +4,21 @@ const moduleDefinitions = [
   {
     id: "analyze",
     title: "Carga y análisis de datos",
-    description:
-      "Carga tus archivos y recibe resúmenes claros con gráficos listos para compartir.",
+    description: "Carga archivos y recibe gráficos listos para compartir.",
     icon: "📊",
     badge: "Recomendado",
   },
   {
     id: "movie",
     title: "Película de datos",
-    description:
-      "Convierte tus números en una historia animada para explicar los cambios con facilidad.",
+    description: "Convierte números en historias animadas.",
     icon: "🎬",
     ribbon: "Nuevo",
   },
   {
     id: "compare",
     title: "Comparativa de datos",
-    description:
-      "Enfrenta periodos, productos o canales y detecta lo que funciona mejor al instante.",
+    description: "Contrasta periodos, productos o canales.",
     icon: "📈",
   },
 ];
@@ -59,8 +56,8 @@ const HomeModules = ({ currentModule = "home", onNavigateModule }) => {
         <h2 className="text-3xl font-semibold tracking-tight text-gray-900 dark:text-white">
           Conoce tus datos en minutos
         </h2>
-        <p className="mx-auto max-w-3xl text-base text-gray-600 dark:text-slate-300">
-          Explora tus números con claridad: importa archivos, cuenta la historia detrás de tus datos o compara resultados sin necesidad de ser experto.
+        <p className="mx-auto max-w-2xl text-base text-gray-600 dark:text-slate-300">
+          Activa el módulo que necesitas y obtén resultados sin rodeos.
         </p>
       </div>
 
@@ -111,18 +108,6 @@ const HomeModules = ({ currentModule = "home", onNavigateModule }) => {
                   {module.description}
                 </p>
               </div>
-            </div>
-
-            <div className="space-y-3 pt-2 text-sm text-gray-600 dark:text-slate-300">
-              {module.id === "analyze" && (
-                <p>Sube tus archivos y obtén resúmenes claros y gráficos fáciles de leer.</p>
-              )}
-              {module.id === "movie" && (
-                <p>Cuenta la evolución de tu negocio con visuales animados listos para compartir.</p>
-              )}
-              {module.id === "compare" && (
-                <p>Enfrenta periodos, productos o campañas para ver qué funciona mejor.</p>
-              )}
             </div>
 
             <div className="flex items-center gap-3 pt-1">
