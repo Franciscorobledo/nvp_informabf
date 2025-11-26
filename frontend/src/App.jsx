@@ -112,6 +112,65 @@ const App = () => {
     </svg>
   );
 
+  const SparklesIcon = ({ className = "" }) => (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <path
+        d="m12 3.5 1.1 2.4 2.4 1.1-2.4 1.1-1.1 2.4-1.1-2.4-2.4-1.1 2.4-1.1L12 3.5ZM6.25 11l.75 1.6 1.6.75-1.6.75-.75 1.6-.75-1.6-1.6-.75 1.6-.75.75-1.6Zm12.5 0 .75 1.6 1.6.75-1.6.75-.75 1.6-.75-1.6-1.6-.75 1.6-.75.75-1.6Z"
+        stroke="currentColor"
+        strokeWidth="1.4"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+
+  const ClockIcon = ({ className = "" }) => (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <circle cx="12" cy="12" r="8.5" stroke="currentColor" strokeWidth="1.6" />
+      <path
+        d="M12 7.5V12l2.5 1.5"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+
+  const ShieldIcon = ({ className = "" }) => (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <path
+        d="M12 21s7-3.5 7-10.5V6.25L12 3 5 6.25V10.5C5 17.5 12 21 12 21Z"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="m9.5 12.25 1.75 1.75 3.25-3.5"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+
   const LogoutIcon = ({ className = "" }) => (
     <svg
       className={className}
@@ -633,11 +692,46 @@ const App = () => {
 
           <div className="w-full max-w-6xl p-8 bg-white/85 dark:bg-slate-900/80 backdrop-blur-lg rounded-3xl shadow-[0_25px_70px_-30px_rgba(15,23,42,0.45)] border border-white/70 dark:border-slate-800 transition-all duration-300 mt-6">
             <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-6">
-              <div className="space-y-2">
-                <h1 className="text-3xl font-bold tracking-tight text-slate-900 dark:text-white">InformeBF</h1>
-                <p className="text-base text-slate-600 dark:text-slate-300 max-w-2xl">
-                  Menú superior estilo SaaS para PYMES: limpio, amigable y con interacciones suaves que inspiran confianza en cada módulo.
+              <div className="space-y-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="inline-flex items-center gap-2 rounded-full border border-blue-200/80 dark:border-blue-900/50 bg-blue-50/70 dark:bg-blue-900/40 px-3 py-1 text-xs font-semibold text-blue-700 dark:text-blue-100 shadow-sm">
+                    <SparklesIcon className="h-4 w-4" /> Nueva experiencia
+                  </span>
+                  <span className="inline-flex items-center gap-2 rounded-full border border-emerald-200/80 dark:border-emerald-900/50 bg-emerald-50/70 dark:bg-emerald-900/30 px-3 py-1 text-xs font-semibold text-emerald-700 dark:text-emerald-100 shadow-sm">
+                    <ClockIcon className="h-4 w-4" /> Listo en minutos
+                  </span>
+                </div>
+
+                <h1 className="text-3xl sm:text-4xl font-bold tracking-tight text-slate-900 dark:text-white leading-tight">
+                  Tus datos, explicados en minutos
+                </h1>
+                <p className="text-base text-slate-600 dark:text-slate-300 max-w-3xl">
+                  Un panel estilo SaaS pensado para PYMES: limpio, amable y con micro-interacciones que inspiran confianza mientras navegas por cada módulo.
                 </p>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
+                  <div className="flex items-start gap-3 rounded-2xl border border-white/80 dark:border-slate-800 bg-white/80 dark:bg-slate-900/60 px-4 py-3 shadow-sm">
+                    <BoxIcon className="h-5 w-5 text-blue-600 dark:text-blue-300" />
+                    <div className="space-y-0.5">
+                      <p className="text-sm font-semibold text-slate-900 dark:text-white">Arquitectura modular</p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">Cambia de módulo sin perder contexto ni ritmo.</p>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-3 rounded-2xl border border-white/80 dark:border-slate-800 bg-white/80 dark:bg-slate-900/60 px-4 py-3 shadow-sm">
+                    <ClockIcon className="h-5 w-5 text-amber-500 dark:text-amber-300" />
+                    <div className="space-y-0.5">
+                      <p className="text-sm font-semibold text-slate-900 dark:text-white">Velocidad inmediata</p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">Carga datos y obtén insights guiados en minutos.</p>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-3 rounded-2xl border border-white/80 dark:border-slate-800 bg-white/80 dark:bg-slate-900/60 px-4 py-3 shadow-sm">
+                    <ShieldIcon className="h-5 w-5 text-emerald-600 dark:text-emerald-300" />
+                    <div className="space-y-0.5">
+                      <p className="text-sm font-semibold text-slate-900 dark:text-white">Confianza asegurada</p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">Controles claros y mensajes cálidos en cada paso.</p>
+                    </div>
+                  </div>
+                </div>
               </div>
             </header>
 
