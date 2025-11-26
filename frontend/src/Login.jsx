@@ -110,9 +110,6 @@ const Login = ({ onLogin }) => {
                 <div className="space-y-1">
                   <h2 className="text-3xl md:text-4xl font-extrabold tracking-wide text-blue-100">InformeBF</h2>
                   <p className="text-gray-300 text-base md:text-lg">AI Data Visualizer — Inicio de sesión</p>
-                  <p className="text-gray-300/90 text-sm md:text-base max-w-xl">
-                    Accede a tus módulos de análisis y visualización con una experiencia optimizada para pantallas grandes y móviles.
-                  </p>
                 </div>
               </div>
             </div>
