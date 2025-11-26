@@ -406,8 +406,12 @@ const App = () => {
     }
   };
 
+  const appShellClasses = !user
+    ? "min-h-screen bg-gradient-to-br from-slate-950 via-blue-950 to-slate-900 flex items-center justify-center font-sans px-4 py-10 text-white"
+    : "min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50/60 dark:from-slate-950 dark:via-slate-950 dark:to-slate-900 flex flex-col items-center font-sans px-4 pt-28 pb-10 text-gray-900 dark:text-slate-100 transition-colors duration-300";
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50/60 dark:from-slate-950 dark:via-slate-950 dark:to-slate-900 flex flex-col items-center font-sans px-4 pt-28 pb-10 text-gray-900 dark:text-slate-100 transition-colors duration-300">
+    <div className={appShellClasses}>
       {!user ? (
         <Login onLogin={handleLogin} />
       ) : (

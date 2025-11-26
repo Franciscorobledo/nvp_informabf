@@ -71,7 +71,7 @@ body {
    🔐 Layout de login
 ------------------------------ */
 .login-layout {
-  @apply relative flex items-center justify-center min-h-screen bg-gradient-to-br from-slate-950 via-blue-950 to-slate-900 text-white px-4 py-12 overflow-hidden;
+  @apply relative flex items-center justify-center min-h-screen bg-gradient-to-br from-slate-950 via-blue-950 to-slate-900 text-white px-4 sm:px-6 md:px-10 py-10 md:py-14 overflow-y-auto;
   isolation: isolate;
 }
 
@@ -99,7 +99,7 @@ body {
 }
 
 .login-card {
-  @apply relative bg-slate-900/80 backdrop-blur-3xl p-10 md:p-12 rounded-[32px] shadow-[0_25px_80px_rgba(0,0,0,0.45)] w-full max-w-2xl border border-white/10 animate-fade-in;
+  @apply relative bg-slate-900/80 backdrop-blur-3xl p-8 sm:p-10 md:p-12 lg:p-14 rounded-[32px] shadow-[0_25px_80px_rgba(0,0,0,0.45)] w-full max-w-5xl border border-white/10 animate-fade-in;
   z-index: 1;
 }
 
