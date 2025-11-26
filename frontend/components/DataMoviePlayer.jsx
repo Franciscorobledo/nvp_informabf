@@ -15,12 +15,19 @@ import {
   hasPlayableDataMovie,
   normalizeSceneList,
 } from "./dataMovieUtils";
+import MovieChart from "./MovieChart";
 
 const fadeInKeyframes = `
 @keyframes dataMovieFadeIn {
   from { opacity: 0; transform: translateY(4px); }
   to { opacity: 1; transform: translateY(0); }
-}`;
+}
+
+@keyframes dataMovieSlideIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+`;
 
 const useCountUp = (targetValue, durationMs = 800) => {
   const [display, setDisplay] = useState(0);
@@ -310,6 +317,7 @@ const DataMoviePlayer = ({ dataMovie }) => {
   const [isPlaying, setIsPlaying] = useState(true);
   const [displayedNarration, setDisplayedNarration] = useState("");
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [downloadStatus, setDownloadStatus] = useState({ state: "idle", message: "", type: null });
   const playerRef = useRef(null);
 
   const goToScene = useCallback(
@@ -412,6 +420,48 @@ const DataMoviePlayer = ({ dataMovie }) => {
     }
   };
 
+  const handleDownload = async (type) => {
+    const downloadUrl = dataMovie?.download_urls?.[type] || dataMovie?.downloads?.[type];
+    // TODO: conectar con el endpoint real de descargas cuando esté disponible.
+    if (!downloadUrl) {
+      setDownloadStatus({ state: "idle", message: "Descarga disponible pronto.", type });
+      return;
+    }
+
+    try {
+      setDownloadStatus({ state: "loading", message: "Preparando descarga…", type });
+      window.open(downloadUrl, "_blank", "noopener");
+      setTimeout(() => {
+        setDownloadStatus({ state: "success", message: "Descarga iniciada.", type });
+      }, 400);
+    } catch (error) {
+      setDownloadStatus({ state: "error", message: "No se pudo iniciar la descarga.", type });
+    }
+  };
+
+  const renderSceneVisual = () => {
+    // Mejora módulo premium Película de datos: visual adaptable por tipo de escena.
+    if (["ranking", "risks", "intro", "outro"].includes(currentScene.type)) {
+      return renderSceneContent(currentScene, () => goToScene(0, true), () => goToScene(0, false));
+    }
+
+    if (currentScene.chart_data || currentScene.chart_config?.data) {
+      return <MovieChart scene={currentScene} />;
+    }
+
+    return renderSceneContent(currentScene, () => goToScene(0, true), () => goToScene(0, false));
+  };
+
+  const highlights =
+    currentScene.highlights ||
+    currentScene.bullets ||
+    currentScene.recommendations ||
+    currentScene.alerts ||
+    [];
+
+  const sceneTitle = currentScene.scene_title || currentScene.title || currentDefinition.label;
+  const progressPct = ((currentSceneIndex + 1) / scenes.length) * 100;
+
   if (!hasScenes) {
     return (
       <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6 text-center text-sm text-slate-200">
@@ -423,46 +473,83 @@ const DataMoviePlayer = ({ dataMovie }) => {
   return (
     <div
       ref={playerRef}
-      className={`rounded-3xl bg-slate-900 p-6 shadow-2xl border border-slate-800 space-y-4 transition-all ${
+      className={`rounded-3xl bg-slate-900 p-6 shadow-2xl border border-slate-800 space-y-5 transition-all ${
         isFullscreen ? "fixed inset-0 z-50 m-0 h-screen w-screen overflow-auto rounded-none" : ""
       }`}
     >
       <style>{fadeInKeyframes}</style>
-      <div className="space-y-1">
-        <h3 className="text-2xl font-bold text-white">{dataMovie?.movie_title || "Película de datos"}</h3>
-        <p className="text-sm text-slate-300">{dataMovie?.movie_subtitle || "Presentación guiada"}</p>
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <div className="space-y-1">
+          <h3 className="text-2xl font-bold text-white">{dataMovie?.movie_title || "Película de datos"}</h3>
+          <p className="text-sm text-slate-300">{dataMovie?.movie_subtitle || "Presentación guiada"}</p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {[
+            { type: "pdf", label: "Descargar reporte (PDF)" },
+            { type: "charts", label: "Descargar gráficos" },
+            { type: "data", label: "Descargar datos" },
+          ].map((action) => {
+            const isLoading = downloadStatus.type === action.type && downloadStatus.state === "loading";
+            return (
+              <button
+                key={action.type}
+                onClick={() => handleDownload(action.type)}
+                className={`rounded-full border border-slate-600 px-4 py-2 text-xs font-semibold text-slate-100 transition hover:border-blue-400 hover:text-white ${
+                  isLoading ? "opacity-70" : ""
+                }`}
+                aria-label={action.label}
+              >
+                {isLoading ? "Preparando…" : action.label}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-3">
-        <div className="lg:col-span-2 rounded-3xl bg-slate-800/70 p-6 shadow-inner border border-slate-700">
-          <div className="mb-4 flex items-center justify-between text-slate-200">
+      {downloadStatus.message && (
+        <div className="rounded-2xl border border-slate-700 bg-slate-800/60 px-4 py-3 text-xs text-slate-200" role="status">
+          {downloadStatus.message}
+        </div>
+      )}
+
+      <div className="grid gap-5 lg:grid-cols-[2fr,1fr]">
+        <div
+          className="relative overflow-hidden rounded-3xl border border-slate-800 bg-gradient-to-br from-slate-900 via-slate-900 to-slate-950 p-6 shadow-inner"
+          style={{ animation: "dataMovieFadeIn 0.45s ease" }}
+        >
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3 text-slate-200">
             <div className="space-y-1">
-              <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Escena</p>
-              <h4 className="text-xl font-semibold">{currentDefinition.label}</h4>
-              <p className="text-xs text-slate-400">{currentScene.type}</p>
+              <p className="text-[11px] uppercase tracking-[0.2em] text-slate-400">Escena</p>
+              <div className="flex items-center gap-3">
+                <span className="rounded-full bg-blue-500/20 px-3 py-1 text-xs font-semibold text-blue-100">{currentDefinition.label}</span>
+                <span className="text-xs text-slate-400">{currentScene.type}</span>
+              </div>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 text-xs">
               <button
-                onClick={() => setIsPlaying((prev) => !prev)}
-                className="rounded-full bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-blue-700"
-              >
-                {isPlaying ? "⏸️ Pausar" : "▶️ Reproducir"}
-              </button>
-              <button
-                onClick={() => goToScene(Math.max(currentSceneIndex - 1, 0))}
-                className="rounded-full border border-slate-600 px-3 py-2 text-white hover:border-slate-400"
+                onClick={() => goToScene(Math.max(currentSceneIndex - 1, 0), false)}
+                className="rounded-full border border-slate-700 px-3 py-2 text-white transition hover:border-blue-400"
+                aria-label="Escena anterior"
               >
                 ◀
               </button>
               <button
-                onClick={() => goToScene(Math.min(currentSceneIndex + 1, scenes.length - 1))}
-                className="rounded-full border border-slate-600 px-3 py-2 text-white hover:border-slate-400"
+                onClick={() => setIsPlaying((prev) => !prev)}
+                className="rounded-full bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-blue-700"
+                aria-label={isPlaying ? "Pausar escena" : "Reproducir escena"}
+              >
+                {isPlaying ? "⏸️ Pausa" : "▶️ Reproducir"}
+              </button>
+              <button
+                onClick={() => goToScene(Math.min(currentSceneIndex + 1, scenes.length - 1), false)}
+                className="rounded-full border border-slate-700 px-3 py-2 text-white transition hover:border-blue-400"
+                aria-label="Escena siguiente"
               >
                 ▶
               </button>
               <button
                 onClick={toggleFullscreen}
-                className="rounded-full border border-slate-600 px-3 py-2 text-white hover:border-slate-400"
+                className="rounded-full border border-slate-700 px-3 py-2 text-white transition hover:border-blue-400"
                 aria-label={isFullscreen ? "Salir de pantalla completa" : "Ver en pantalla completa"}
               >
                 {isFullscreen ? "🗗" : "🗖"}
@@ -470,41 +557,67 @@ const DataMoviePlayer = ({ dataMovie }) => {
             </div>
           </div>
 
-          <div
-            key={currentScene.id}
-            className="min-h-[260px] rounded-2xl border border-slate-700/60 bg-slate-900/20 p-1"
-            style={{ animation: "dataMovieFadeIn 0.45s ease" }}
-          >
-            {renderSceneContent(currentScene, () => goToScene(0, true), () => goToScene(0, false))}
+          <div className="min-h-[280px]" key={currentScene.id}>
+            {renderSceneVisual()}
           </div>
         </div>
 
-        <div className="rounded-3xl bg-slate-800 p-5 shadow-xl border border-slate-700">
-          <AvatarPresenter
-            mood={currentScene.avatar_mood || currentDefinition.defaultMood}
-            narration={displayedNarration || currentScene.narration}
-          />
+        <div
+          className="rounded-3xl border border-slate-800 bg-slate-800/70 p-5 shadow-xl backdrop-blur"
+          style={{ animation: "dataMovieSlideIn 0.55s ease" }}
+        >
+          <div className="flex items-start gap-4">
+            <AvatarPresenter
+              mood={currentScene.avatar_mood || currentDefinition.defaultMood}
+              narration={displayedNarration || currentScene.narration}
+            />
+            <div className="space-y-2">
+              <p className="text-xs uppercase tracking-[0.16em] text-blue-300">Escena {currentSceneIndex + 1} de {scenes.length}</p>
+              <h4 className="text-lg font-semibold text-white">{sceneTitle}</h4>
+              <p className="text-sm leading-relaxed text-slate-200">{displayedNarration || currentScene.narration}</p>
+            </div>
+          </div>
+
+          {highlights.length > 0 && (
+            <div className="mt-4 space-y-2">
+              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">Highlights</p>
+              <ul className="space-y-2">
+                {highlights.slice(0, 4).map((item, idx) => (
+                  <li
+                    key={`${item}-${idx}`}
+                    className="flex items-start gap-2 rounded-xl border border-slate-700/70 bg-slate-900/30 px-3 py-2 text-sm text-slate-200"
+                    style={{ animation: "dataMovieFadeIn 0.8s ease", animationDelay: `${idx * 80}ms` }}
+                  >
+                    <span className="mt-0.5 text-blue-300">•</span>
+                    <span>{item}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </div>
       </div>
 
-      <div className="flex flex-col gap-3">
+      <div className="space-y-3">
+        <div className="flex items-center justify-between text-xs text-slate-400">
+          <span>Escena {currentSceneIndex + 1} de {scenes.length}</span>
+          <span>{Math.round(progressPct)}% de la película</span>
+        </div>
+        <div className="h-2 w-full overflow-hidden rounded-full bg-slate-800">
+          <div className="h-full rounded-full bg-gradient-to-r from-blue-500 via-emerald-400 to-cyan-300" style={{ width: `${progressPct}%`, transition: "width 500ms ease" }} />
+        </div>
         <div className="flex items-center justify-center gap-2">
           {scenes.map((scene, idx) => (
             <button
               key={scene.id || idx}
               onClick={() => goToScene(idx, false)}
               className={`h-3 w-3 rounded-full transition ${
-                idx === currentSceneIndex
-                  ? "bg-blue-500 ring-4 ring-blue-900"
-                  : "bg-slate-700 hover:bg-slate-500"
+                idx === currentSceneIndex ? "bg-blue-500 ring-4 ring-blue-900" : "bg-slate-700 hover:bg-slate-500"
               }`}
               aria-label={`Ir a escena ${idx + 1}`}
             />
           ))}
         </div>
-        <p className="text-center text-xs text-slate-400">
-          Escena {currentSceneIndex + 1} de {scenes.length}
-        </p>
       </div>
     </div>
   );
