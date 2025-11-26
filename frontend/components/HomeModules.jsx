@@ -15,6 +15,7 @@ const moduleDefinitions = [
     description:
       "Convierte tus números en una historia animada para explicar los cambios con facilidad.",
     icon: "🎬",
+    ribbon: "Nuevo",
   },
   {
     id: "compare",
@@ -67,45 +68,49 @@ const HomeModules = ({ currentModule = "home", onNavigateModule }) => {
         {cards.map((module) => (
           <div
             key={module.id}
-            className={`group relative flex h-full flex-col justify-between gap-6 rounded-2xl border p-8 text-left shadow-[0_20px_60px_-35px_rgba(15,23,42,0.45)] transition-all duration-300 ${
+            className={`group relative flex h-full flex-col justify-between gap-6 overflow-hidden rounded-2xl border p-8 text-left shadow-[0_20px_60px_-35px_rgba(15,23,42,0.45)] transition-all duration-300 ${
               module.isSelected
                 ? "border-blue-400/80 bg-gradient-to-br from-blue-50 via-white to-blue-100 text-gray-900 dark:border-blue-800 dark:from-slate-900 dark:via-slate-900 dark:to-blue-950/30 dark:text-white"
                 : "border-slate-200/80 bg-white/90 text-gray-900 hover:-translate-y-1 hover:border-blue-200 hover:shadow-[0_25px_70px_-40px_rgba(37,99,235,0.55)] dark:border-slate-800 dark:bg-slate-900/80 dark:text-white"
             }`}
           >
-            <div className="flex items-start justify-between gap-3">
-              <div className="flex items-start gap-4">
-                <span
-                  className={`flex h-14 w-14 items-center justify-center rounded-xl text-3xl shadow-sm ring-1 ${
-                    module.isSelected
-                      ? "bg-white text-blue-700 ring-blue-200 shadow-blue-200/70 dark:bg-blue-900/40 dark:text-blue-100 dark:ring-blue-800"
-                      : "bg-slate-50 text-slate-700 ring-slate-200 dark:bg-slate-800 dark:text-slate-100 dark:ring-slate-700"
-                  }`}
-                  aria-hidden="true"
-                >
-                  {module.icon}
-                </span>
-                <div className="space-y-1">
-                  <h3 className="text-xl font-semibold leading-tight text-gray-900 dark:text-white">
-                    {module.title}
-                  </h3>
-                  <p className="text-base text-gray-600 dark:text-slate-300">
-                    {module.description}
-                  </p>
-                </div>
-              </div>
+            {module.ribbon && (
+              <span className="pointer-events-none absolute -left-12 top-6 -rotate-45 bg-orange-500 px-12 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-white shadow-lg">
+                {module.ribbon}
+              </span>
+            )}
 
-              {(module.isSelected || module.badge) && (
-                <span
-                  className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${
-                    module.isSelected
-                      ? "bg-blue-600 text-white shadow-lg shadow-blue-300/50 dark:bg-blue-500"
-                      : "bg-emerald-100 text-emerald-700 ring-1 ring-emerald-200 dark:bg-emerald-900/40 dark:text-emerald-100 dark:ring-emerald-700"
-                  }`}
-                >
-                  {module.isSelected ? "Seleccionado" : module.badge}
-                </span>
-              )}
+            {(module.isSelected || module.badge) && (
+              <span
+                className={`absolute right-6 top-6 inline-flex items-center rounded-full px-3 py-1 text-[11px] font-semibold shadow-sm ring-1 ${
+                  module.isSelected
+                    ? "bg-blue-600 text-white ring-blue-300/80 shadow-blue-200/60 dark:bg-blue-500"
+                    : "bg-emerald-100 text-emerald-700 ring-emerald-200 dark:bg-emerald-900/60 dark:text-emerald-100 dark:ring-emerald-800"
+                }`}
+              >
+                {module.isSelected ? "Seleccionado" : module.badge}
+              </span>
+            )}
+
+            <div className="flex items-start gap-4 pr-16">
+              <span
+                className={`flex h-14 w-14 items-center justify-center rounded-xl text-3xl shadow-sm ring-1 ${
+                  module.isSelected
+                    ? "bg-white text-blue-700 ring-blue-200 shadow-blue-200/70 dark:bg-blue-900/40 dark:text-blue-100 dark:ring-blue-800"
+                    : "bg-slate-50 text-slate-700 ring-slate-200 dark:bg-slate-800 dark:text-slate-100 dark:ring-slate-700"
+                }`}
+                aria-hidden="true"
+              >
+                {module.icon}
+              </span>
+              <div className="space-y-1">
+                <h3 className="text-xl font-semibold leading-tight text-gray-900 dark:text-white">
+                  {module.title}
+                </h3>
+                <p className="text-base text-gray-600 dark:text-slate-300">
+                  {module.description}
+                </p>
+              </div>
             </div>
 
             <div className="space-y-3 pt-2 text-sm text-gray-600 dark:text-slate-300">
