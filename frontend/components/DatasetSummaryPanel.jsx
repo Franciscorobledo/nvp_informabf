@@ -121,16 +121,17 @@ const DatasetSummaryPanel = ({ summary, headlessCoreKpi }) => {
 
         const mood = variability > 0.6 ? "Alta variabilidad" : "Tendencia estable";
         const detail = variability > 0.6
-          ? "Revisa outliers y crea alertas para variaciones fuertes."
-          : "Úsalo como KPI central y define umbrales de control.";
+          ? "Variación alta, revisa outliers."
+          : "Tendencia estable, ideal para KPI.";
 
         return {
           column,
           icon,
+          type,
           badge: "Métrica",
           score: (stats.count ?? 0) + variability * 100,
           headline: `${mood} en ${column}`,
-          body: `Promedio ${formatNumber(mean)}, rango ${formatNumber(min)} - ${formatNumber(max)}. ${detail}`,
+          body: `Promedio ${formatNumber(mean)} | rango ${formatNumber(min)} - ${formatNumber(max)}. ${detail}`,
         };
       }
 
@@ -144,10 +145,11 @@ const DatasetSummaryPanel = ({ summary, headlessCoreKpi }) => {
         return {
           column,
           icon,
+          type,
           badge: "Comportamiento",
           score: Number(topValue || 0),
           headline: `${topName || "Categoría"} domina ${column}`,
-          body: `${formatNumber(topValue)} registros (${topShare}% del total). Ideal para segmentar reportes y detectar nichos.`,
+          body: `${formatNumber(topValue)} registros (${topShare}% del total). Señal rápida para segmentar.`,
         };
       }
 
@@ -155,10 +157,11 @@ const DatasetSummaryPanel = ({ summary, headlessCoreKpi }) => {
         return {
           column,
           icon,
+          type,
           badge: "Tiempo",
           score: Number(stats.count || 0),
           headline: `Ventana temporal en ${column}`,
-          body: `Cobertura desde ${stats.min || "-"} hasta ${stats.max || "-"}. Aprovecha para medir tendencias y estacionalidad.`,
+          body: `Desde ${stats.min || "-"} hasta ${stats.max || "-"}. Usa esta ventana para tendencias y estacionalidad.`,
         };
       }
 
@@ -166,6 +169,7 @@ const DatasetSummaryPanel = ({ summary, headlessCoreKpi }) => {
         return {
           column,
           icon,
+          type,
           badge: "Identidad",
           score: Number(stats.unique_values || 0),
           headline: `${formatNumber(stats.unique_values)} valores únicos en ${column}`,
@@ -177,6 +181,7 @@ const DatasetSummaryPanel = ({ summary, headlessCoreKpi }) => {
         return {
           column,
           icon,
+          type,
           badge: "Atención",
           score: 999,
           headline: `Revisa ${column}`,
@@ -224,33 +229,28 @@ const DatasetSummaryPanel = ({ summary, headlessCoreKpi }) => {
         datasetCount !== null
           ? `${formatNumber(datasetCount)} filas`
           : "Filas no detectadas",
-      helper: `${typeCount.total || 0} columnas encontradas`,
+      helper: `${typeCount.total || 0} columnas detectadas`,
     },
     {
-      label: "Perfil de columnas",
+      label: "Perfil compacto",
       value: `${typeCount.numeric || 0} num · ${typeCount.categorical || 0} cat · ${
         typeCount.date || 0
       } fecha`,
-      helper: "Distribución por tipo de dato",
-    },
-    {
-      label: "Categoría líder",
-      value: topCategories[0]?.[0] || "Sin categorías",
       helper: topCategories[0]
-        ? `${formatNumber(topCategories[0][1])} registros (top 3 disponibles)`
-        : "Se mostrará cuando existan columnas categóricas",
+        ? `${topCategories[0][0]} destaca en categorías`
+        : "Mostramos solo lo esencial",
     },
   ];
 
   const renderTopItems = (stats) => {
     const sorted = Object.entries(stats)
       .sort(([, a], [, b]) => Number(b) - Number(a))
-      .slice(0, 3);
+      .slice(0, 2);
 
     return (
-      <div className="mt-3 space-y-2">
-        <p className="text-xs font-semibold text-gray-500 dark:text-slate-400">Top 3 categorías</p>
-        <div className="space-y-2">
+      <div className="mt-2 space-y-1">
+        <p className="text-xs font-semibold text-gray-500 dark:text-slate-400">Top categorías</p>
+        <div className="space-y-1">
           {sorted.map(([label, value]) => (
             <div key={label} className="flex items-center justify-between text-sm">
               <span className="text-gray-700 dark:text-slate-200 truncate mr-2">{label}</span>
@@ -311,9 +311,23 @@ const DatasetSummaryPanel = ({ summary, headlessCoreKpi }) => {
     );
   };
 
-  const smartHighlights = smartNarratives.slice(0, 3);
-  const prioritizedColumns = smartNarratives
-    .slice(0, 4)
+  const pickUniqueByType = (items, limit) => {
+    const seen = new Set();
+    const unique = [];
+
+    for (const item of items) {
+      if (seen.has(item.type)) continue;
+      seen.add(item.type);
+      unique.push(item);
+      if (unique.length === limit) break;
+    }
+
+    return unique;
+  };
+
+  const smartHighlights = pickUniqueByType(smartNarratives, 2);
+
+  const prioritizedColumns = pickUniqueByType(smartNarratives, 3)
     .map((insight) => analyzed.find((item) => item.column === insight.column))
     .filter(Boolean);
 
