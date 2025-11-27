@@ -24,6 +24,27 @@ const DataMovieModule = ({ onUnauthorized }) => {
     []
   );
 
+  const parseJsonResponse = async (res, defaultError) => {
+    const text = await res.text();
+
+    if (!res.ok) {
+      throw new Error(text || defaultError);
+    }
+
+    if (!text) {
+      throw new Error("La respuesta del servidor llegó vacía. Intenta nuevamente.");
+    }
+
+    try {
+      return JSON.parse(text);
+    } catch (parseError) {
+      console.error("Respuesta inválida del servidor", parseError);
+      throw new Error(
+        "No se pudo interpretar la respuesta del servidor. Intenta nuevamente o usa el modo demo."
+      );
+    }
+  };
+
   const handleSubmit = async () => {
     setError("");
     setResponse(null);
@@ -57,12 +78,10 @@ const DataMovieModule = ({ onUnauthorized }) => {
         return;
       }
 
-      if (!res.ok) {
-        const text = await res.text();
-        throw new Error(text || "No se pudo generar la película de datos.");
-      }
-
-      const data = await res.json();
+      const data = await parseJsonResponse(
+        res,
+        "No se pudo generar la película de datos."
+      );
       if (!data?.data_movie) {
         throw new Error(
           "La respuesta no contiene la película de datos. Intenta nuevamente o usa el modo demo."
@@ -93,12 +112,10 @@ const DataMovieModule = ({ onUnauthorized }) => {
         return;
       }
 
-      if (!res.ok) {
-        const text = await res.text();
-        throw new Error(text || "No se pudo generar la película demo.");
-      }
-
-      const data = await res.json();
+      const data = await parseJsonResponse(
+        res,
+        "No se pudo generar la película demo."
+      );
       if (!data?.data_movie) {
         throw new Error("No se pudo cargar la película demo. Intenta más tarde.");
       }
