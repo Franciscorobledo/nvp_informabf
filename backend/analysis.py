@@ -483,7 +483,28 @@ def build_data_movie(
         col for col in (schema.get("main_entity_columns") or []) if col in df.columns
     ] or [c for c, t in column_types.items() if t == "categorical"]
 
-    metric_col = numeric_candidates[0] if numeric_candidates else None
+    sales_keywords = [["venta"], ["sales"], ["revenue"], ["gross", "sales"], ["amount"], ["total", "sale"]]
+    marketing_keywords = [["click"], ["ctr"], ["impression"], ["visita"], ["session"]]
+    generic_value_keywords = [["total"], ["importe"], ["monto"], ["value"], ["amount"]]
+
+    metric_col = None
+    if dataset_purpose == "ventas":
+        metric_col = _find_best_numeric_column(df, column_types, sales_keywords)
+    elif dataset_purpose == "marketing":
+        metric_col = _find_best_numeric_column(df, column_types, marketing_keywords)
+
+    if not metric_col:
+        metric_col = _find_best_numeric_column(df, column_types, generic_value_keywords)
+
+    def _is_temporal_name(name: str) -> bool:
+        normalized = _normalize(name)
+        return any(keyword in normalized for keyword in ["year", "anio", "ano", "mes", "month", "week", "day", "fecha", "date", "period"])
+
+    metric_candidates = [col for col in numeric_candidates if not _is_temporal_name(col)]
+    if not metric_col and metric_candidates:
+        metric_col = metric_candidates[0]
+    elif not metric_col and numeric_candidates:
+        metric_col = numeric_candidates[0]
     entity_col = entity_candidates[0] if entity_candidates else None
 
     def _safe_numeric(series: pd.Series | None) -> pd.Series:
@@ -577,9 +598,10 @@ def build_data_movie(
         peak_point = max(timeline_points, key=lambda item: item["y"])
         trough_point = min(timeline_points, key=lambda item: item["y"])
         trend_direction = "al alza" if peak_point["x"] == timeline_points[-1]["x"] else "con altibajos"
+        metric_label = main_metric_label or metric_col or "la métrica principal"
         timeline_narration = (
-            "Observa la línea de tiempo: "
-            f"el punto más alto fue el {peak_point['x']} y el más bajo el {trough_point['x']}. "
+            f"Evolución de {metric_label}: "
+            f"pico el {peak_point['x']} y mínimo el {trough_point['x']}. "
             f"La serie luce {trend_direction}."
         )
     elif requires_user_date:
@@ -683,11 +705,48 @@ def build_data_movie(
     )
 
     # Outro scene
-    recommendations = [
-        "Acciona sobre los picos y caídas para estabilizar la tendencia.",
-        "Refuerza a las entidades líderes sin descuidar la cola larga.",
-        "Define experimentos para reducir la volatilidad detectada.",
-    ]
+    def _compose_outro_recommendations():
+        recs: list[str] = []
+
+        if len(timeline_points) >= 2:
+            first_val = timeline_points[0].get("y") or 0
+            last_val = timeline_points[-1].get("y") or 0
+            base = abs(first_val) or 1
+            growth = (last_val - first_val) / base
+            label = main_metric_label or "la métrica principal"
+
+            if growth >= 0.15:
+                recs.append(
+                    f"Capitaliza el crecimiento reciente de {label} replicando los periodos más fuertes."
+                )
+            elif growth <= -0.15:
+                recs.append(
+                    f"Activa un plan de recuperación: {label} cayó en la última parte del periodo."
+                )
+            else:
+                recs.append(
+                    f"Mantén control semanal de {label} para detectar desvíos antes de que escalen."
+                )
+
+        if ranking_entities:
+            leader = ranking_entities[0]
+            leader_share = leader.get("share")
+            share_pct = f" ({leader_share*100:.0f}% del total)" if leader_share is not None else ""
+            recs.append(
+                f"Refuerza acuerdos con {leader['name']}{share_pct} y replica buenas prácticas en el resto."
+            )
+            if len(ranking_entities) > 1:
+                recs.append("Diversifica: potencia al top 3 para reducir dependencia de un solo actor.")
+
+        if requires_user_date:
+            recs.append("Confirma la columna de fecha principal para mejorar próximas historias y alertas.")
+
+        if not recs:
+            recs.append("Define un plan de acción con responsables y revisiones quincenales basadas en estos datos.")
+
+        return recs[:4]
+
+    recommendations = _compose_outro_recommendations()
 
     scenes.append(
         {
@@ -727,6 +786,20 @@ def generate_data_movie_payload(
     date_decision = select_primary_date_column(
         cleaned, column_types=column_types, user_date=date_field
     )
+
+    if not date_decision.get("selected"):
+        composite_date = _build_composite_date_column(cleaned)
+        if composite_date:
+            cleaned[composite_date["column"]] = composite_date["series"]
+            column_types = detect_column_types(cleaned)
+            source_fields = ", ".join(composite_date.get("source_fields", [])) or "columnas de fecha"
+            date_decision = {
+                "selected": composite_date["column"],
+                "status": "auto_composite",
+                "message": f"Fecha compuesta inferida desde {source_fields}.",
+                "candidates": detect_date_candidates(cleaned, column_types),
+            }
+
     ai_schema = _infer_ai_schema(
         cleaned, column_types, date_field=date_field, date_decision=date_decision
     )
@@ -799,6 +872,28 @@ def _find_best_column(df, keyword_groups, return_all: bool = False):
     if return_all:
         return [col for col, _ in ranked]
 
+    return ranked[0][0]
+
+
+def _find_best_numeric_column(df, column_types: dict, keyword_groups: list[list[str]]):
+    """Similar a ``_find_best_column`` pero solo entre columnas numéricas."""
+
+    numeric_cols = [col for col, col_type in column_types.items() if col_type == "numeric"]
+    if not numeric_cols:
+        return None
+
+    normalized_cols = {col: _normalize(col) for col in numeric_cols}
+    ranked: list[tuple[str, int]] = []
+
+    for col, normalized in normalized_cols.items():
+        for keywords in keyword_groups:
+            if all(keyword in normalized for keyword in keywords):
+                ranked.append((col, len(keywords)))
+
+    if not ranked:
+        return None
+
+    ranked.sort(key=lambda item: item[1], reverse=True)
     return ranked[0][0]
 
 
@@ -927,6 +1022,45 @@ def detect_date_candidates(
 
     candidates.sort(key=lambda item: item["score"], reverse=True)
     return candidates
+
+
+def _build_composite_date_column(df: pd.DataFrame) -> dict | None:
+    """Intenta crear una fecha combinando columnas de año/mes/día."""
+
+    normalized_cols = {_normalize(col): col for col in df.columns}
+    year_col = normalized_cols.get("year") or normalized_cols.get("anio") or normalized_cols.get("ano")
+    month_col = normalized_cols.get("month") or normalized_cols.get("mes")
+    day_col = normalized_cols.get("day") or normalized_cols.get("dia")
+
+    if not year_col or not month_col:
+        return None
+
+    try:
+        year_series = pd.to_numeric(df[year_col], errors="coerce")
+        month_series = pd.to_numeric(df[month_col], errors="coerce")
+        day_series = pd.to_numeric(df[day_col], errors="coerce") if day_col else None
+
+        composite = pd.to_datetime(
+            {
+                "year": year_series,
+                "month": month_series,
+                "day": day_series if day_series is not None else 1,
+            },
+            errors="coerce",
+        )
+    except Exception:
+        return None
+
+    parse_ratio = composite.notna().mean()
+    if parse_ratio < 0.6 or composite.nunique(dropna=True) < 2:
+        return None
+
+    return {
+        "column": "__movie_composite_date__",
+        "series": composite,
+        "source_fields": [c for c in [year_col, month_col, day_col] if c],
+        "parsed_ratio": float(parse_ratio),
+    }
 
 
 def select_primary_date_column(

@@ -13,6 +13,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 import pandas as pd
 import io
+import json
 import logging
 import uuid
 import threading
@@ -1334,6 +1335,11 @@ async def demo_movie(scenario: str = "ventas_demo", current_user=Depends(get_cur
                 "dataset_csv": df.to_csv(index=False),
             },
         )
+        if payload.get("data_movie") is None:
+            payload["data_movie"] = {}
+        payload["data_movie"].setdefault("download_urls", {})[
+            "movie"
+        ] = f"/api/movie/report/file/{analysis_id}"
         payload["analysis_id"] = analysis_id
         return JSONResponse(content=json_safe_deep(payload))
     except Exception as exc:  # noqa: BLE001
@@ -1598,6 +1604,11 @@ async def analyze_data_movie(
                 "dataset_csv": df.to_csv(index=False),
             },
         )
+        if payload.get("data_movie") is None:
+            payload["data_movie"] = {}
+        payload["data_movie"].setdefault("download_urls", {})[
+            "movie"
+        ] = f"/api/movie/report/file/{analysis_id}"
         payload["analysis_id"] = analysis_id
         return JSONResponse(content=json_safe_deep(payload))
     except Exception as exc:
@@ -1637,6 +1648,23 @@ async def download_movie_charts(analysis_id: str):
         "Content-Disposition": f"attachment; filename=movie-charts-{analysis_id}.zip"
     }
     return StreamingResponse(zip_buffer, media_type="application/zip", headers=headers)
+
+
+@app.get("/api/movie/report/file/{analysis_id}")
+async def download_movie_file(analysis_id: str):
+    stored = data_movie_store.get_movie(analysis_id)
+    if not stored:
+        raise HTTPException(status_code=404, detail="Película no encontrada para este ID")
+
+    data_movie = stored.get("data_movie") or (stored.get("payload") or {}).get("data_movie")
+    if not data_movie:
+        raise HTTPException(status_code=404, detail="No hay escenas guardadas para este análisis")
+
+    buffer = io.BytesIO(json.dumps(data_movie, ensure_ascii=False, indent=2).encode("utf-8"))
+    headers = {
+        "Content-Disposition": f"attachment; filename=movie-{analysis_id}.movie",
+    }
+    return StreamingResponse(buffer, media_type="application/json", headers=headers)
 
 
 @app.get("/api/movie/report/dataset/{analysis_id}")

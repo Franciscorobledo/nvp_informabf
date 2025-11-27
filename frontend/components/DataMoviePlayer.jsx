@@ -420,9 +420,9 @@ const DataMoviePlayer = ({ dataMovie }) => {
     }
   };
 
-  const handleDownload = async (type) => {
+  const handleDownload = async (type = "movie") => {
     const downloadUrl = dataMovie?.download_urls?.[type] || dataMovie?.downloads?.[type];
-    // TODO: conectar con el endpoint real de descargas cuando esté disponible.
+
     if (!downloadUrl) {
       setDownloadStatus({ state: "idle", message: "Descarga disponible pronto.", type });
       return;
@@ -484,25 +484,15 @@ const DataMoviePlayer = ({ dataMovie }) => {
           <p className="text-sm text-slate-300">{dataMovie?.movie_subtitle || "Presentación guiada"}</p>
         </div>
         <div className="flex flex-wrap gap-2">
-          {[
-            { type: "pdf", label: "Descargar reporte (PDF)" },
-            { type: "charts", label: "Descargar gráficos" },
-            { type: "data", label: "Descargar datos" },
-          ].map((action) => {
-            const isLoading = downloadStatus.type === action.type && downloadStatus.state === "loading";
-            return (
-              <button
-                key={action.type}
-                onClick={() => handleDownload(action.type)}
-                className={`rounded-full border border-slate-600 px-4 py-2 text-xs font-semibold text-slate-100 transition hover:border-blue-400 hover:text-white ${
-                  isLoading ? "opacity-70" : ""
-                }`}
-                aria-label={action.label}
-              >
-                {isLoading ? "Preparando…" : action.label}
-              </button>
-            );
-          })}
+          <button
+            onClick={() => handleDownload("movie")}
+            className={`rounded-full border border-slate-600 px-4 py-2 text-xs font-semibold text-slate-100 transition hover:border-blue-400 hover:text-white ${
+              downloadStatus.state === "loading" ? "opacity-70" : ""
+            }`}
+            aria-label="Descargar película (.movie)"
+          >
+            {downloadStatus.state === "loading" ? "Preparando…" : "Descargar película (.movie)"}
+          </button>
         </div>
       </div>
 
