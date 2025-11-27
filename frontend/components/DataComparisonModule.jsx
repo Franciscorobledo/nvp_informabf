@@ -16,14 +16,7 @@ import axios from "axios";
 import API_URL from "../src/api";
 import AppButton from "./AppButton";
 import LoadingBar from "./LoadingBar";
-
-const focusOptions = [
-  { value: "todo", label: "Todo" },
-  { value: "venta", label: "Venta" },
-  { value: "stock", label: "Stock" },
-  { value: "producto", label: "Producto" },
-  { value: "reportes", label: "Reportes" },
-];
+import focusOptions from "./focusOptions";
 
 const stepMessages = {
   subiendo_archivos: "Subiendo archivos…",
@@ -47,7 +40,7 @@ const DataComparisonModule = ({ onUnauthorized }) => {
   const [fileB, setFileB] = useState(null);
   const [labelA, setLabelA] = useState("Dataset A");
   const [labelB, setLabelB] = useState("Dataset B");
-  const [focus, setFocus] = useState("todo");
+  const [focus, setFocus] = useState("todos");
   const [compareJobId, setCompareJobId] = useState(null);
   const [compareProgress, setCompareProgress] = useState(0);
   const [compareStep, setCompareStep] = useState("");
@@ -389,8 +382,8 @@ const DataComparisonModule = ({ onUnauthorized }) => {
               className="rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-sm"
             >
               {focusOptions.map((opt) => (
-                <option key={opt.value} value={opt.value}>
-                  {opt.label}
+                <option key={opt.valor} value={opt.valor}>
+                  {opt.etiqueta}
                 </option>
               ))}
             </select>

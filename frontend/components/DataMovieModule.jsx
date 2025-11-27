@@ -2,15 +2,7 @@ import React, { useMemo, useState } from "react";
 import DataMoviePlayer from "./DataMoviePlayer";
 import AppButton from "./AppButton";
 import LoadingBar from "./LoadingBar";
-
-const focusOptions = [
-  { value: "todos", label: "🔎 Todo / sin filtro" },
-  { value: "ventas", label: "🛒 Venta" },
-  { value: "stock", label: "📦 Stock" },
-  { value: "producto", label: "📌 Producto" },
-  { value: "auditoria", label: "🕵️ Auditoría" },
-  { value: "reportes", label: "📈 Reportes de análisis" },
-];
+import focusOptions from "./focusOptions";
 
 const DataMovieModule = ({ onUnauthorized }) => {
   const [file, setFile] = useState(null);
@@ -155,8 +147,8 @@ const DataMovieModule = ({ onUnauthorized }) => {
             className="w-full rounded-xl border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-400 dark:text-slate-100"
           >
             {focusOptions.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
+              <option key={option.valor} value={option.valor}>
+                {option.etiqueta}
               </option>
             ))}
           </select>

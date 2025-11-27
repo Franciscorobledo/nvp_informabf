@@ -16,6 +16,7 @@ import DatasetSummaryPanel from "./DatasetSummaryPanel";
 import VisualizationExplorer from "./VisualizationExplorer";
 import AppButton from "./AppButton";
 import LoadingBar from "./LoadingBar";
+import focusOptions from "./focusOptions";
 
 const FileUpload = ({ onDataReceived, onUnauthorized, onNavigateModule }) => {
   const [files, setFiles] = useState([]);
@@ -1088,9 +1089,9 @@ const FileUpload = ({ onDataReceived, onUnauthorized, onNavigateModule }) => {
           🎯 Foco del informe
         </label>
         <p className="text-xs text-gray-600 dark:text-slate-300 mb-2">
-          Elige un contexto (ventas, stock, producto, auditoría o reportes)
-          para priorizar los KPIs y visualizaciones más relevantes. "Todo"
-          mantiene el comportamiento actual.
+          Elige un contexto (ventas o stock) para priorizar los KPIs y
+          visualizaciones más relevantes. "Todo" mantiene el comportamiento
+          actual.
         </p>
         <div className="relative w-full sm:w-80">
           <select
@@ -1100,12 +1101,11 @@ const FileUpload = ({ onDataReceived, onUnauthorized, onNavigateModule }) => {
             ref={filterSelectRef}
             className="w-full appearance-none bg-white dark:bg-slate-900 border border-gray-300 dark:border-slate-700 rounded-lg px-4 py-3 pr-10 shadow-sm text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 dark:text-slate-100"
           >
-            <option value="todos">🔎 Todo / sin filtro</option>
-            <option value="ventas">🛒 Venta</option>
-            <option value="stock">📦 Stock</option>
-            <option value="producto">📌 Producto</option>
-            <option value="auditoria">🕵️ Auditoría</option>
-            <option value="reportes">📈 Reportes de análisis</option>
+            {focusOptions.map((option) => (
+              <option key={option.valor} value={option.valor}>
+                {option.etiqueta}
+              </option>
+            ))}
           </select>
           <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-gray-400 dark:text-slate-500">
             ▼
