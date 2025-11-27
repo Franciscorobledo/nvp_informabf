@@ -1181,12 +1181,11 @@ const FileUpload = ({ onDataReceived, onUnauthorized, onNavigateModule }) => {
               onChange={handleFileChange}
               accept=".csv, .xlsx, .zip"
               multiple
-              disabled={demoMetadata?.is_demo}
               className="w-full sm:w-auto border border-gray-300 dark:border-slate-700 p-3 rounded-lg shadow-sm focus:ring focus:ring-blue-300 bg-white dark:bg-slate-900 dark:text-slate-100 dark:placeholder-slate-400"
             />
             {demoMetadata?.is_demo && (
               <p className="text-xs text-amber-600 dark:text-amber-300 text-center">
-                Estás viendo datos de ejemplo. Inicia un análisis real para reemplazarlos.
+                Estás viendo datos de ejemplo. Sube un archivo para reemplazarlos.
               </p>
             )}
           </>
@@ -1230,7 +1229,7 @@ const FileUpload = ({ onDataReceived, onUnauthorized, onNavigateModule }) => {
         <div className="flex flex-col sm:flex-row gap-3 w-full">
           <AppButton
             onClick={handleUpload}
-            disabled={files.length === 0 || demoMetadata?.is_demo}
+            disabled={files.length === 0}
             loading={loading || isAnalyzing}
             loadingText="Analizando..."
             fullWidth
