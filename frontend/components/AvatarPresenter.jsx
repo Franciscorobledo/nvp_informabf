@@ -46,12 +46,6 @@ const AvatarPresenter = ({ mood = "neutral", narration }) => {
           {style.icon}
         </span>
       </div>
-      <div className="relative w-full">
-        <div className="absolute -left-3 top-6 h-3 w-3 rotate-45 bg-slate-800" />
-        <div className="rounded-2xl bg-slate-800 p-4 text-sm text-slate-100 shadow-xl">
-          {narration}
-        </div>
-      </div>
     </div>
   );
 };

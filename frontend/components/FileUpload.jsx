@@ -116,7 +116,7 @@ const FileUpload = ({ onDataReceived, onUnauthorized, onNavigateModule }) => {
     tokenClientRef.current = window.google.accounts.oauth2.initTokenClient({
       client_id: googleClientId,
       scope: "https://www.googleapis.com/auth/drive.readonly",
-      callback: () => {},
+      callback: () => { },
     });
   }, [drivePickerReady, googleClientId]);
 
@@ -1064,19 +1064,19 @@ const FileUpload = ({ onDataReceived, onUnauthorized, onNavigateModule }) => {
 
   const topNullColumns = preAnalysis
     ? (() => {
-        const source = preAnalysis.null_percentages || preAnalysis.null_counts || {};
-        const hasPercentages = Boolean(preAnalysis.null_percentages);
-        return Object.entries(source)
-          .sort(([, a], [, b]) => (Number(b ?? 0) || 0) - (Number(a ?? 0) || 0))
-          .slice(0, 3)
-          .map(([col, value]) => {
-            const numericValue = Number(value ?? 0);
-            const displayValue = hasPercentages
-              ? `${numericValue.toFixed(1)}%`
-              : `${numericValue.toLocaleString()}`;
-            return `${col} (${displayValue})`;
-          });
-      })()
+      const source = preAnalysis.null_percentages || preAnalysis.null_counts || {};
+      const hasPercentages = Boolean(preAnalysis.null_percentages);
+      return Object.entries(source)
+        .sort(([, a], [, b]) => (Number(b ?? 0) || 0) - (Number(a ?? 0) || 0))
+        .slice(0, 3)
+        .map(([col, value]) => {
+          const numericValue = Number(value ?? 0);
+          const displayValue = hasPercentages
+            ? `${numericValue.toFixed(1)}%`
+            : `${numericValue.toLocaleString()}`;
+          return `${col} (${displayValue})`;
+        });
+    })()
     : [];
 
   return (
@@ -1140,11 +1140,10 @@ const FileUpload = ({ onDataReceived, onUnauthorized, onNavigateModule }) => {
         <div className="flex flex-wrap gap-2 justify-center">
           <button
             onClick={() => setUploadMode("local")}
-            className={`px-4 py-2 rounded-lg text-sm font-semibold border transition ${
-              uploadMode === "local"
+            className={`px-4 py-2 rounded-lg text-sm font-semibold border transition ${uploadMode === "local"
                 ? "bg-blue-50 dark:bg-slate-800 border-blue-300 text-blue-700 dark:text-blue-200"
                 : "bg-white dark:bg-slate-900 border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-200"
-            }`}
+              }`}
           >
             📁 Subir desde tu equipo
           </button>
@@ -1156,11 +1155,10 @@ const FileUpload = ({ onDataReceived, onUnauthorized, onNavigateModule }) => {
           {false && (
             <button
               onClick={() => setUploadMode("drive")}
-              className={`px-4 py-2 rounded-lg text-sm font-semibold border transition ${
-                uploadMode === "drive"
+              className={`px-4 py-2 rounded-lg text-sm font-semibold border transition ${uploadMode === "drive"
                   ? "bg-blue-50 dark:bg-slate-800 border-blue-300 text-blue-700 dark:text-blue-200"
                   : "bg-white dark:bg-slate-900 border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-200"
-              }`}
+                }`}
             >
               ☁️ Importar desde Google Drive
             </button>
@@ -1197,11 +1195,10 @@ const FileUpload = ({ onDataReceived, onUnauthorized, onNavigateModule }) => {
             <button
               onClick={openDrivePicker}
               disabled={driveLoading || !drivePickerReady}
-              className={`w-full sm:w-auto px-6 py-3 rounded-lg font-semibold transition-all duration-300 ${
-                driveLoading || !drivePickerReady
+              className={`w-full sm:w-auto px-6 py-3 rounded-lg font-semibold transition-all duration-300 ${driveLoading || !drivePickerReady
                   ? "bg-gray-400 text-white cursor-not-allowed"
                   : "bg-emerald-600 hover:bg-emerald-700 text-white shadow"
-              }`}
+                }`}
             >
               {driveLoading
                 ? "Conectando con Google..."
@@ -1271,6 +1268,7 @@ const FileUpload = ({ onDataReceived, onUnauthorized, onNavigateModule }) => {
                 <LoadingBar
                   progress={uploadProgress}
                   label="Subiendo archivo(s)…"
+                  step="cargando"
                   helperText={
                     uploadProgress < 100
                       ? "Cifrando y verificando tus archivos antes de analizarlos."
@@ -1283,6 +1281,7 @@ const FileUpload = ({ onDataReceived, onUnauthorized, onNavigateModule }) => {
                 <LoadingBar
                   progress={displayProgress}
                   label={getStepLabel(analysisStep)}
+                  step={analysisStep}
                   helperText={
                     statusMessage ||
                     "El asistente está limpiando, conectando y resumiendo tu dataset."
@@ -1312,10 +1311,10 @@ const FileUpload = ({ onDataReceived, onUnauthorized, onNavigateModule }) => {
             </div>
           )}
 
-        {preAnalysis && (
-          <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 shadow space-y-4">
-            <div className="flex items-center gap-2">
-              <div className="w-10 h-10 rounded-full bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-200 flex items-center justify-center font-bold">
+          {preAnalysis && (
+            <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 shadow space-y-4">
+              <div className="flex items-center gap-2">
+                <div className="w-10 h-10 rounded-full bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-200 flex items-center justify-center font-bold">
                   ⚡️
                 </div>
                 <div>
@@ -1394,11 +1393,10 @@ const FileUpload = ({ onDataReceived, onUnauthorized, onNavigateModule }) => {
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
-                  className={`px-4 py-2 text-sm font-semibold rounded-xl transition-all duration-300 flex items-center gap-2 ${
-                    activeTab === tab.id
+                  className={`px-4 py-2 text-sm font-semibold rounded-xl transition-all duration-300 flex items-center gap-2 ${activeTab === tab.id
                       ? "text-blue-700 bg-white shadow-sm border border-blue-200 dark:text-blue-200 dark:bg-slate-800 dark:border-slate-700"
                       : "text-gray-600 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-300"
-                  }`}
+                    }`}
                 >
                   {tab.label}
                 </button>
@@ -1453,22 +1451,20 @@ const FileUpload = ({ onDataReceived, onUnauthorized, onNavigateModule }) => {
                       <div className="flex items-center gap-2">
                         <button
                           onClick={() => setGalleryMode("static")}
-                          className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition ${
-                            galleryMode === "static"
+                          className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition ${galleryMode === "static"
                               ? "border-blue-500 text-blue-700 dark:text-blue-200 bg-blue-50 dark:bg-slate-800"
                               : "border-gray-200 dark:border-slate-700 text-gray-600 dark:text-slate-300"
-                          }`}
+                            }`}
                         >
                           📷 Capturas
                         </button>
                         <button
                           onClick={() => setGalleryMode("interactive")}
                           disabled={!interactiveGalleryCharts.length}
-                          className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition flex items-center gap-1 ${
-                            galleryMode === "interactive"
+                          className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition flex items-center gap-1 ${galleryMode === "interactive"
                               ? "border-emerald-500 text-emerald-700 dark:text-emerald-200 bg-emerald-50 dark:bg-slate-800"
                               : "border-gray-200 dark:border-slate-700 text-gray-600 dark:text-slate-300"
-                          } ${!interactiveGalleryCharts.length ? "opacity-60 cursor-not-allowed" : ""}`}
+                            } ${!interactiveGalleryCharts.length ? "opacity-60 cursor-not-allowed" : ""}`}
                         >
                           🧭 Interactivo
                         </button>
@@ -1498,109 +1494,109 @@ const FileUpload = ({ onDataReceived, onUnauthorized, onNavigateModule }) => {
                     <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
                       {galleryMode === "interactive"
                         ? (() => {
-                            const charts = filterGraphsByCategory(interactiveGalleryCharts).slice(
-                              0,
-                              interactiveLimit
-                            );
+                          const charts = filterGraphsByCategory(interactiveGalleryCharts).slice(
+                            0,
+                            interactiveLimit
+                          );
 
-                            return charts.length ? (
-                              charts.map((chart, index) => (
-                                <div
-                                  key={`${chart.title}-${index}`}
-                                  className="group overflow-hidden rounded-2xl border border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-lg"
-                                >
-                                  <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-slate-800">
-                                    <div className="flex items-center gap-3">
-                                      <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-700 dark:text-emerald-200">
-                                        <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                                          <path d="M3 3v18h18" />
-                                          <path d="M7 16l3-3 4 4 5-5" />
-                                        </svg>
-                                      </span>
-                                      <div>
-                                        <p className="text-xs uppercase tracking-wide text-gray-500 dark:text-slate-400">Interactivo</p>
-                                        <h4 className="text-base font-semibold text-gray-900 dark:text-white">{chart.title}</h4>
-                                      </div>
-                                    </div>
-                                    <span className="text-[11px] text-gray-500 dark:text-slate-400">Tooltip + Leyenda</span>
-                                  </div>
-                                  <div className="p-5 h-72">
-                                    <ResponsiveContainer width="100%" height="100%">
-                                      {chart.type === "bar" ? (
-                                        <BarChart data={chart.data.slice(0, interactiveLimit)} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                                          <CartesianGrid strokeDasharray="3 3" strokeOpacity={0.2} />
-                                          <XAxis dataKey={chart.xKey} tick={{ fontSize: 12 }} angle={-15} textAnchor="end" height={70} />
-                                          <YAxis tick={{ fontSize: 12 }} />
-                                          <Tooltip formatter={(value) => Number(value).toLocaleString()} />
-                                          <Legend />
-                                          <Bar dataKey={chart.yKey} name={chart.yKey} fill="#10b981" radius={[10, 10, 4, 4]} />
-                                        </BarChart>
-                                      ) : (
-                                        <LineChart data={chart.data.slice(0, interactiveLimit)} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                                          <CartesianGrid strokeDasharray="3 3" strokeOpacity={0.2} />
-                                          <XAxis dataKey={chart.xKey} tick={{ fontSize: 12 }} angle={-10} textAnchor="end" height={60} />
-                                          <YAxis tick={{ fontSize: 12 }} />
-                                          <Tooltip formatter={(value) => Number(value).toLocaleString()} />
-                                          <Legend />
-                                          <Line type="monotone" dataKey={chart.yKey} name={chart.yKey} stroke="#6366f1" strokeWidth={2} dot={{ r: 3 }} />
-                                        </LineChart>
-                                      )}
-                                    </ResponsiveContainer>
-                                  </div>
-                                </div>
-                              ))
-                            ) : (
-                              <p className="text-gray-500 dark:text-slate-400 italic text-center col-span-2">
-                                No hay datos suficientes en la muestra para construir gráficos interactivos.
-                              </p>
-                            );
-                          })()
-                        : filterGraphsByCategory(analysis.graphs)?.length > 0 ? (
-                            filterGraphsByCategory(analysis.graphs).map((chart, i) => (
+                          return charts.length ? (
+                            charts.map((chart, index) => (
                               <div
-                                key={i}
-                                className="group relative overflow-hidden rounded-2xl border border-gray-200 dark:border-slate-800 bg-gradient-to-br from-white to-slate-50 dark:from-slate-900 dark:to-slate-950 shadow-lg"
+                                key={`${chart.title}-${index}`}
+                                className="group overflow-hidden rounded-2xl border border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-lg"
                               >
                                 <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-slate-800">
                                   <div className="flex items-center gap-3">
-                                    <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-200">
+                                    <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-700 dark:text-emerald-200">
                                       <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                                         <path d="M3 3v18h18" />
                                         <path d="M7 16l3-3 4 4 5-5" />
                                       </svg>
                                     </span>
                                     <div>
-                                      <p className="text-xs uppercase tracking-wide text-gray-500 dark:text-slate-400">Visualización</p>
-                                      <h4 className="text-base font-semibold text-gray-900 dark:text-white">{chart.column || `Gráfico ${i + 1}`}</h4>
+                                      <p className="text-xs uppercase tracking-wide text-gray-500 dark:text-slate-400">Interactivo</p>
+                                      <h4 className="text-base font-semibold text-gray-900 dark:text-white">{chart.title}</h4>
                                     </div>
                                   </div>
-                                  <div className="relative">
-                                    <div className="inline-flex items-center gap-1 text-xs text-gray-500 dark:text-slate-400 border border-gray-200 dark:border-slate-700 rounded-full px-3 py-1">
-                                      <span className="w-2 h-2 rounded-full bg-blue-500" />
-                                      Hover para detalles
-                                    </div>
-                                    <div className="pointer-events-none absolute right-0 mt-2 w-48 rounded-xl bg-white/95 dark:bg-slate-900/95 shadow-lg border border-gray-200 dark:border-slate-800 p-3 text-xs text-gray-600 dark:text-slate-200 opacity-0 translate-y-1 group-hover:opacity-100 group-hover:translate-y-0 transition duration-200">
-                                      Gráficos enmarcados con sombra sutil y tipografía reforzada para un look tipo Notion/Linear.
-                                    </div>
-                                  </div>
+                                  <span className="text-[11px] text-gray-500 dark:text-slate-400">Tooltip + Leyenda</span>
                                 </div>
-                                <div className="p-5">
-                                  <div className="overflow-hidden rounded-xl border border-gray-100 dark:border-slate-800 shadow-inner bg-white dark:bg-slate-900">
-                                    <img
-                                      src={chart.image}
-                                      alt={chart.column}
-                                      className="rounded-lg mx-auto"
-                                      style={{ maxHeight: "320px", objectFit: "contain" }}
-                                    />
-                                  </div>
+                                <div className="p-5 h-72">
+                                  <ResponsiveContainer width="100%" height="100%">
+                                    {chart.type === "bar" ? (
+                                      <BarChart data={chart.data.slice(0, interactiveLimit)} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                                        <CartesianGrid strokeDasharray="3 3" strokeOpacity={0.2} />
+                                        <XAxis dataKey={chart.xKey} tick={{ fontSize: 12 }} angle={-15} textAnchor="end" height={70} />
+                                        <YAxis tick={{ fontSize: 12 }} />
+                                        <Tooltip formatter={(value) => Number(value).toLocaleString()} />
+                                        <Legend />
+                                        <Bar dataKey={chart.yKey} name={chart.yKey} fill="#10b981" radius={[10, 10, 4, 4]} />
+                                      </BarChart>
+                                    ) : (
+                                      <LineChart data={chart.data.slice(0, interactiveLimit)} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                                        <CartesianGrid strokeDasharray="3 3" strokeOpacity={0.2} />
+                                        <XAxis dataKey={chart.xKey} tick={{ fontSize: 12 }} angle={-10} textAnchor="end" height={60} />
+                                        <YAxis tick={{ fontSize: 12 }} />
+                                        <Tooltip formatter={(value) => Number(value).toLocaleString()} />
+                                        <Legend />
+                                        <Line type="monotone" dataKey={chart.yKey} name={chart.yKey} stroke="#6366f1" strokeWidth={2} dot={{ r: 3 }} />
+                                      </LineChart>
+                                    )}
+                                  </ResponsiveContainer>
                                 </div>
                               </div>
                             ))
                           ) : (
                             <p className="text-gray-500 dark:text-slate-400 italic text-center col-span-2">
-                              No hay gráficos disponibles.
+                              No hay datos suficientes en la muestra para construir gráficos interactivos.
                             </p>
-                          )}
+                          );
+                        })()
+                        : filterGraphsByCategory(analysis.graphs)?.length > 0 ? (
+                          filterGraphsByCategory(analysis.graphs).map((chart, i) => (
+                            <div
+                              key={i}
+                              className="group relative overflow-hidden rounded-2xl border border-gray-200 dark:border-slate-800 bg-gradient-to-br from-white to-slate-50 dark:from-slate-900 dark:to-slate-950 shadow-lg"
+                            >
+                              <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-slate-800">
+                                <div className="flex items-center gap-3">
+                                  <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-200">
+                                    <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                      <path d="M3 3v18h18" />
+                                      <path d="M7 16l3-3 4 4 5-5" />
+                                    </svg>
+                                  </span>
+                                  <div>
+                                    <p className="text-xs uppercase tracking-wide text-gray-500 dark:text-slate-400">Visualización</p>
+                                    <h4 className="text-base font-semibold text-gray-900 dark:text-white">{chart.column || `Gráfico ${i + 1}`}</h4>
+                                  </div>
+                                </div>
+                                <div className="relative">
+                                  <div className="inline-flex items-center gap-1 text-xs text-gray-500 dark:text-slate-400 border border-gray-200 dark:border-slate-700 rounded-full px-3 py-1">
+                                    <span className="w-2 h-2 rounded-full bg-blue-500" />
+                                    Hover para detalles
+                                  </div>
+                                  <div className="pointer-events-none absolute right-0 mt-2 w-48 rounded-xl bg-white/95 dark:bg-slate-900/95 shadow-lg border border-gray-200 dark:border-slate-800 p-3 text-xs text-gray-600 dark:text-slate-200 opacity-0 translate-y-1 group-hover:opacity-100 group-hover:translate-y-0 transition duration-200">
+                                    Gráficos enmarcados con sombra sutil y tipografía reforzada para un look tipo Notion/Linear.
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="p-5">
+                                <div className="overflow-hidden rounded-xl border border-gray-100 dark:border-slate-800 shadow-inner bg-white dark:bg-slate-900">
+                                  <img
+                                    src={chart.image}
+                                    alt={chart.column}
+                                    className="rounded-lg mx-auto"
+                                    style={{ maxHeight: "320px", objectFit: "contain" }}
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                          ))
+                        ) : (
+                          <p className="text-gray-500 dark:text-slate-400 italic text-center col-span-2">
+                            No hay gráficos disponibles.
+                          </p>
+                        )}
                     </div>
                   </div>
                 </div>
@@ -1744,11 +1740,10 @@ const FileUpload = ({ onDataReceived, onUnauthorized, onNavigateModule }) => {
                       <button
                         onClick={handleSendReportEmail}
                         disabled={sendingReport || downloading || !analysis}
-                        className={`w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl font-semibold transition shadow-md focus:outline-none focus:ring-4 focus:ring-emerald-200 ${
-                          sendingReport || downloading || !analysis
+                        className={`w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl font-semibold transition shadow-md focus:outline-none focus:ring-4 focus:ring-emerald-200 ${sendingReport || downloading || !analysis
                             ? "bg-gray-300 text-gray-500 cursor-not-allowed"
                             : "bg-emerald-500 text-white hover:bg-emerald-600"
-                        }`}
+                          }`}
                       >
                         <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                           <path d="M4 4l8 6 8-6" />
@@ -1761,11 +1756,10 @@ const FileUpload = ({ onDataReceived, onUnauthorized, onNavigateModule }) => {
                     </div>
                     {emailFeedback && (
                       <p
-                        className={`text-sm text-left ${
-                          emailFeedback.startsWith("⚠️")
+                        className={`text-sm text-left ${emailFeedback.startsWith("⚠️")
                             ? "text-amber-700 dark:text-amber-300"
                             : "text-emerald-700 dark:text-emerald-300"
-                        }`}
+                          }`}
                       >
                         {emailFeedback}
                       </p>
@@ -1775,11 +1769,10 @@ const FileUpload = ({ onDataReceived, onUnauthorized, onNavigateModule }) => {
                   <button
                     onClick={handleDownloadReport}
                     disabled={downloading || !analysis}
-                    className={`group relative inline-flex items-center justify-center gap-2 px-8 py-3 rounded-full font-semibold tracking-wide transition-all duration-300 shadow-lg focus:outline-none focus:ring-4 focus:ring-emerald-200 ${
-                      downloading || !analysis
+                    className={`group relative inline-flex items-center justify-center gap-2 px-8 py-3 rounded-full font-semibold tracking-wide transition-all duration-300 shadow-lg focus:outline-none focus:ring-4 focus:ring-emerald-200 ${downloading || !analysis
                         ? "bg-gray-300 text-gray-500 cursor-not-allowed"
                         : "bg-gradient-to-r from-emerald-400 via-emerald-500 to-emerald-600 text-white hover:scale-[1.02] hover:shadow-xl"
-                    }`}
+                      }`}
                   >
                     <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                       <path d="M12 3v12" />

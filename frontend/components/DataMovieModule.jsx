@@ -120,6 +120,14 @@ const DataMovieModule = ({ onUnauthorized }) => {
     }
   };
 
+  const playerRef = React.useRef(null);
+
+  React.useEffect(() => {
+    if (response && playerRef.current) {
+      playerRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }, [response]);
+
   return (
     <div className="space-y-6">
       <div className="space-y-2">
@@ -216,7 +224,7 @@ const DataMovieModule = ({ onUnauthorized }) => {
       )}
 
       {response && (
-        <div className="rounded-3xl border border-slate-800 bg-slate-950/80 p-4">
+        <div ref={playerRef} className="rounded-3xl border border-slate-800 bg-slate-950/80 p-4 scroll-mt-6">
           <p className="text-sm text-slate-200 mb-2">
             Presentación automática con escenas animadas y avatar. Usa las flechas o espera a que el reproductor avance según la duración de cada escena.
           </p>

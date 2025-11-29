@@ -12,60 +12,79 @@ const LoadingBar = ({
     clampProgress(progress)
   );
 
+  // --- MODO PROGRESO NORMAL (NO INDETERMINADO) ---
   useEffect(() => {
     if (indeterminate) return;
-    setDisplayProgress(clampProgress(progress));
+
+    // Garantiza que nunca retroceda
+    setDisplayProgress((prev) => {
+      const next = clampProgress(progress);
+      return next < prev ? prev : next;
+    });
   }, [progress, indeterminate]);
 
-  useEffect(() => {
-    if (!indeterminate) return undefined;
-
-    setDisplayProgress(48);
-    const interval = setInterval(() => {
-      setDisplayProgress((prev) => {
-        const next = prev + (Math.random() * 14 - 6);
-        if (next > 86) return 62;
-        if (next < 28) return 46;
-        return next;
-      });
-    }, 900);
-
-    return () => clearInterval(interval);
-  }, [indeterminate]);
-
   return (
-    <div className="rounded-2xl border border-gray-200 dark:border-slate-800 bg-white/90 dark:bg-slate-900/80 p-4 shadow-sm">
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <span className="relative flex h-2.5 w-2.5">
-            <span className="absolute inline-flex h-full w-full rounded-full bg-blue-500 opacity-60 animate-ping" />
-            <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-blue-600 shadow-[0_0_0_2px_rgba(59,130,246,0.2)]" />
+    <div className="w-full max-w-3xl mx-auto font-sans py-4">
+      {/* Header: Label & Percentage */}
+      <div className="mb-2 flex items-end justify-between">
+        <div className="flex flex-col">
+          <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">
+            {label || "Procesando..."}
           </span>
-          <p className="text-sm font-semibold text-gray-800 dark:text-slate-100">{label}</p>
+          {helperText && (
+            <span className="text-xs text-slate-500 dark:text-slate-400">
+              {helperText}
+            </span>
+          )}
         </div>
-        <span className="text-xs font-semibold text-blue-700 dark:text-blue-200">
-          {Math.round(displayProgress)}%
-        </span>
+
+        {!indeterminate && (
+          <span className="text-sm font-bold text-slate-700 dark:text-slate-300 tabular-nums">
+            {Math.round(displayProgress)}%
+          </span>
+        )}
       </div>
 
-      {helperText && (
-        <p className="mt-1 text-xs text-gray-600 dark:text-slate-300">{helperText}</p>
-      )}
-
-      <div className="mt-3 relative h-3 w-full overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800/80 border border-white/70 dark:border-slate-700/70 shadow-inner">
-        <div className="loading-bar-glow" aria-hidden />
-        <div
-          className="loading-bar-fill"
-          style={{ width: `${displayProgress}%` }}
-          role="progressbar"
-          aria-valuemin={0}
-          aria-valuemax={100}
-          aria-valuenow={Math.round(displayProgress)}
-          aria-label={label}
-        >
-          <span className="loading-bar-shine" aria-hidden />
-        </div>
+      {/* Progress Container */}
+      <div className="relative h-2 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
+        {/* --- MODO INDETERMINADO --- */}
+        {indeterminate ? (
+          <div className="absolute inset-0 overflow-hidden">
+            <div className="indeterminate-bar" />
+          </div>
+        ) : (
+          /* --- MODO NORMAL --- */
+          <div
+            className="h-full bg-blue-600 dark:bg-blue-500 transition-all duration-300 ease-out"
+            style={{ width: `${displayProgress}%` }}
+            role="progressbar"
+            aria-valuenow={Math.round(displayProgress)}
+          />
+        )}
       </div>
+
+      {/* Estilos para la animación indeterminada */}
+      <style>{`
+        .indeterminate-bar {
+          width: 50%;
+          height: 100%;
+          background-color: #2563eb;
+          border-radius: 999px;
+          animation: indeterminateLoop 1.3s infinite ease-in-out;
+        }
+
+        @keyframes indeterminateLoop {
+          0% {
+            transform: translateX(-50%);
+          }
+          50% {
+            transform: translateX(120%);
+          }
+          100% {
+            transform: translateX(-50%);
+          }
+        }
+      `}</style>
     </div>
   );
 };

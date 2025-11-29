@@ -704,6 +704,70 @@ def build_data_movie(
         }
     )
 
+    # 🆕 Auto-generate additional scenes based on data patterns
+    try:
+        from utils.movie_generators import (
+            generate_comparison_scene,
+            generate_distribution_scene,
+            generate_correlation_scene,
+            generate_anomalies_scene,
+            generate_trend_scene,
+            generate_concentration_scene
+        )
+        from utils.movie_detectors import (
+            should_generate_comparison,
+            should_generate_distribution,
+            has_temporal_data,
+            has_categorical_data,
+            has_multiple_numeric_cols
+        )
+        
+        # Build schema for detectors
+        detection_schema = {
+            "date_column": date_col,
+            "column_types": column_types
+        }
+        
+        # Generate comparison scene if applicable
+        if should_generate_comparison(df, detection_schema):
+            comp_scene = generate_comparison_scene(df, detection_schema)
+            if comp_scene:
+                scenes.append(comp_scene)
+        
+        # Generate distribution scene if applicable
+        if should_generate_distribution(df, detection_schema):
+            dist_scene = generate_distribution_scene(df, detection_schema)
+            if dist_scene:
+                scenes.append(dist_scene)
+        
+        # Generate correlation scene if applicable
+        if has_multiple_numeric_cols(df, detection_schema):
+            corr_scene = generate_correlation_scene(df, detection_schema)
+            if corr_scene:
+                scenes.append(corr_scene)
+        
+        # Generate anomalies scene if applicable
+        anom_scene = generate_anomalies_scene(df, detection_schema)
+        if anom_scene:
+            scenes.append(anom_scene)
+        
+        # Generate trend scene if applicable (beyond basic timeline)
+        if has_temporal_data(df, detection_schema) and len(timeline_points) >= 5:
+            trend_scene = generate_trend_scene(df, detection_schema)
+            if trend_scene:
+                scenes.append(trend_scene)
+        
+        # Generate concentration scene if applicable
+        if has_categorical_data(df, detection_schema) and metric_col:
+            conc_scene = generate_concentration_scene(df, detection_schema)
+            if conc_scene:
+                scenes.append(conc_scene)
+    
+    except Exception as e:
+        # Silently fail if new scene generation has issues
+        print(f"⚠️ Error generating enhanced scenes: {e}")
+        pass
+
     # Outro scene
     def _compose_outro_recommendations():
         recs: list[str] = []
@@ -823,6 +887,27 @@ def generate_data_movie_payload(
         usage_context={"source": "data_movie"},
     )
     data_movie = _apply_ai_movie_response(data_movie, ai_movie_response)
+    
+    # 🆕 Generar insights específicos para PYMEs (ventas/inventario)
+    try:
+        from utils.pyme_insights import generate_pyme_insights
+        
+        pyme_insights = generate_pyme_insights(cleaned, ai_schema)
+        
+        # Agregar insights al data_movie
+        if data_movie and isinstance(data_movie, dict):
+            data_movie["pyme_insights"] = pyme_insights
+            
+            # Actualizar título según tipo detectado
+            dataset_type = pyme_insights.get("type", "generic")
+            if dataset_type == "sales":
+                data_movie["movie_title"] = "Película de Ventas"
+                data_movie["movie_subtitle"] = "Análisis inteligente de tus ventas"
+            elif dataset_type == "inventory":
+                data_movie["movie_title"] = "Película de Inventario"
+                data_movie["movie_subtitle"] = "Estado de tu stock y recomendaciones"
+    except Exception as e:
+        print(f"⚠️ Error generating PYME insights: {e}")
 
     basic_summary = {
         "rows": int(len(cleaned)),
