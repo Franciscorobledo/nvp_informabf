@@ -17,6 +17,7 @@ import VisualizationExplorer from "./VisualizationExplorer";
 import AppButton from "./AppButton";
 import LoadingBar from "./LoadingBar";
 import focusOptions from "./focusOptions";
+import DataChat from "./DataChat";
 
 const FileUpload = ({ onDataReceived, onUnauthorized, onNavigateModule }) => {
   const [files, setFiles] = useState([]);
@@ -49,6 +50,8 @@ const FileUpload = ({ onDataReceived, onUnauthorized, onNavigateModule }) => {
   const [galleryMode, setGalleryMode] = useState("static");
   const [interactiveLimit, setInteractiveLimit] = useState(10);
   const filterSelectRef = useRef(null);
+
+  const datasetId = analysis?.datasetId || analysis?.dataset_id || jobId;
 
   const goToMovieModule = () => onNavigateModule?.("movie");
   const goToCompareModule = () => onNavigateModule?.("compare");
@@ -1701,6 +1704,8 @@ const FileUpload = ({ onDataReceived, onUnauthorized, onNavigateModule }) => {
                       </ul>
                     </div>
                   </div>
+
+                  <DataChat datasetId={datasetId} />
                 </div>
               )}
 
