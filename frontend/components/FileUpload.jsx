@@ -49,9 +49,20 @@ const FileUpload = ({ onDataReceived, onUnauthorized, onNavigateModule }) => {
   const [resultNotice, setResultNotice] = useState("");
   const [galleryMode, setGalleryMode] = useState("static");
   const [interactiveLimit, setInteractiveLimit] = useState(10);
+  const [persistedDatasetId, setPersistedDatasetId] = useState(() => {
+    if (typeof window === "undefined") return null;
+    return localStorage.getItem("lastDatasetId");
+  });
+  const [persistedDatasetName, setPersistedDatasetName] = useState(() => {
+    if (typeof window === "undefined") return "";
+    return localStorage.getItem("lastDatasetName") || "";
+  });
   const filterSelectRef = useRef(null);
 
-  const datasetId = analysis?.datasetId || analysis?.dataset_id || jobId;
+  const datasetId =
+    analysis?.datasetId || analysis?.dataset_id || jobId || persistedDatasetId;
+  const datasetName =
+    analysis?.metadata?.file_name || analysis?.file_name || persistedDatasetName;
 
   const goToMovieModule = () => onNavigateModule?.("movie");
   const goToCompareModule = () => onNavigateModule?.("compare");
@@ -59,6 +70,20 @@ const FileUpload = ({ onDataReceived, onUnauthorized, onNavigateModule }) => {
   const tokenClientRef = useRef(null);
   const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
   const googleApiKey = import.meta.env.VITE_GOOGLE_API_KEY;
+
+  const persistDatasetMeta = (id, name) => {
+    if (!id) return;
+    setPersistedDatasetId(id);
+    if (typeof window !== "undefined") {
+      localStorage.setItem("lastDatasetId", id);
+    }
+    if (name) {
+      setPersistedDatasetName(name);
+      if (typeof window !== "undefined") {
+        localStorage.setItem("lastDatasetName", name);
+      }
+    }
+  };
 
   const loadScript = (src) =>
     new Promise((resolve, reject) => {
@@ -175,6 +200,11 @@ const FileUpload = ({ onDataReceived, onUnauthorized, onNavigateModule }) => {
           if (data.result) {
             setAnalysis(data.result);
             setAiCharts(generateAiCharts(data.result.sample));
+            const resolvedDatasetId =
+              data.result.datasetId || data.result.dataset_id || jobId;
+            const resolvedFileName =
+              data.result.metadata?.file_name || data.result.file_name;
+            persistDatasetMeta(resolvedDatasetId, resolvedFileName);
             onDataReceived?.(data.result);
             setResultNotice("Análisis listo. Explora los KPIs, gráficos e insights generados.");
           }
@@ -811,6 +841,9 @@ const FileUpload = ({ onDataReceived, onUnauthorized, onNavigateModule }) => {
 
       const data = await res.json();
       setAnalysis(data);
+      const demoDatasetId = data?.datasetId || data?.dataset_id || data?.analysis_id;
+      const demoFileName = data?.metadata?.file_name || data?.file_name || "Demo de ventas";
+      persistDatasetMeta(demoDatasetId, demoFileName);
       setAiCharts(generateAiCharts(data.sample));
       setDemoMetadata(data.demo_metadata || { is_demo: true, scenario: "ventas_demo" });
       onDataReceived?.(data);
@@ -1529,7 +1562,7 @@ const FileUpload = ({ onDataReceived, onUnauthorized, onNavigateModule }) => {
                     </div>
                   </div>
 
-                  <DataChat datasetId={datasetId} />
+                  <DataChat datasetId={datasetId} datasetName={datasetName} />
                 </div>
               )}
 

@@ -1,6 +1,6 @@
 import React, { useMemo, useRef, useState } from "react";
 
-const DataChat = ({ datasetId }) => {
+const DataChat = ({ datasetId, datasetName }) => {
   const [messages, setMessages] = useState([
     {
       role: "system",
@@ -12,6 +12,7 @@ const DataChat = ({ datasetId }) => {
   const [loading, setLoading] = useState(false);
   const scrollRef = useRef(null);
   const API_URL = import.meta.env.VITE_API_URL || "http://localhost:1000";
+  const hasDataset = Boolean(datasetId);
 
   const quickQuestions = useMemo(
     () => [
@@ -25,8 +26,8 @@ const DataChat = ({ datasetId }) => {
   );
 
   const canSend = useMemo(
-    () => Boolean(datasetId) && Boolean(input.trim()) && !loading,
-    [datasetId, input, loading]
+    () => hasDataset && Boolean(input.trim()) && !loading,
+    [hasDataset, input, loading]
   );
 
   const appendMessage = (newMessage) => {
@@ -43,7 +44,7 @@ const DataChat = ({ datasetId }) => {
 
   const handleSend = async (overrideMessage) => {
     const textToSend = overrideMessage ?? input;
-    if (!textToSend || !textToSend.trim() || loading || !datasetId) return;
+    if (!textToSend || !textToSend.trim() || loading || !hasDataset) return;
 
     const userMessage = textToSend.trim();
     appendMessage({ role: "user", content: userMessage });
@@ -96,13 +97,47 @@ const DataChat = ({ datasetId }) => {
     }
   };
 
+  const handleQuickQuestion = (question) => {
+    setInput(question);
+    if (hasDataset && !loading) {
+      handleSend(question);
+    }
+  };
+
   return (
-    <div className="rounded-2xl border border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-lg p-6 space-y-4">
-      <div className="space-y-1">
-        <h4 className="text-lg font-semibold text-gray-900 dark:text-white">Chat con tus datos</h4>
-        <p className="text-sm text-gray-600 dark:text-slate-300">
-          Haz preguntas y recibe recomendaciones accionables basadas en este archivo.
-        </p>
+    <div className="rounded-2xl border border-gray-200 dark:border-slate-800 bg-gradient-to-br from-white via-slate-50 to-blue-50 dark:from-slate-900 dark:via-slate-900 dark:to-slate-950 shadow-xl p-6 space-y-5">
+      <div className="space-y-3">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div className="space-y-1">
+            <h4 className="text-lg font-semibold text-gray-900 dark:text-white">Chat con tus datos</h4>
+            <p className="text-sm text-gray-600 dark:text-slate-300">
+              Haz preguntas y recibe recomendaciones accionables basadas en tu último archivo cargado.
+            </p>
+          </div>
+          <div
+            className={`inline-flex items-center gap-2 rounded-full px-3 py-2 text-xs font-semibold shadow-sm ring-1 ${
+              hasDataset
+                ? "bg-emerald-50 text-emerald-700 ring-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-100 dark:ring-emerald-800"
+                : "bg-amber-50 text-amber-700 ring-amber-200 dark:bg-amber-900/40 dark:text-amber-100 dark:ring-amber-700"
+            }`}
+          >
+            <span className="inline-flex h-2.5 w-2.5 rounded-full bg-current" aria-hidden="true" />
+            {hasDataset ? "Dataset listo para conversar" : "Sube un archivo para habilitar"}
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2 rounded-xl bg-white/80 dark:bg-slate-900/70 border border-gray-100 dark:border-slate-800 px-4 py-3 text-xs text-gray-700 dark:text-slate-200 shadow-inner">
+          <span className="inline-flex items-center gap-1 rounded-full bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-100 px-2.5 py-1 font-semibold">
+            ⚡ Contexto activo
+          </span>
+          {hasDataset ? (
+            <span className="font-semibold text-gray-900 dark:text-white">
+              {datasetName || "Dataset cargado"}
+            </span>
+          ) : (
+            <span>Conecta tu dataset desde el módulo "Carga y análisis" para activar el chat.</span>
+          )}
+        </div>
       </div>
 
       <div className="rounded-xl border border-blue-100 dark:border-slate-800 bg-blue-50/50 dark:bg-slate-800/60 p-3 text-sm text-blue-900 dark:text-slate-100">
@@ -112,11 +147,11 @@ const DataChat = ({ datasetId }) => {
             <button
               key={idx}
               type="button"
-              onClick={() => handleSend(question)}
-              disabled={loading || !datasetId}
+              onClick={() => handleQuickQuestion(question)}
+              disabled={loading}
               className={`text-left rounded-lg px-3 py-2 text-xs font-semibold shadow-sm transition focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-400 ${
-                loading || !datasetId
-                  ? "bg-white/50 dark:bg-slate-900/60 text-gray-400 cursor-not-allowed"
+                loading
+                  ? "bg-white/50 dark:bg-slate-900/60 text-gray-400 cursor-wait"
                   : "bg-white dark:bg-slate-900 text-blue-800 dark:text-slate-100 hover:bg-blue-100 dark:hover:bg-slate-800"
               }`}
             >
@@ -154,9 +189,9 @@ const DataChat = ({ datasetId }) => {
           </div>
         )}
 
-        {!datasetId && (
+        {!hasDataset && (
           <p className="text-sm text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-600 rounded-xl px-3 py-2">
-            Carga un archivo para habilitar el chat y obtener recomendaciones sobre tu dataset.
+            Carga un archivo para habilitar el chat y obtener recomendaciones sobre tu dataset. El módulo recordará tu último archivo analizado automáticamente.
           </p>
         )}
       </div>
