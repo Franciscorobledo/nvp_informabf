@@ -1879,4 +1879,5 @@ def analyze_file(
         "ai_schema": ai_schema,
         "data_movie": data_movie,
         "column_types": column_types,
+        "dataset_profile": dataset_profile,
     }

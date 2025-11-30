@@ -39,7 +39,11 @@ from analysis import (
     _infer_ai_schema,
 )
 from auth import admin_required, ensure_default_admin, get_current_user, router as auth_router
-from ai_module import check_openai_status, infer_dataset_schema_with_ai
+from ai_module import (
+    check_openai_status,
+    infer_dataset_schema_with_ai,
+    generate_dataset_chat_reply,
+)
 from utils.dataframe_loader import read_dataframes
 from utils.openai_keys import get_openai_api_key, persist_openai_api_key
 from utils.openai_monitor import get_usage_snapshot
@@ -47,6 +51,7 @@ from usage_api import router as usage_router
 from utils.job_store import JobStore
 from utils.compare_job_store import CompareJobStore
 from utils.data_movie_store import DataMovieStore
+from utils.dataset_store import DatasetStore
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
@@ -88,6 +93,7 @@ app = FastAPI(title="InformeBF - Intelligent Data Visualizer")
 job_store = JobStore()
 compare_job_store = CompareJobStore()
 data_movie_store = DataMovieStore()
+dataset_store = DatasetStore()
 
 
 class OpenAITokenPayload(BaseModel):
@@ -97,6 +103,10 @@ class OpenAITokenPayload(BaseModel):
 class EmailReportPayload(BaseModel):
     analysis: dict
     email: EmailStr
+
+
+class DatasetChatPayload(BaseModel):
+    message: str
 
 # ==============================
 # CONFIGURACIÓN DE CORS
@@ -210,6 +220,34 @@ def clean_base64_image(image_data: str):
         return None
 
 
+def _persist_dataset_context(
+    dataset_id: str,
+    dataset_name: str,
+    analysis_result: dict,
+    metadata: dict | None = None,
+    source: str | None = None,
+):
+    """Guarda en memoria el contexto necesario para el chat de datos."""
+
+    dataset_store.save_dataset(
+        dataset_id,
+        {
+            "dataset_id": dataset_id,
+            "dataset_name": dataset_name,
+            "summary": analysis_result.get("summary", {}),
+            "ai_summary": analysis_result.get("ai_summary"),
+            "refined_insights": analysis_result.get("refined_insights", []),
+            "data_health": analysis_result.get("data_health", {}),
+            "sample": analysis_result.get("sample", []),
+            "column_types": analysis_result.get("column_types", {}),
+            "dataset_profile": analysis_result.get("dataset_profile", {}),
+            "metadata": metadata or {},
+            "source": source,
+            "demo_metadata": analysis_result.get("demo_metadata"),
+        },
+    )
+
+
 def _movie_to_pdf(data_movie: dict) -> io.BytesIO:
     """Genera un PDF simple a partir de las escenas de la película."""
 
@@ -258,6 +296,69 @@ def _movie_to_pdf(data_movie: dict) -> io.BytesIO:
     pdf.save()
     buffer.seek(0)
     return buffer
+
+
+# ==============================
+# DATASETS Y CHAT CON IA
+# ==============================
+
+
+@app.get("/datasets/{dataset_id}/context")
+def get_dataset_context(dataset_id: str, current_user=Depends(get_current_user)):
+    dataset = dataset_store.get_dataset(dataset_id)
+    if not dataset:
+        job = job_store.get_job(dataset_id)
+        job_result = (job or {}).get("result") if job else None
+        if job_result:
+            dataset_name = (job_result.get("metadata") or {}).get("file_name") or "Dataset analizado"
+            _persist_dataset_context(
+                dataset_id=dataset_id,
+                dataset_name=dataset_name,
+                analysis_result=job_result,
+                metadata=job_result.get("metadata"),
+                source="analysis_job_cache",
+            )
+            dataset = dataset_store.get_dataset(dataset_id)
+
+    if not dataset:
+        raise HTTPException(status_code=404, detail="Dataset no encontrado o expirado. Reprocesa el archivo para chatear.")
+
+    return JSONResponse(content=json_safe_deep(dataset))
+
+
+@app.post("/datasets/{dataset_id}/chat")
+async def chat_with_dataset(
+    dataset_id: str,
+    payload: DatasetChatPayload,
+    current_user=Depends(get_current_user),
+):
+    dataset = dataset_store.get_dataset(dataset_id)
+
+    if not dataset:
+        job = job_store.get_job(dataset_id)
+        job_result = (job or {}).get("result") if job else None
+        if job_result:
+            dataset_name = (job_result.get("metadata") or {}).get("file_name") or "Dataset analizado"
+            _persist_dataset_context(
+                dataset_id=dataset_id,
+                dataset_name=dataset_name,
+                analysis_result=job_result,
+                metadata=job_result.get("metadata"),
+                source="analysis_job_cache",
+            )
+            dataset = dataset_store.get_dataset(dataset_id)
+
+    if not dataset:
+        raise HTTPException(status_code=404, detail="No encontramos el dataset para chatear. Vuelve a cargar el archivo o la demo.")
+
+    try:
+        reply = generate_dataset_chat_reply(dataset, payload.message)
+        return {"reply": reply, "datasetId": dataset_id}
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:  # noqa: BLE001
+        logging.error("❌ Error generando respuesta de chat: %s", exc)
+        raise HTTPException(status_code=500, detail="No se pudo generar una respuesta con IA. Intenta nuevamente.") from exc
 
 
 def _movie_charts_zip(data_movie: dict) -> io.BytesIO:
@@ -1200,7 +1301,8 @@ def _run_full_analysis_job(
         job_store.update_job(job_id, step="ia", progress=80)
 
         safe_sample = result.get("sample") or df.head(10).applymap(json_safe).to_dict(orient="records")
-        response = json_safe_deep({
+        dataset_name = file_names[0] if file_names else "Dataset analizado"
+        dataset_payload = {
             "summary": result.get("summary", {}),
             "sample": safe_sample,
             "graphs": result.get("graphs", []),
@@ -1210,7 +1312,21 @@ def _run_full_analysis_job(
             "historical_deviation": result.get("historical_deviation"),
             "learning_updated": result.get("learning_updated", False),
             "column_types": result.get("column_types", {}),
-        })
+            "dataset_profile": result.get("dataset_profile", {}),
+            "datasetId": job_id,
+            "dataset_id": job_id,
+            "metadata": {"file_name": dataset_name, "files": file_names},
+        }
+
+        response = json_safe_deep(dataset_payload)
+
+        _persist_dataset_context(
+            dataset_id=job_id,
+            dataset_name=dataset_name,
+            analysis_result=dataset_payload,
+            metadata={"file_names": file_names, "focus": focus},
+            source="analysis_job",
+        )
 
         job_store.update_job(job_id, step="reporte", progress=100, done=True, result=response)
         logging.info("✅ Análisis de job %s completado", job_id)
@@ -1290,21 +1406,35 @@ async def demo_analyze(
         )
 
         safe_sample = result.get("sample") or df.head(10).applymap(json_safe).to_dict(orient="records")
-        response = json_safe_deep(
-            {
-                "summary": result.get("summary", {}),
-                "sample": safe_sample,
-                "graphs": result.get("graphs", []),
-                "ai_summary": result.get("ai_summary", "No se generó resumen automático."),
-                "data_health": result.get("data_health", {}),
-                "refined_insights": result.get("refined_insights", []),
-                "historical_deviation": result.get("historical_deviation"),
-                "learning_updated": result.get("learning_updated", False),
-                "ai_schema": result.get("ai_schema"),
-                "data_movie": result.get("data_movie"),
-                "column_types": result.get("column_types", {}),
-                "demo_metadata": {"is_demo": True, "scenario": scenario},
-            }
+        dataset_id = str(uuid.uuid4())
+        dataset_name = result.get("metadata", {}).get("file_name") or file_name
+        demo_metadata = {"is_demo": True, "scenario": scenario}
+        dataset_payload = {
+            "summary": result.get("summary", {}),
+            "sample": safe_sample,
+            "graphs": result.get("graphs", []),
+            "ai_summary": result.get("ai_summary", "No se generó resumen automático."),
+            "data_health": result.get("data_health", {}),
+            "refined_insights": result.get("refined_insights", []),
+            "historical_deviation": result.get("historical_deviation"),
+            "learning_updated": result.get("learning_updated", False),
+            "ai_schema": result.get("ai_schema"),
+            "data_movie": result.get("data_movie"),
+            "column_types": result.get("column_types", {}),
+            "dataset_profile": result.get("dataset_profile", {}),
+            "datasetId": dataset_id,
+            "dataset_id": dataset_id,
+            "metadata": {"file_name": dataset_name},
+            "demo_metadata": demo_metadata,
+        }
+        response = json_safe_deep(dataset_payload)
+
+        _persist_dataset_context(
+            dataset_id=dataset_id,
+            dataset_name=dataset_name,
+            analysis_result=dataset_payload,
+            metadata={"file_name": dataset_name, "scenario": scenario},
+            source="demo_analyze",
         )
         return JSONResponse(content=response)
     except HTTPException:
