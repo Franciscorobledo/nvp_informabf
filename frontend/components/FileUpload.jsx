@@ -17,7 +17,7 @@ import VisualizationExplorer from "./VisualizationExplorer";
 import AppButton from "./AppButton";
 import LoadingBar from "./LoadingBar";
 import focusOptions from "./focusOptions";
-import DataChat from "./DataChat";
+import InsightsIA from "./InsightsIA";
 
 const FileUpload = ({ onDataReceived, onUnauthorized, onNavigateModule }) => {
   const [files, setFiles] = useState([]);
@@ -1562,7 +1562,7 @@ const FileUpload = ({ onDataReceived, onUnauthorized, onNavigateModule }) => {
                     </div>
                   </div>
 
-                  <DataChat datasetId={datasetId} datasetName={datasetName} />
+                  <InsightsIA datasetId={datasetId} datasetName={datasetName} />
                 </div>
               )}
 
