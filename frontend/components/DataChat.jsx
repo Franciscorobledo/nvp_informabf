@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 
 const DataChat = ({ datasetId, datasetName }) => {
   const [messages, setMessages] = useState([
@@ -10,9 +10,12 @@ const DataChat = ({ datasetId, datasetName }) => {
   ]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [datasetStatus, setDatasetStatus] = useState(datasetId ? "checking" : "missing");
+  const [datasetNote, setDatasetNote] = useState("");
+  const [resolvedDatasetName, setResolvedDatasetName] = useState(datasetName || "");
   const scrollRef = useRef(null);
   const API_URL = import.meta.env.VITE_API_URL || "http://localhost:1000";
-  const hasDataset = Boolean(datasetId);
+  const hasDataset = datasetStatus === "ready";
 
   const quickQuestions = useMemo(
     () => [
@@ -29,6 +32,95 @@ const DataChat = ({ datasetId, datasetName }) => {
     () => hasDataset && Boolean(input.trim()) && !loading,
     [hasDataset, input, loading]
   );
+
+  const statusClasses = useMemo(() => {
+    if (datasetStatus === "ready")
+      return "bg-emerald-50 text-emerald-700 ring-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-100 dark:ring-emerald-800";
+    if (datasetStatus === "checking" || datasetStatus === "pending")
+      return "bg-blue-50 text-blue-700 ring-blue-200 dark:bg-blue-900/40 dark:text-blue-100 dark:ring-blue-800";
+    if (datasetStatus === "error")
+      return "bg-amber-50 text-amber-700 ring-amber-200 dark:bg-amber-900/40 dark:text-amber-100 dark:ring-amber-700";
+    return "bg-amber-50 text-amber-700 ring-amber-200 dark:bg-amber-900/40 dark:text-amber-100 dark:ring-amber-700";
+  }, [datasetStatus]);
+
+  const statusLabel = useMemo(() => {
+    if (datasetStatus === "ready") return "Dataset listo para conversar";
+    if (datasetStatus === "checking") return "Validando dataset…";
+    if (datasetStatus === "pending") return "Dataset en preparación";
+    if (datasetStatus === "error") return "No pudimos validar el dataset";
+    return "Sube un archivo para habilitar";
+  }, [datasetStatus]);
+
+  const contextMessage = hasDataset
+    ? resolvedDatasetName || "Dataset cargado"
+    : datasetNote || "Conecta tu dataset desde el módulo \"Carga y análisis\" para activar el chat.";
+
+  useEffect(() => {
+    setResolvedDatasetName(datasetName || "");
+  }, [datasetName]);
+
+  useEffect(() => {
+    let cancelled = false;
+    let retryTimer;
+
+    if (!datasetId) {
+      setDatasetStatus("missing");
+      setDatasetNote("Carga un archivo o la demo para desbloquear el chat de recomendaciones.");
+      return () => {};
+    }
+
+    if (datasetStatus === "ready" || datasetStatus === "missing") return () => {};
+
+    const token = localStorage.getItem("token");
+    const checkContext = async () => {
+      setDatasetStatus((prev) => (prev === "pending" ? "pending" : "checking"));
+      if (!datasetNote) setDatasetNote("Validando dataset…");
+      try {
+        const res = await fetch(`${API_URL}/datasets/${datasetId}/context`, {
+          headers: {
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+        });
+
+        if (cancelled) return;
+
+        if (res.status === 404) {
+          setDatasetStatus("pending");
+          setDatasetNote("Estamos preparando el dataset para el chat. Si ya terminó el análisis, vuelve a cargar el archivo o la demo.");
+          return;
+        }
+
+        if (!res.ok) {
+          throw new Error("No se pudo validar el dataset para el chat.");
+        }
+
+        const data = await res.json();
+        if (cancelled) return;
+
+        setDatasetStatus("ready");
+        setDatasetNote("");
+        if (!resolvedDatasetName && data?.metadata?.file_name) {
+          setResolvedDatasetName(data.metadata.file_name);
+        }
+      } catch (error) {
+        if (cancelled) return;
+        setDatasetStatus("error");
+        setDatasetNote("No pudimos validar el dataset. Intenta recargar el módulo o reanalizar el archivo.");
+        console.error("Error validando dataset para chat:", error);
+      }
+    };
+
+    if (datasetStatus === "pending") {
+      retryTimer = setTimeout(checkContext, 2500);
+    } else {
+      checkContext();
+    }
+
+    return () => {
+      cancelled = true;
+      if (retryTimer) clearTimeout(retryTimer);
+    };
+  }, [API_URL, datasetId, datasetStatus, datasetNote, resolvedDatasetName]);
 
   const appendMessage = (newMessage) => {
     setMessages((prev) => {
@@ -62,8 +154,21 @@ const DataChat = ({ datasetId, datasetName }) => {
         body: JSON.stringify({ datasetId, message: userMessage }),
       });
 
+      if (res.status === 404) {
+        setDatasetStatus("missing");
+        setDatasetNote("No encontramos el dataset en el servidor. Vuelve a cargar tu archivo o la demo.");
+        appendMessage({
+          role: "system",
+          content:
+            "No encontramos tu dataset en el servidor. Vuelve a cargar el archivo o la demo para continuar la conversación.",
+        });
+        return;
+      }
+
       if (!res.ok) {
         const detail = await res.text();
+        setDatasetStatus("error");
+        setDatasetNote("El chat no pudo responder. Reintenta en unos segundos o recarga el análisis.");
         throw new Error(detail || "No se pudo obtener la respuesta de la IA.");
       }
 
@@ -115,14 +220,10 @@ const DataChat = ({ datasetId, datasetName }) => {
             </p>
           </div>
           <div
-            className={`inline-flex items-center gap-2 rounded-full px-3 py-2 text-xs font-semibold shadow-sm ring-1 ${
-              hasDataset
-                ? "bg-emerald-50 text-emerald-700 ring-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-100 dark:ring-emerald-800"
-                : "bg-amber-50 text-amber-700 ring-amber-200 dark:bg-amber-900/40 dark:text-amber-100 dark:ring-amber-700"
-            }`}
+            className={`inline-flex items-center gap-2 rounded-full px-3 py-2 text-xs font-semibold shadow-sm ring-1 ${statusClasses}`}
           >
             <span className="inline-flex h-2.5 w-2.5 rounded-full bg-current" aria-hidden="true" />
-            {hasDataset ? "Dataset listo para conversar" : "Sube un archivo para habilitar"}
+            {statusLabel}
           </div>
         </div>
 
@@ -130,14 +231,14 @@ const DataChat = ({ datasetId, datasetName }) => {
           <span className="inline-flex items-center gap-1 rounded-full bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-100 px-2.5 py-1 font-semibold">
             ⚡ Contexto activo
           </span>
-          {hasDataset ? (
-            <span className="font-semibold text-gray-900 dark:text-white">
-              {datasetName || "Dataset cargado"}
-            </span>
-          ) : (
-            <span>Conecta tu dataset desde el módulo "Carga y análisis" para activar el chat.</span>
-          )}
+          <span className="font-semibold text-gray-900 dark:text-white">{contextMessage}</span>
         </div>
+        {datasetNote && (
+          <p className="text-xs text-amber-700 dark:text-amber-200 flex items-center gap-2">
+            <span className="inline-block h-2 w-2 rounded-full bg-current" aria-hidden="true" />
+            {datasetNote}
+          </p>
+        )}
       </div>
 
       <div className="rounded-xl border border-blue-100 dark:border-slate-800 bg-blue-50/50 dark:bg-slate-800/60 p-3 text-sm text-blue-900 dark:text-slate-100">
@@ -191,7 +292,8 @@ const DataChat = ({ datasetId, datasetName }) => {
 
         {!hasDataset && (
           <p className="text-sm text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-600 rounded-xl px-3 py-2">
-            Carga un archivo para habilitar el chat y obtener recomendaciones sobre tu dataset. El módulo recordará tu último archivo analizado automáticamente.
+            {datasetNote ||
+              "Carga un archivo para habilitar el chat y obtener recomendaciones sobre tu dataset. El módulo recordará tu último archivo analizado automáticamente."}
           </p>
         )}
       </div>

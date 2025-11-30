@@ -343,3 +343,86 @@ def generate_movie_script_with_ai(
     except Exception as exc:  # noqa: BLE001
         logging.error("⚠️ Error al generar película IA: %s", exc)
         return None
+
+
+def generate_dataset_chat_reply(dataset_context: dict, user_message: str) -> str:
+    """Genera una respuesta contextualizada para el chat de datasets."""
+
+    if not user_message or not user_message.strip():
+        raise ValueError("El mensaje de usuario no puede estar vacío.")
+
+    dataset_name = dataset_context.get("dataset_name") or "Dataset sin nombre"
+    ai_summary = dataset_context.get("ai_summary") or "Sin resumen automático disponible."
+    refined_insights = dataset_context.get("refined_insights") or []
+    data_health = dataset_context.get("data_health") or {}
+    sample_rows = dataset_context.get("sample") or []
+    column_types = dataset_context.get("column_types") or {}
+    dataset_profile = dataset_context.get("dataset_profile") or {}
+    metadata = dataset_context.get("metadata") or {}
+
+    health_notes = []
+    quality_score = data_health.get("score")
+    if quality_score is not None:
+        health_notes.append(f"Puntaje de calidad: {quality_score}/100")
+    if data_health.get("warnings"):
+        health_notes.extend(data_health.get("warnings", []))
+
+    profile_summary = (
+        f"Filas: {dataset_profile.get('row_count', 'desconocido')} | "
+        f"Columnas: {dataset_profile.get('column_count', 'desconocido')} | "
+        f"Tipos: {dataset_profile.get('type_counts', {})}"
+    )
+
+    sample_excerpt = sample_rows[:5]
+    prompt = f"""
+Actúa como asesor de negocio senior. Responde en español con un tono consultivo y accionable.
+No inventes métricas: usa solo la información provista.
+
+Contexto del dataset:
+- Nombre: {dataset_name}
+- Perfil: {profile_summary}
+- Columnas detectadas: {json.dumps(column_types, ensure_ascii=False)}
+- Resumen IA: {ai_summary}
+- Insights clave: {json.dumps(refined_insights[:6], ensure_ascii=False)}
+- Calidad de datos: {json.dumps(health_notes, ensure_ascii=False)}
+- Muestra de filas (máx 5): {json.dumps(sample_excerpt, ensure_ascii=False, default=str)}
+- Metadatos: {json.dumps(metadata, ensure_ascii=False)}
+
+Instrucciones de respuesta:
+- Brinda 2-4 recomendaciones accionables o indicadores según la pregunta.
+- Si la pregunta no se puede responder con los datos, indica la limitación y sugiere qué dato falta.
+- Usa viñetas cuando sean acciones y agrega un cierre breve con el siguiente mejor paso.
+"""
+
+    try:
+        client = _get_openai_client()
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {
+                    "role": "system",
+                    "content": "Eres un asesor de analítica para pymes que responde de forma concreta y accionable.",
+                },
+                {"role": "user", "content": prompt},
+                {
+                    "role": "user",
+                    "content": user_message.strip(),
+                },
+            ],
+            temperature=0.35,
+            max_tokens=420,
+        )
+
+        content = response.choices[0].message.content.strip()
+        usage = getattr(response, "usage", None)
+        record_openai_usage(
+            model="gpt-4o-mini",
+            prompt_tokens=getattr(usage, "prompt_tokens", None) if usage else None,
+            completion_tokens=getattr(usage, "completion_tokens", None) if usage else None,
+            source="dataset_chat",
+            action="dataset_chat",
+        )
+        return content
+    except Exception as exc:  # noqa: BLE001
+        logging.error("⚠️ Error en chat de dataset: %s", exc)
+        raise
