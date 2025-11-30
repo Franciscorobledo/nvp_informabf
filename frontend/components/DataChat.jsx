@@ -5,13 +5,24 @@ const DataChat = ({ datasetId }) => {
     {
       role: "system",
       content:
-        "Pide recomendaciones accionables sobre ventas, producto, marketing o eficiencia basadas en el archivo cargado.",
+        "Soy tu asesor inteligente de negocio. Pregunta cómo optimizar ventas, marketing, operaciones o rentabilidad basándome en tu archivo.",
     },
   ]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const scrollRef = useRef(null);
   const API_URL = import.meta.env.VITE_API_URL || "http://localhost:1000";
+
+  const quickQuestions = useMemo(
+    () => [
+      "¿Qué productos debo empujar más este mes?",
+      "Dame 3 acciones para aumentar margen con estos datos.",
+      "¿Qué clientes están en riesgo de churn y qué hago al respecto?",
+      "¿Cómo puedo reducir costos operativos en 30 días?",
+      "Genera un plan de campañas con el top de oportunidades.",
+    ],
+    []
+  );
 
   const canSend = useMemo(
     () => Boolean(datasetId) && Boolean(input.trim()) && !loading,
@@ -30,10 +41,11 @@ const DataChat = ({ datasetId }) => {
     });
   };
 
-  const handleSend = async () => {
-    if (!canSend) return;
+  const handleSend = async (overrideMessage) => {
+    const textToSend = overrideMessage ?? input;
+    if (!textToSend || !textToSend.trim() || loading || !datasetId) return;
 
-    const userMessage = input.trim();
+    const userMessage = textToSend.trim();
     appendMessage({ role: "user", content: userMessage });
     setInput("");
     setLoading(true);
@@ -91,6 +103,27 @@ const DataChat = ({ datasetId }) => {
         <p className="text-sm text-gray-600 dark:text-slate-300">
           Haz preguntas y recibe recomendaciones accionables basadas en este archivo.
         </p>
+      </div>
+
+      <div className="rounded-xl border border-blue-100 dark:border-slate-800 bg-blue-50/50 dark:bg-slate-800/60 p-3 text-sm text-blue-900 dark:text-slate-100">
+        <p className="font-semibold text-blue-800 dark:text-blue-100 mb-2">Preguntas sugeridas</p>
+        <div className="flex flex-wrap gap-2">
+          {quickQuestions.map((question, idx) => (
+            <button
+              key={idx}
+              type="button"
+              onClick={() => handleSend(question)}
+              disabled={loading || !datasetId}
+              className={`text-left rounded-lg px-3 py-2 text-xs font-semibold shadow-sm transition focus:outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-400 ${
+                loading || !datasetId
+                  ? "bg-white/50 dark:bg-slate-900/60 text-gray-400 cursor-not-allowed"
+                  : "bg-white dark:bg-slate-900 text-blue-800 dark:text-slate-100 hover:bg-blue-100 dark:hover:bg-slate-800"
+              }`}
+            >
+              {question}
+            </button>
+          ))}
+        </div>
       </div>
 
       <div
