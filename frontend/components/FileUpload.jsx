@@ -12,7 +12,6 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import DatasetSummaryPanel from "./DatasetSummaryPanel";
 import VisualizationExplorer from "./VisualizationExplorer";
 import AppButton from "./AppButton";
 import LoadingBar from "./LoadingBar";
@@ -23,7 +22,7 @@ const FileUpload = ({ onDataReceived, onUnauthorized, onNavigateModule }) => {
   const [files, setFiles] = useState([]);
   const [loading, setLoading] = useState(false);
   const [analysis, setAnalysis] = useState(null);
-  const [activeTab, setActiveTab] = useState("resumen");
+  const [activeTab, setActiveTab] = useState("graficos");
   const [downloading, setDownloading] = useState(false);
   const [aiCharts, setAiCharts] = useState([]);
   const [categoryFilter, setCategoryFilter] = useState("todos");
@@ -298,30 +297,6 @@ const FileUpload = ({ onDataReceived, onUnauthorized, onNavigateModule }) => {
     return filtered.length ? filtered : graphs;
   };
 
-  const filterSummaryByCategory = (summary) => {
-    if (categoryFilter === "todos" || !summary) return summary;
-
-    if (typeof summary === "string") {
-      return matchesCategory(summary, categoryFilter) ? summary : summary;
-    }
-
-    if (Array.isArray(summary)) {
-      const filtered = summary.filter((item) =>
-        matchesCategory(JSON.stringify(item), categoryFilter)
-      );
-      return filtered.length ? filtered : summary;
-    }
-
-    if (typeof summary === "object") {
-      const filteredEntries = Object.entries(summary).filter(([key, value]) =>
-        matchesCategory(`${key} ${value}`, categoryFilter)
-      );
-      return filteredEntries.length ? Object.fromEntries(filteredEntries) : summary;
-    }
-
-    return summary;
-  };
-
   const filterInsights = (text) => {
     if (categoryFilter === "todos" || !text) return text;
     const sentences = text.split(/(?<=[.!?])\s+/);
@@ -388,109 +363,6 @@ const FileUpload = ({ onDataReceived, onUnauthorized, onNavigateModule }) => {
       .map((chart) => buildInteractiveChart(chart.column))
       .filter(Boolean);
   }, [analysis]);
-
-  const renderHealthPanel = () => {
-    const kpi = analysis?.data_health;
-    if (!kpi) return null;
-
-    const statusConfig = {
-      healthy: {
-        label: "Saludable",
-        badgeBg: "bg-emerald-100 dark:bg-emerald-900/60",
-        badgeText: "text-emerald-800 dark:text-emerald-100",
-        border: "border-emerald-200 dark:border-emerald-800",
-        bar: "bg-emerald-500",
-      },
-      watch: {
-        label: "Revisar",
-        badgeBg: "bg-amber-100 dark:bg-amber-900/60",
-        badgeText: "text-amber-800 dark:text-amber-100",
-        border: "border-amber-200 dark:border-amber-800",
-        bar: "bg-amber-400",
-      },
-      critical: {
-        label: "Crítico",
-        badgeBg: "bg-rose-100 dark:bg-rose-900/60",
-        badgeText: "text-rose-800 dark:text-rose-100",
-        border: "border-rose-200 dark:border-rose-800",
-        bar: "bg-rose-500",
-      },
-    };
-
-    const config = statusConfig[kpi.health_status] || statusConfig.watch;
-    const scoreValue = Math.max(0, Math.min(100, kpi.health_score ?? 0));
-
-    return (
-      <div
-        className={`mb-6 p-6 rounded-2xl bg-gradient-to-br from-white to-gray-50 dark:from-slate-900 dark:to-slate-800 border shadow-sm ${config.border}`}
-      >
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
-          <div className="space-y-2">
-            <p className="text-sm font-semibold text-gray-600 dark:text-slate-300">
-              🩺 KPI Health Score
-            </p>
-            <div className="flex items-end gap-3">
-              <span className="text-4xl font-extrabold text-gray-900 dark:text-white">
-                {kpi.health_score ?? "--"}
-              </span>
-              <span
-                className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold ${config.badgeBg} ${config.badgeText}`}
-              >
-                <span className="text-lg" role="img" aria-hidden="true">
-                  {kpi.health_status === "healthy" ? "✅" : kpi.health_status === "watch" ? "⚠️" : "🚨"}
-                </span>
-                {config.label}
-              </span>
-            </div>
-            <p className="text-xs text-gray-500 dark:text-slate-400">
-              0 = crítico, 100 = excelente. Calculado según nulos, formatos, fechas, duplicados, stock y outliers.
-            </p>
-          </div>
-
-          <div className="flex-1 space-y-3">
-            <div className="w-full h-3 rounded-full bg-gray-100 dark:bg-slate-800 overflow-hidden">
-              <div
-                className={`h-full ${config.bar}`}
-                style={{ width: `${scoreValue}%` }}
-                role="presentation"
-              />
-            </div>
-
-            <div>
-              <p className="text-sm font-semibold text-gray-700 dark:text-slate-200 mb-2">
-                Principales drivers
-              </p>
-              {kpi.drivers?.length ? (
-                <ul className="list-disc list-inside space-y-1 text-sm text-gray-700 dark:text-slate-200">
-                  {kpi.drivers.map((driver, idx) => (
-                    <li key={`${driver}-${idx}`}>{driver}</li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="text-sm text-gray-500 dark:text-slate-400">
-                  Sin riesgos significativos detectados.
-                </p>
-              )}
-            </div>
-
-            {kpi.recommendations?.length > 0 && (
-              <div className="flex flex-wrap gap-2 pt-1">
-                {kpi.recommendations.slice(0, 4).map((rec, idx) => (
-                  <span
-                    key={`${rec}-${idx}`}
-                    className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-blue-50 dark:bg-slate-800 text-blue-700 dark:text-blue-200 text-xs"
-                  >
-                    <span aria-hidden="true">💡</span>
-                    {rec}
-                  </span>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-    );
-  };
 
   const buildSuggestedActions = () => {
     if (!analysis) return [];
@@ -808,7 +680,7 @@ const FileUpload = ({ onDataReceived, onUnauthorized, onNavigateModule }) => {
     setAnalysis(null);
     setFiles([]);
     setStatusMessage("Cargando demo…");
-    setActiveTab("resumen");
+    setActiveTab("graficos");
     setIsAnalyzing(true);
     setProgress(0);
     setAnalysisProgress(0);
@@ -956,7 +828,6 @@ const FileUpload = ({ onDataReceived, onUnauthorized, onNavigateModule }) => {
   };
 
   const tabs = [
-    { id: "resumen", label: "📄 Resumen" },
     { id: "graficos", label: "📊 Visualizaciones" },
     { id: "insights", label: "🤖 Insights IA" },
     { id: "reporte", label: "📑 Reporte ejecutivo" },
@@ -992,11 +863,6 @@ const FileUpload = ({ onDataReceived, onUnauthorized, onNavigateModule }) => {
   };
 
   const focusInsightsPanel = () => setActiveTab("insights");
-
-  const focusFilter = () => {
-    setActiveTab("resumen");
-    filterSelectRef.current?.focus();
-  };
 
   const rowsEstimated =
     (preAnalysis?.rows_est || preAnalysis?.rows || preAnalysis?.sample_size || 0);
@@ -1343,38 +1209,6 @@ const FileUpload = ({ onDataReceived, onUnauthorized, onNavigateModule }) => {
             </div>
 
             <div className="p-6">
-              {/* 📄 RESUMEN */}
-              {activeTab === "resumen" && (
-                <div className="space-y-6">
-                  <div className="relative overflow-hidden rounded-2xl border border-gray-200 dark:border-slate-800 shadow-inner bg-gradient-to-r from-white via-slate-50 to-white dark:from-slate-900 dark:via-slate-900 dark:to-slate-950 p-6">
-                    <div className="absolute left-0 top-0 h-full w-1 bg-blue-500/70 rounded-full" aria-hidden="true" />
-                    <div className="pl-4 space-y-2">
-                      <p className="text-xs font-semibold tracking-wide text-blue-600 dark:text-blue-300">Salud del dataset</p>
-                      <p className="text-sm text-gray-600 dark:text-slate-300">Score de calidad, nulos, outliers y recomendaciones accionables.</p>
-                    </div>
-                    <div className="mt-4">{renderHealthPanel()}</div>
-                  </div>
-
-                  <div className="bg-gray-50/80 dark:bg-slate-900/50 rounded-2xl border border-dashed border-gray-200 dark:border-slate-800 p-5">
-                    <div className="flex items-center justify-between flex-wrap gap-3 mb-4">
-                      <div>
-                        <p className="text-xs uppercase tracking-[0.15em] text-gray-500 dark:text-slate-400">Resumen estructurado</p>
-                        <h3 className="text-lg font-bold text-gray-900 dark:text-white">Dataset en tarjetas</h3>
-                        <p className="text-sm text-gray-600 dark:text-slate-300">KPIs claros (min, max, count) y top 3 categorías en una cuadrícula legible.</p>
-                      </div>
-                      <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white dark:bg-slate-800 text-xs text-gray-600 dark:text-slate-200 border border-gray-200 dark:border-slate-700">
-                        <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                        Datos listos para compartir
-                      </span>
-                    </div>
-                    <DatasetSummaryPanel
-                      summary={filterSummaryByCategory(analysis.summary)}
-                      headlessCoreKpi={analysis?.data_health?.health_score}
-                    />
-                  </div>
-                </div>
-              )}
-
               {/* 📊 GRÁFICOS */}
               {activeTab === "graficos" && (
                 <div className="space-y-8">
