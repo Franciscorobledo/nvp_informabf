@@ -34,9 +34,6 @@ const FileUpload = ({ onDataReceived, onUnauthorized, onNavigateModule }) => {
   const [sendingReport, setSendingReport] = useState(false);
   const [emailFeedback, setEmailFeedback] = useState("");
   const [jobId, setJobId] = useState(null);
-  const [progress, setProgress] = useState(0);
-  const [uploadProgress, setUploadProgress] = useState(0);
-  const [analysisProgress, setAnalysisProgress] = useState(0);
   const [displayProgress, setDisplayProgress] = useState(0);
   const [analysisStep, setAnalysisStep] = useState("cargando");
   const [preAnalysis, setPreAnalysis] = useState(null);
@@ -179,14 +176,11 @@ const FileUpload = ({ onDataReceived, onUnauthorized, onNavigateModule }) => {
         const data = await res.json();
         if (cancelled) return;
 
-        setProgress(data.progress ?? 0);
-        setAnalysisProgress(data.progress ?? 0);
         setAnalysisStep(data.step || "cargando");
         setStatusMessage(getStepLabel(data.step));
 
         if (data.done) {
-          setProgress(data.progress ?? 100);
-          setAnalysisProgress(data.progress ?? 100);
+          setDisplayProgress(100);
           setPolling(false);
           setIsAnalyzing(false);
           if (data.error) {
@@ -226,22 +220,18 @@ const FileUpload = ({ onDataReceived, onUnauthorized, onNavigateModule }) => {
   }, [jobId, polling, onUnauthorized, onDataReceived]);
 
   useEffect(() => {
-    const target = analysisProgress;
-    if (displayProgress === target) return;
+    if (!isAnalyzing) return;
 
+    setDisplayProgress(0);
     const interval = setInterval(() => {
       setDisplayProgress((prev) => {
-        const diff = target - prev;
-        if (Math.abs(diff) < 1) return target;
-
-        const step = Math.max(Math.abs(diff) * 0.2, 1);
-        const next = prev + Math.sign(diff) * Math.min(step, Math.abs(diff));
-        return Math.min(Math.max(next, 0), 100);
+        if (prev >= 100) return 100;
+        return prev + 1;
       });
-    }, 80);
+    }, 120);
 
     return () => clearInterval(interval);
-  }, [analysisProgress, displayProgress]);
+  }, [isAnalyzing]);
 
   const categoryKeywords = {
     ventas: [
@@ -607,9 +597,6 @@ const FileUpload = ({ onDataReceived, onUnauthorized, onNavigateModule }) => {
     setAiCharts([]);
     setPreAnalysis(null);
     setJobId(null);
-    setProgress(0);
-    setUploadProgress(0);
-    setAnalysisProgress(0);
     setDisplayProgress(0);
     setAnalysisStep("cargando");
     setStatusMessage("Preparando archivo…");
@@ -635,7 +622,6 @@ const FileUpload = ({ onDataReceived, onUnauthorized, onNavigateModule }) => {
         onUploadProgress: (event) => {
           if (!event.total) return;
           const percent = Math.round((event.loaded * 100) / event.total);
-          setUploadProgress(percent);
           setStatusMessage(
             percent < 100
               ? "Preparando archivo…"
@@ -646,11 +632,8 @@ const FileUpload = ({ onDataReceived, onUnauthorized, onNavigateModule }) => {
 
       const data = res.data;
       console.log("📊 Job lanzado:", data);
-      setUploadProgress(100);
       setJobId(data.job_id);
       setPreAnalysis(data.pre_analysis);
-      setProgress(data.progress ?? 20);
-      setAnalysisProgress(data.progress ?? 20);
       setAnalysisStep(data.step || "pre_analisis");
       setStatusMessage("Analizando datos…");
       setPolling(true);
@@ -682,9 +665,6 @@ const FileUpload = ({ onDataReceived, onUnauthorized, onNavigateModule }) => {
     setStatusMessage("Cargando demo…");
     setActiveTab("graficos");
     setIsAnalyzing(true);
-    setProgress(0);
-    setAnalysisProgress(0);
-    setUploadProgress(0);
     setDisplayProgress(0);
     setAnalysisError("");
     setResultNotice("");
@@ -720,9 +700,6 @@ const FileUpload = ({ onDataReceived, onUnauthorized, onNavigateModule }) => {
       setDemoMetadata(data.demo_metadata || { is_demo: true, scenario: "ventas_demo" });
       onDataReceived?.(data);
       setStatusMessage("Demo lista");
-      setProgress(100);
-      setAnalysisProgress(100);
-      setUploadProgress(100);
       setDisplayProgress(100);
       setResultNotice("Demo lista. Explora los gráficos interactivos y descárgalos en PDF.");
     } catch (error) {
@@ -1069,33 +1046,16 @@ const FileUpload = ({ onDataReceived, onUnauthorized, onNavigateModule }) => {
             </div>
 
             <div className="space-y-3">
-              {uploadProgress > 0 && (
-                <LoadingBar
-                  progress={uploadProgress}
-                  label="Subiendo archivo(s)…"
-                  status="Carga de archivos"
-                  tone={uploadProgress >= 100 ? "success" : "info"}
-                  step="cargando"
-                  helperText={
-                    uploadProgress < 100
-                      ? "Cifrando y verificando tus archivos antes de analizarlos."
-                      : "Subida completada. Iniciando análisis completo."
-                  }
-                />
-              )}
-
-              {displayProgress < 100 && (
-                <LoadingBar
-                  progress={displayProgress}
-                  label={getStepLabel(analysisStep)}
-                  status="Análisis inteligente"
-                  step={analysisStep}
-                  helperText={
-                    statusMessage ||
-                    "El asistente está limpiando, conectando y resumiendo tu dataset."
-                  }
-                />
-              )}
+              <LoadingBar
+                progress={displayProgress}
+                label={getStepLabel(analysisStep)}
+                status="Análisis inteligente"
+                step={analysisStep}
+                helperText={
+                  statusMessage ||
+                  "El asistente está limpiando, conectando y resumiendo tu dataset."
+                }
+              />
             </div>
           </div>
 
