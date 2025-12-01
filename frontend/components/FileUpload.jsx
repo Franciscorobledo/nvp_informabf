@@ -1073,6 +1073,8 @@ const FileUpload = ({ onDataReceived, onUnauthorized, onNavigateModule }) => {
                 <LoadingBar
                   progress={uploadProgress}
                   label="Subiendo archivo(s)…"
+                  status="Carga de archivos"
+                  tone={uploadProgress >= 100 ? "success" : "info"}
                   step="cargando"
                   helperText={
                     uploadProgress < 100
@@ -1086,6 +1088,7 @@ const FileUpload = ({ onDataReceived, onUnauthorized, onNavigateModule }) => {
                 <LoadingBar
                   progress={displayProgress}
                   label={getStepLabel(analysisStep)}
+                  status="Análisis inteligente"
                   step={analysisStep}
                   helperText={
                     statusMessage ||

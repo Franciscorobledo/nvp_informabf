@@ -419,6 +419,7 @@ const DataComparisonModule = ({ onUnauthorized }) => {
         <LoadingBar
           progress={uploadProgress}
           label={stepMessages.subiendo_archivos}
+          status="Carga de archivos"
           helperText="Estamos asegurando que ambos archivos se suban correctamente."
         />
       )}
@@ -427,6 +428,7 @@ const DataComparisonModule = ({ onUnauthorized }) => {
         <LoadingBar
           progress={compareProgress}
           label={stepMessages[compareStep] || "Procesando comparativa…"}
+          status="Comparativa inteligente"
           helperText="Generando comparativa inteligente con IA."
         />
       )}

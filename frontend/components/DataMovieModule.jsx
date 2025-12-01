@@ -219,6 +219,7 @@ const DataMovieModule = ({ onUnauthorized }) => {
           indeterminate
           progress={64}
           label="Generando tu película de datos"
+          status="Narrativa visual"
           helperText="Estamos analizando los KPIs y armando la narrativa visual."
         />
       )}
