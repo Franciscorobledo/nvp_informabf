@@ -17,10 +17,12 @@ import {
 } from "./dataMovieUtils";
 import MovieChart from "./MovieChart";
 import KPICard from "./KPICard";
-import NetflixHero from "./NetflixHero";
 import SceneTimeline from "./SceneTimeline";
 import CinemaControls from "./CinemaControls";
 import '../src/netflix-movie.css';
+
+const DEFAULT_THUMBNAIL =
+  "https://images.unsplash.com/photo-1504384308090-c894fdcc538d?auto=format&fit=crop&w=1600&q=80";
 
 const fadeInKeyframes = `
 @keyframes dataMovieFadeIn {
@@ -657,6 +659,7 @@ const DataMoviePlayer = ({ dataMovie }) => {
   const [currentSceneIndex, setCurrentSceneIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [displayedNarration, setDisplayedNarration] = useState("");
+  const [hasStarted, setHasStarted] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [downloadStatus, setDownloadStatus] = useState({ state: "idle", message: "", type: null });
   const playerRef = useRef(null);
@@ -665,6 +668,7 @@ const DataMoviePlayer = ({ dataMovie }) => {
     (idx, shouldPlay = null) => {
       if (!scenes.length) return;
       const clamped = Math.min(Math.max(idx, 0), scenes.length - 1);
+      setHasStarted(true);
       setCurrentSceneIndex(clamped);
       if (typeof shouldPlay === "boolean") {
         setIsPlaying(shouldPlay);
@@ -679,6 +683,7 @@ const DataMoviePlayer = ({ dataMovie }) => {
     if (!scenes.length) return;
     setCurrentSceneIndex(0);
     setIsPlaying(false);
+    setHasStarted(false);
   }, [scenes.length]);
 
   useEffect(() => {
@@ -802,6 +807,30 @@ const DataMoviePlayer = ({ dataMovie }) => {
 
   const sceneTitle = currentScene.scene_title || currentScene.title || currentDefinition.label;
   const progressPct = ((currentSceneIndex + 1) / scenes.length) * 100;
+  const thumbnailUrl = dataMovie?.thumbnail_url || dataMovie?.cover_image || DEFAULT_THUMBNAIL;
+  const quickStats = useMemo(() => {
+    const kpis = dataMovie?.pyme_insights?.kpis;
+    if (!kpis) return [];
+
+    return Object.entries(kpis)
+      .slice(0, 3)
+      .map(([key, kpi]) => ({
+        icon: key === "total_revenue" ? "💰" : key === "total_transactions" ? "📊" : "🏆",
+        value: kpi.format === "currency" ? `$${(kpi.value / 1000).toFixed(0)}k` : kpi.value.toLocaleString(),
+        label: kpi.label,
+      }));
+  }, [dataMovie]);
+
+  const handleStartPlayback = () => {
+    setHasStarted(true);
+    setIsPlaying(true);
+    setCurrentSceneIndex(0);
+  };
+
+  const handleSceneClick = (idx) => {
+    setHasStarted(true);
+    goToScene(idx, false);
+  };
 
   if (!hasScenes) {
     return (
@@ -814,180 +843,197 @@ const DataMoviePlayer = ({ dataMovie }) => {
   return (
     <div
       ref={playerRef}
-      className={`rounded-3xl bg-slate-900 p-6 shadow-2xl border border-slate-800 space-y-5 transition-all ${isFullscreen ? "fixed inset-0 z-50 m-0 h-screen w-screen overflow-auto rounded-none" : ""
-        }`}
+      className={`relative overflow-hidden rounded-[32px] border border-white/10 bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950 p-6 sm:p-8 shadow-[0_25px_90px_-40px_rgba(59,130,246,0.45)] transition-all ${
+        isFullscreen ? "fixed inset-0 z-50 m-0 h-screen w-screen overflow-auto rounded-none" : ""
+      }`}
     >
       <style>{fadeInKeyframes}</style>
+      <div className="pointer-events-none absolute -left-16 -top-16 h-56 w-56 rounded-full bg-blue-500/15 blur-3xl" />
+      <div className="pointer-events-none absolute bottom-0 right-0 h-72 w-72 rounded-full bg-purple-500/10 blur-3xl" />
 
-      {/* 🎬 Netflix Hero Section */}
-      {!isPlaying && currentSceneIndex === 0 && (
-        <NetflixHero
-          title={dataMovie?.movie_title || "Película de Datos"}
-          subtitle={dataMovie?.movie_subtitle || "Descubre la historia detrás de tus datos"}
-          onPlay={() => setIsPlaying(true)}
-          stats={dataMovie?.pyme_insights?.kpis ? Object.entries(dataMovie.pyme_insights.kpis).slice(0, 3).map(([key, kpi]) => ({
-            icon: key === 'total_revenue' ? '💰' : key === 'total_transactions' ? '📊' : '🏆',
-            value: kpi.format === 'currency' ? `$${(kpi.value / 1000).toFixed(0)}k` : kpi.value.toLocaleString(),
-            label: kpi.label
-          })) : []}
-        />
-      )}
-
-      {/* Header with title */}
-      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-        <div className="space-y-1">
-          <h3 className="text-2xl font-bold text-white">{dataMovie?.movie_title || "Película de datos"}</h3>
-          <p className="text-sm text-slate-300">{dataMovie?.movie_subtitle || "Presentación guiada"}</p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <button
-            onClick={() => handleDownload("movie")}
-            className={`rounded-full border border-slate-600 px-4 py-2 text-xs font-semibold text-slate-100 transition hover:border-blue-400 hover:text-white ${downloadStatus.state === "loading" ? "opacity-70" : ""
+      <div className="relative flex flex-col gap-6">
+        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <div className="space-y-1">
+            <p className="text-[11px] uppercase tracking-[0.32em] text-blue-300">Película de datos</p>
+            <h3 className="text-3xl sm:text-4xl font-bold text-white leading-tight">
+              {dataMovie?.movie_title || "Película de datos"}
+            </h3>
+            <p className="text-sm text-slate-200/90">{dataMovie?.movie_subtitle || "Presentación guiada"}</p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={() => handleDownload("movie")}
+              className={`rounded-full border border-white/20 bg-white/5 px-4 py-2 text-xs font-semibold text-white shadow-sm transition hover:-translate-y-[1px] hover:border-blue-300/70 hover:bg-white/10 ${
+                downloadStatus.state === "loading" ? "opacity-70" : ""
               }`}
-            aria-label="Descargar película (.movie)"
-          >
-            {downloadStatus.state === "loading" ? "Preparando…" : "Descargar película (.movie)"}
-          </button>
+              aria-label="Descargar película (.movie)"
+            >
+              {downloadStatus.state === "loading" ? "Preparando…" : "Descargar película (.movie)"}
+            </button>
+            <button
+              onClick={hasStarted ? () => setIsPlaying((prev) => !prev) : handleStartPlayback}
+              className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-blue-500 to-indigo-500 px-4 py-2 text-xs font-semibold text-white shadow-lg shadow-blue-500/25 transition hover:-translate-y-[1px]"
+            >
+              <span aria-hidden="true">{hasStarted ? (isPlaying ? "⏸" : "▶️") : "🎬"}</span>
+              {hasStarted ? (isPlaying ? "Pausar" : "Reanudar") : "Reproducir ahora"}
+            </button>
+          </div>
         </div>
-      </div>
 
-      {/* 🎬 Scene Timeline */}
-      {hasScenes && scenes.length > 1 && (
-        <SceneTimeline
-          scenes={scenes}
-          currentIndex={currentSceneIndex}
-          onSceneClick={(idx) => goToScene(idx, false)}
-        />
-      )}
+        {hasScenes && scenes.length > 1 && (
+          <SceneTimeline scenes={scenes} currentIndex={currentSceneIndex} onSceneClick={handleSceneClick} />
+        )}
 
-      {downloadStatus.message && (
-        <div className="rounded-2xl border border-slate-700 bg-slate-800/60 px-4 py-3 text-xs text-slate-200" role="status">
-          {downloadStatus.message}
-        </div>
-      )}
+        {downloadStatus.message && (
+          <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-xs text-slate-100" role="status">
+            {downloadStatus.message}
+          </div>
+        )}
 
-      <div className="grid gap-6 lg:grid-cols-[2fr,1fr] h-full">
-        {/* Left Column: Visuals */}
-        <div
-          className="relative flex flex-col overflow-hidden rounded-3xl border border-slate-800 bg-gradient-to-br from-[#0f172a] via-[#1e293b] to-[#0f172a] shadow-2xl"
-          style={{ animation: "dataMovieFadeIn 0.5s ease-out" }}
-        >
-          {/* Scene Header inside Visual Area */}
-          <div className="absolute top-0 left-0 right-0 z-10 flex items-center justify-between bg-gradient-to-b from-black/60 to-transparent p-6 text-slate-200">
-            <div className="flex items-center gap-3">
-              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-600/20 text-sm font-bold text-blue-400 ring-1 ring-blue-500/50">
-                {currentSceneIndex + 1}
-              </span>
-              <div>
-                <p className="text-[10px] uppercase tracking-widest text-slate-400 font-bold">ESCENA</p>
-                <p className="text-sm font-semibold text-white tracking-wide">{currentDefinition.label}</p>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2">
+        <div className="grid gap-6 xl:grid-cols-[1.4fr,1fr] items-stretch">
+          <div className="group relative overflow-hidden rounded-[28px] border border-white/10 bg-white/5 backdrop-blur-2xl shadow-[0_20px_70px_-45px_rgba(59,130,246,0.65)]">
+            <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-white/5 via-blue-500/5 to-purple-500/10 opacity-80" />
+            {!hasStarted ? (
               <button
-                onClick={toggleFullscreen}
-                className="rounded-full bg-white/10 p-2 text-white hover:bg-white/20 transition backdrop-blur-sm"
-                title={isFullscreen ? "Salir de pantalla completa" : "Pantalla completa"}
+                type="button"
+                onClick={handleStartPlayback}
+                className="relative z-10 flex w-full flex-col gap-4 p-4 text-left transition duration-300 hover:scale-[1.01]"
               >
-                {isFullscreen ? "🗗" : "🗖"}
+                <div className="relative aspect-video w-full overflow-hidden rounded-[22px] ring-1 ring-white/10 shadow-2xl">
+                  <img
+                    src={thumbnailUrl}
+                    alt="Miniatura de la película de datos"
+                    className="h-full w-full object-cover"
+                    loading="lazy"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-black/10" />
+                  <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 text-white">
+                    <div className="flex h-16 w-16 items-center justify-center rounded-full bg-white/15 shadow-lg shadow-blue-500/30 backdrop-blur-md ring-1 ring-white/30">
+                      <span className="text-2xl">▶</span>
+                    </div>
+                    <div className="text-center space-y-1">
+                      <p className="text-sm uppercase tracking-[0.18em] text-slate-200">Miniatura</p>
+                      <p className="text-lg font-semibold">Click para reproducir la película</p>
+                    </div>
+                  </div>
+                </div>
+
+                {quickStats.length > 0 && (
+                  <div className="grid gap-3 sm:grid-cols-3">
+                    {quickStats.map((stat) => (
+                      <div
+                        key={stat.label}
+                        className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white/90 shadow-inner shadow-blue-900/20"
+                      >
+                        <p className="text-xs uppercase tracking-[0.16em] text-slate-200/70 flex items-center gap-2">
+                          <span aria-hidden="true">{stat.icon}</span>
+                          {stat.label}
+                        </p>
+                        <p className="text-xl font-bold tracking-tight">{stat.value}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </button>
-            </div>
+            ) : (
+              <div className="relative z-10 flex h-full flex-col">
+                <div className="absolute top-0 left-0 right-0 z-20 flex items-center justify-between bg-gradient-to-b from-black/70 to-transparent px-6 py-5 text-slate-100">
+                  <div className="flex items-center gap-3">
+                    <span className="flex h-9 w-9 items-center justify-center rounded-full bg-blue-600/25 text-sm font-bold text-blue-100 ring-1 ring-blue-300/50">
+                      {currentSceneIndex + 1}
+                    </span>
+                    <div>
+                      <p className="text-[10px] uppercase tracking-[0.3em] text-slate-300 font-semibold">Escena</p>
+                      <p className="text-base font-semibold text-white leading-snug">{currentDefinition.label}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={toggleFullscreen}
+                      className="rounded-full bg-white/10 p-2 text-white ring-1 ring-white/20 transition hover:bg-white/20"
+                      title={isFullscreen ? "Salir de pantalla completa" : "Pantalla completa"}
+                    >
+                      {isFullscreen ? "🗗" : "🗖"}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex-1 flex items-center justify-center p-6 pt-20 min-h-[380px] sm:min-h-[420px]">
+                  {renderSceneVisual()}
+                </div>
+
+                <div className="bg-slate-950/70 backdrop-blur-md border-t border-white/10 p-4">
+                  <CinemaControls
+                    isPlaying={isPlaying}
+                    onPlayPause={() => setIsPlaying(!isPlaying)}
+                    onPrevious={() => goToScene(Math.max(currentSceneIndex - 1, 0), false)}
+                    onNext={() => goToScene(Math.min(currentSceneIndex + 1, scenes.length - 1), false)}
+                    onFullscreen={toggleFullscreen}
+                    currentScene={currentSceneIndex}
+                    totalScenes={scenes.length}
+                    compact
+                  />
+                  <div className="mt-3 flex items-center gap-3 text-slate-200">
+                    <span className="text-xs font-medium w-12 text-right">{(currentSceneIndex + 1).toString().padStart(2, '0')}</span>
+                    <div className="h-2 flex-1 overflow-hidden rounded-full bg-white/10">
+                      <div
+                        className="h-full rounded-full bg-gradient-to-r from-sky-400 via-indigo-400 to-fuchsia-500 shadow-[0_0_18px_rgba(59,130,246,0.55)]"
+                        style={{ width: `${progressPct}%`, transition: "width 500ms ease-out" }}
+                      />
+                    </div>
+                    <span className="text-xs font-medium w-12">{scenes.length.toString().padStart(2, '0')}</span>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
 
-          {/* Main Visual Content */}
-          <div className="flex-1 flex items-center justify-center p-8 pt-20 min-h-[400px]">
-            {renderSceneVisual()}
-          </div>
-
-          {/* Bottom Controls Overlay */}
-          <div className="bg-slate-900/80 backdrop-blur-md border-t border-slate-800 p-4">
-            <CinemaControls
-              isPlaying={isPlaying}
-              onPlayPause={() => setIsPlaying(!isPlaying)}
-              onPrevious={() => goToScene(Math.max(currentSceneIndex - 1, 0), false)}
-              onNext={() => goToScene(Math.min(currentSceneIndex + 1, scenes.length - 1), false)}
-              onFullscreen={toggleFullscreen}
-              currentScene={currentSceneIndex}
-              totalScenes={scenes.length}
-              compact
-            />
-            {/* Progress bar */}
-            <div className="mt-3 flex items-center gap-3">
-              <span className="text-xs font-medium text-slate-400 w-12 text-right">{(currentSceneIndex + 1).toString().padStart(2, '0')}</span>
-              <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-slate-800/50">
-                <div
-                  className="h-full rounded-full bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 shadow-[0_0_10px_rgba(168,85,247,0.5)]"
-                  style={{ width: `${progressPct}%`, transition: "width 500ms ease-out" }}
+          <div className="flex flex-col gap-5 rounded-[28px] border border-white/10 bg-white/5 p-6 shadow-xl backdrop-blur-2xl">
+            <div className="flex flex-col items-center text-center space-y-4 pb-4 border-b border-white/10">
+              <div className="relative">
+                <div className="absolute inset-0 rounded-full bg-blue-500/25 blur-2xl" />
+                <AvatarPresenter
+                  mood={currentScene.avatar_mood || currentDefinition.defaultMood}
+                  narration={displayedNarration || currentScene.narration}
+                  size="lg"
                 />
               </div>
-              <span className="text-xs font-medium text-slate-400 w-12">{scenes.length.toString().padStart(2, '0')}</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Right Column: Narrative & Context */}
-        <div
-          className="flex flex-col gap-4 rounded-3xl border border-slate-800 bg-slate-900/60 p-6 shadow-xl backdrop-blur-xl"
-          style={{ animation: "dataMovieSlideIn 0.6s ease-out" }}
-        >
-          {/* Avatar & Mood */}
-          <div className="flex flex-col items-center text-center space-y-4 pb-6 border-b border-slate-800">
-            <div className="relative">
-              <div className="absolute inset-0 rounded-full bg-blue-500/20 blur-xl animate-pulse"></div>
-              <AvatarPresenter
-                mood={currentScene.avatar_mood || currentDefinition.defaultMood}
-                narration={displayedNarration || currentScene.narration}
-                size="lg"
-              />
-            </div>
-            <div>
-              <h4 className="text-xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-white to-slate-400">
-                {sceneTitle}
-              </h4>
-              <p className="text-xs uppercase tracking-widest text-blue-400 mt-1">
-                {currentScene.type === 'intro' ? 'Inicio' : currentScene.type === 'outro' ? 'Conclusión' : 'Análisis'}
-              </p>
-            </div>
-          </div>
-
-          {/* Narrative Text */}
-          <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar">
-            <div className="prose prose-invert prose-sm max-w-none">
-              <p className="text-slate-300 leading-relaxed text-base font-light">
-                {displayedNarration}
-              </p>
-            </div>
-
-            {/* Highlights / Bullets */}
-            {highlights.length > 0 && (
-              <div className="mt-6 space-y-3">
-                {highlights.slice(0, 4).map((item, idx) => (
-                  <div
-                    key={`${item}-${idx}`}
-                    className="group flex items-start gap-3 rounded-xl border border-slate-800 bg-slate-800/40 p-3 transition-all hover:border-blue-500/30 hover:bg-slate-800/60"
-                    style={{ animation: "dataMovieFadeIn 0.5s ease forwards", animationDelay: `${idx * 100}ms`, opacity: 0 }}
-                  >
-                    <span className="mt-1 flex h-2 w-2 shrink-0 rounded-full bg-blue-400 shadow-[0_0_8px_rgba(96,165,250,0.6)]"></span>
-                    <span className="text-sm text-slate-200 group-hover:text-white transition-colors">{item}</span>
-                  </div>
-                ))}
+              <div className="space-y-1">
+                <h4 className="text-xl font-semibold text-white drop-shadow-sm">{sceneTitle}</h4>
+                <p className="text-[11px] uppercase tracking-[0.26em] text-blue-200">
+                  {currentScene.type === "intro" ? "Inicio" : currentScene.type === "outro" ? "Conclusión" : "Análisis"}
+                </p>
               </div>
-            )}
+            </div>
 
-            {/* Pyme Overview Specifics - Only if explicitly needed in narrative */}
-            {currentSceneIndex === 0 && dataMovie?.pyme_insights && !currentScene.chart_data && (
-              <div className="mt-6 pt-6 border-t border-slate-800">
-                <p className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-3">Resumen General</p>
-                {/* We show a mini summary here if the main visual isn't covering it */}
-                <PymeOverviewScene pymeInsights={dataMovie.pyme_insights} />
-              </div>
-            )}
+            <div className="flex-1 space-y-4 overflow-y-auto pr-2 custom-scrollbar">
+              <p className="text-slate-200 leading-relaxed text-base font-light">{displayedNarration}</p>
+
+              {highlights.length > 0 && (
+                <div className="space-y-3">
+                  {highlights.slice(0, 4).map((item, idx) => (
+                    <div
+                      key={`${item}-${idx}`}
+                      className="flex items-start gap-3 rounded-2xl border border-white/10 bg-white/5 p-3 text-slate-100 transition hover:border-blue-300/40"
+                      style={{ animation: "dataMovieFadeIn 0.5s ease forwards", animationDelay: `${idx * 100}ms`, opacity: 0 }}
+                    >
+                      <span className="mt-1 h-2 w-2 rounded-full bg-blue-400 shadow-[0_0_8px_rgba(96,165,250,0.7)]"></span>
+                      <span className="text-sm leading-relaxed">{item}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {currentSceneIndex === 0 && dataMovie?.pyme_insights && !currentScene.chart_data && (
+                <div className="space-y-3 rounded-2xl border border-white/10 bg-white/5 p-4">
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-200">Resumen general</p>
+                  <PymeOverviewScene pymeInsights={dataMovie.pyme_insights} />
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>
-
-
     </div>
   );
 };
