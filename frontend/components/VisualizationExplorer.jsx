@@ -21,6 +21,11 @@ const ChartEmptyState = ({ message }) => (
   </div>
 );
 
+const initialFilterState = {
+  dimensionValues: {},
+  dateRange: { start: "", end: "" },
+};
+
 const VisualizationExplorer = ({ analysis }) => {
   const sampleData = analysis?.sample || [];
   const columnTypes = analysis?.column_types || {};
@@ -49,6 +54,8 @@ const VisualizationExplorer = ({ analysis }) => {
     return inferred;
   }, [columnTypes, sampleData]);
 
+  const allColumns = useMemo(() => Object.keys(detectedTypes), [detectedTypes]);
+
   const numericColumns = useMemo(
     () => Object.keys(detectedTypes).filter((col) => detectedTypes[col] === "numeric"),
     [detectedTypes]
@@ -68,22 +75,13 @@ const VisualizationExplorer = ({ analysis }) => {
   const [selectedDimensions, setSelectedDimensions] = useState([]);
   const [selectedChartType, setSelectedChartType] = useState("bar");
   const [selectedDateColumn, setSelectedDateColumn] = useState(null);
-  const [filters, setFilters] = useState({
-    dimensionValues: {},
-    dateRange: { start: "", end: "" },
-  });
+  const [filters, setFilters] = useState(initialFilterState);
 
   useEffect(() => {
     if (!selectedMetric && numericColumns.length) {
       setSelectedMetric(numericColumns[0]);
     }
   }, [numericColumns, selectedMetric]);
-
-  useEffect(() => {
-    if (!selectedDimensions.length && categoricalColumns.length) {
-      setSelectedDimensions(categoricalColumns.slice(0, 2));
-    }
-  }, [categoricalColumns, selectedDimensions]);
 
   useEffect(() => {
     if (!selectedDateColumn && dateColumns.length) {
@@ -97,7 +95,9 @@ const VisualizationExplorer = ({ analysis }) => {
     return selectedDimensions.reduce((acc, dimension) => {
       const values = new Set();
       sampleData.forEach((row) => values.add(row?.[dimension] ?? "Sin dato"));
-      acc[dimension] = Array.from(values).filter(Boolean).slice(0, 20);
+      acc[dimension] = Array.from(values)
+        .filter((value) => value !== undefined && value !== null && value !== "")
+        .slice(0, 20);
       return acc;
     }, {});
   }, [sampleData, selectedDimensions]);
@@ -202,6 +202,12 @@ const VisualizationExplorer = ({ analysis }) => {
 
       return [...prev, dimension];
     });
+  };
+
+  const handleResetFilters = () => {
+    setSelectedDimensions([]);
+    setFilters(initialFilterState);
+    setSelectedDateColumn(null);
   };
 
   const handleDateRangeChange = (field, value) => {
@@ -316,32 +322,9 @@ const VisualizationExplorer = ({ analysis }) => {
 
             <div className="space-y-2">
               <div className="flex items-center justify-between gap-2">
-                <label className="text-xs font-semibold text-gray-500 dark:text-slate-400">Segmentos (categoría)</label>
-                <span className="text-[11px] text-gray-400">Multi-selección</span>
+                <label className="text-xs font-semibold text-gray-500 dark:text-slate-400">Tipo de gráfico</label>
+                <span className="text-[11px] text-gray-400">Barras, línea o pastel</span>
               </div>
-              <div className="flex flex-wrap gap-2">
-                {categoricalColumns.map((col) => {
-                  const isActive = selectedDimensions.includes(col);
-                  return (
-                    <button
-                      key={col}
-                      onClick={() => handleDimensionToggle(col)}
-                      className={`px-3 py-1.5 rounded-full text-xs border transition ${
-                        isActive
-                          ? "bg-blue-500/10 text-blue-700 dark:text-blue-200 border-blue-300"
-                          : "bg-gray-50 dark:bg-slate-800 text-gray-600 dark:text-slate-300 border-gray-200 dark:border-slate-700"
-                      }`}
-                    >
-                      {col}
-                    </button>
-                  );
-                })}
-              </div>
-              <p className="text-[11px] text-gray-500 dark:text-slate-400">Combina varias categorías (ej. producto, canal, región) para segmentar los KPIs.</p>
-            </div>
-
-            <div className="space-y-2">
-              <p className="text-xs font-semibold text-gray-500 dark:text-slate-400">Tipo de gráfico</p>
               <div className="grid grid-cols-3 gap-2">
                 {[
                   { id: "bar", label: "Barras" },
@@ -362,12 +345,82 @@ const VisualizationExplorer = ({ analysis }) => {
                 ))}
               </div>
             </div>
+
+            <div className="space-y-2">
+              <p className="text-xs font-semibold text-gray-500 dark:text-slate-400">Segmentos (categoría)</p>
+              <p className="text-[11px] text-gray-500 dark:text-slate-400">
+                Ahora puedes elegir cualquier columna como atributo. Usa los checkboxes de abajo para activar o desactivar filtros.
+              </p>
+            </div>
           </div>
 
           <div className="rounded-2xl border border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 shadow-sm space-y-3">
-            <div className="flex items-center justify-between">
-              <p className="text-xs font-semibold text-gray-500 dark:text-slate-400">Filtros rápidos</p>
-              <span className="text-[11px] text-gray-400">Opcional</span>
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-xs font-semibold text-gray-500 dark:text-slate-400">Campos y filtros</p>
+                <p className="text-[11px] text-gray-400">Selecciona atributos con checkboxes</p>
+              </div>
+              <button
+                onClick={handleResetFilters}
+                className="text-xs px-3 py-1.5 rounded-full border border-gray-200 dark:border-slate-700 text-gray-600 dark:text-slate-200 hover:border-blue-400 hover:text-blue-600 dark:hover:border-blue-400"
+              >
+                Reset filtros
+              </button>
+            </div>
+
+            <div className="space-y-2">
+              <p className="text-xs uppercase tracking-[0.15em] text-gray-500 dark:text-slate-400">Filtros activos</p>
+              {selectedDimensions.length ? (
+                <div className="flex flex-wrap gap-2">
+                  {selectedDimensions.map((dimension) => (
+                    <span
+                      key={dimension}
+                      className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs bg-blue-50 dark:bg-slate-800 text-blue-700 dark:text-blue-200 border border-blue-100 dark:border-slate-700"
+                    >
+                      {dimension}
+                      <button
+                        onClick={() => handleDimensionToggle(dimension)}
+                        className="text-[11px] text-blue-600 dark:text-blue-300 hover:underline"
+                        aria-label={`Quitar filtro ${dimension}`}
+                      >
+                        Quitar
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-[12px] text-gray-500 dark:text-slate-500">No hay filtros seleccionados.</p>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <p className="text-xs uppercase tracking-[0.15em] text-gray-500 dark:text-slate-400">Campos disponibles</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {allColumns.map((col) => {
+                  const isActive = selectedDimensions.includes(col);
+                  return (
+                    <label
+                      key={col}
+                      className={`flex items-center justify-between gap-2 rounded-xl border px-3 py-2 text-sm cursor-pointer transition ${
+                        isActive
+                          ? "border-blue-400 bg-blue-50 dark:bg-slate-800 text-blue-700 dark:text-blue-200"
+                          : "border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-200"
+                      }`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={isActive}
+                          onChange={() => handleDimensionToggle(col)}
+                          className="w-4 h-4 rounded border-gray-300 text-blue-500 focus:ring-blue-500"
+                        />
+                        <span>{col}</span>
+                      </div>
+                      <span className="text-[11px] uppercase tracking-[0.12em] text-gray-400 dark:text-slate-500">{detectedTypes[col]}</span>
+                    </label>
+                  );
+                })}
+              </div>
             </div>
 
             {selectedDimensions.map((dimension) => {
