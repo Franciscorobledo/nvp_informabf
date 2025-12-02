@@ -61,9 +61,9 @@ const VisualizationExplorer = ({ analysis }) => {
     [detectedTypes]
   );
 
-  const categoricalColumns = useMemo(
-    () => Object.keys(detectedTypes).filter((col) => detectedTypes[col] === "categorical"),
-    [detectedTypes]
+  const attributeColumns = useMemo(
+    () => allColumns.filter((col) => detectedTypes[col] !== "numeric" && detectedTypes[col] !== "date"),
+    [allColumns, detectedTypes]
   );
 
   const dateColumns = useMemo(
@@ -78,6 +78,23 @@ const VisualizationExplorer = ({ analysis }) => {
   const [filters, setFilters] = useState(initialFilterState);
   const [isMetricSectionOpen, setIsMetricSectionOpen] = useState(true);
   const [isFiltersSectionOpen, setIsFiltersSectionOpen] = useState(true);
+
+  useEffect(() => {
+    setSelectedDimensions((prev) => {
+      const nextDimensions = prev.filter((dimension) => attributeColumns.includes(dimension));
+      if (nextDimensions.length === prev.length) return prev;
+
+      setFilters((current) => {
+        const updatedValues = Object.fromEntries(
+          Object.entries(current.dimensionValues || {}).filter(([dimension]) => attributeColumns.includes(dimension))
+        );
+
+        return { ...current, dimensionValues: updatedValues };
+      });
+
+      return nextDimensions;
+    });
+  }, [attributeColumns]);
 
   useEffect(() => {
     if (!selectedMetric && numericColumns.length) {
@@ -432,7 +449,7 @@ const VisualizationExplorer = ({ analysis }) => {
                 <div className="space-y-2">
                   <p className="text-xs uppercase tracking-[0.15em] text-gray-500 dark:text-slate-400">Campos disponibles</p>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    {allColumns.map((col) => {
+                    {attributeColumns.map((col) => {
                       const isActive = selectedDimensions.includes(col);
                       return (
                         <label
