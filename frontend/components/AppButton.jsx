@@ -2,9 +2,9 @@ import React from "react";
 
 const variantStyles = {
   primary:
-    "bg-blue-600 text-white hover:bg-blue-700 focus-visible:ring-blue-300 disabled:bg-blue-400 disabled:hover:bg-blue-400",
+    "bg-gradient-to-r from-blue-600 via-blue-600 to-blue-700 text-white shadow-lg shadow-blue-500/25 hover:shadow-blue-500/35 hover:-translate-y-0.5 focus-visible:ring-blue-300 disabled:bg-blue-400 disabled:shadow-none disabled:hover:translate-y-0",
   secondary:
-    "border border-blue-200 text-blue-800 bg-blue-50 hover:bg-blue-100 focus-visible:ring-blue-200 dark:border-blue-800 dark:text-blue-100 dark:bg-blue-900/30 dark:hover:bg-blue-900/50 focus-visible:dark:ring-blue-800",
+    "border border-slate-200/90 dark:border-slate-700/80 bg-white/80 dark:bg-slate-900/40 text-slate-800 dark:text-slate-50 hover:border-blue-300 hover:text-blue-800 hover:shadow-sm focus-visible:ring-blue-200 focus-visible:dark:ring-blue-800",
   danger:
     "bg-rose-600 text-white hover:bg-rose-700 focus-visible:ring-rose-300 disabled:bg-rose-400 disabled:hover:bg-rose-400",
   ghost:
@@ -50,7 +50,7 @@ const AppButton = ({
   const variantClass = variantStyles[variant] || variantStyles.primary;
   const widthClass = fullWidth ? "w-full" : "";
   const baseStyles =
-    "inline-flex items-center justify-center gap-2 rounded-xl px-5 h-12 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-slate-900";
+    "inline-flex items-center justify-center gap-2 rounded-2xl px-5 h-12 text-sm font-semibold transition duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-slate-900";
   const disabledStyles = stateDisabled ? "opacity-80 cursor-not-allowed" : "";
 
   return (

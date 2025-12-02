@@ -45,6 +45,7 @@ const FileUpload = ({ onDataReceived, onUnauthorized, onNavigateModule }) => {
   const [resultNotice, setResultNotice] = useState("");
   const [galleryMode, setGalleryMode] = useState("static");
   const [interactiveLimit, setInteractiveLimit] = useState(10);
+  const [isDragging, setIsDragging] = useState(false);
   const [persistedDatasetId, setPersistedDatasetId] = useState(() => {
     if (typeof window === "undefined") return null;
     return localStorage.getItem("lastDatasetId");
@@ -64,6 +65,7 @@ const FileUpload = ({ onDataReceived, onUnauthorized, onNavigateModule }) => {
   const goToCompareModule = () => onNavigateModule?.("compare");
 
   const tokenClientRef = useRef(null);
+  const fileInputRef = useRef(null);
   const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
   const googleApiKey = import.meta.env.VITE_GOOGLE_API_KEY;
 
@@ -487,10 +489,34 @@ const FileUpload = ({ onDataReceived, onUnauthorized, onNavigateModule }) => {
     return charts.slice(0, 2);
   };
 
-  const handleFileChange = (e) => {
+  const setLocalFiles = (incomingFiles = []) => {
     setDemoMetadata(null);
-    setFiles(Array.from(e.target.files || []));
+    setFiles(Array.from(incomingFiles));
   };
+
+  const handleFileChange = (e) => {
+    setLocalFiles(e.target.files || []);
+  };
+
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e) => {
+    e.preventDefault();
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    setIsDragging(false);
+    if (e.dataTransfer?.files?.length) {
+      setLocalFiles(e.dataTransfer.files);
+    }
+  };
+
+  const openFileDialog = () => fileInputRef.current?.click();
 
   const downloadDriveFile = async (fileId, accessToken, suggestedName) => {
     try {
@@ -862,172 +888,265 @@ const FileUpload = ({ onDataReceived, onUnauthorized, onNavigateModule }) => {
     : [];
 
   return (
-    <div className="flex flex-col items-center space-y-6 w-full max-w-5xl mx-auto text-gray-800 dark:text-slate-100">
-      <div className="w-full px-2">
-        <label
-          htmlFor="category-filter"
-          className="block text-sm font-semibold text-gray-700 dark:text-slate-100"
-        >
-          🎯 Foco del informe
-        </label>
-        <p className="text-xs text-gray-600 dark:text-slate-300 mb-2">
-          Elige un contexto (ventas o stock) para priorizar los KPIs y
-          visualizaciones más relevantes. "Todo" mantiene el comportamiento
-          actual.
-        </p>
-        <div className="relative w-full sm:w-80">
-          <select
-            id="category-filter"
-            value={categoryFilter}
-            onChange={(e) => setCategoryFilter(e.target.value)}
-            ref={filterSelectRef}
-            className="w-full appearance-none bg-white dark:bg-slate-900 border border-gray-300 dark:border-slate-700 rounded-lg px-4 py-3 pr-10 shadow-sm text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 dark:text-slate-100"
-          >
-            {focusOptions.map((option) => (
-              <option key={option.valor} value={option.valor}>
-                {option.etiqueta}
-              </option>
-            ))}
-          </select>
-          <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-gray-400 dark:text-slate-500">
-            ▼
-          </span>
-        </div>
-        {getFocusIndicators().length > 0 && (
-          <div className="mt-3 grid gap-2 sm:grid-cols-2">
-            {getFocusIndicators().map((indicator) => (
-              <div
-                key={indicator.title}
-                className="flex items-start gap-3 rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/30 p-3"
+    <div className="w-full max-w-6xl mx-auto flex flex-col space-y-8 text-gray-800 dark:text-slate-100">
+      <div className="grid w-full gap-6 px-2 lg:grid-cols-[1.05fr_1.2fr]">
+        <div className="rounded-3xl border border-slate-200/80 dark:border-slate-800 bg-white/80 dark:bg-slate-900/70 shadow-xl p-6 sm:p-7 space-y-4">
+          <div className="flex items-start gap-3">
+            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-blue-600 text-white shadow-lg shadow-blue-500/30">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                className="h-5 w-5"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth="1.8"
               >
-                <span className="mt-0.5 text-lg" aria-hidden="true">
-                  📌
-                </span>
-                <div>
-                  <p className="text-sm font-semibold text-amber-900 dark:text-amber-100">
-                    {indicator.title}
-                  </p>
-                  <p className="text-xs text-amber-800/90 dark:text-amber-100/80 leading-relaxed">
-                    {indicator.description}
-                  </p>
-                </div>
-              </div>
-            ))}
+                <circle cx="12" cy="12" r="8" />
+                <path d="M12 8v4l3 2" />
+              </svg>
+            </div>
+            <div className="space-y-1">
+              <p className="text-xs uppercase tracking-[0.18em] text-slate-500 dark:text-slate-300">Prioriza el análisis</p>
+              <h3 className="text-xl font-semibold text-slate-900 dark:text-white">Foco del informe</h3>
+              <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
+                Elige el enfoque (ventas, stock o auditoría) para que los KPIs y visualizaciones se alineen con tu objetivo. "Todo" mantiene el comportamiento actual.
+              </p>
+            </div>
           </div>
-        )}
-      </div>
-
-      {/* Subida de archivo */}
-      <div className="flex flex-col items-stretch sm:items-center gap-3 w-full px-2">
-        <div className="flex flex-wrap gap-2 justify-center">
-          <button
-            onClick={() => setUploadMode("local")}
-            className={`px-4 py-2 rounded-lg text-sm font-semibold border transition ${uploadMode === "local"
-                ? "bg-blue-50 dark:bg-slate-800 border-blue-300 text-blue-700 dark:text-blue-200"
-                : "bg-white dark:bg-slate-900 border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-200"
-              }`}
-          >
-            📁 Subir desde tu equipo
-          </button>
-          {/**
-           * Botón deshabilitado temporalmente hasta completar el proceso de
-           * verificación de Google Drive. Se mantiene comentado para
-           * reactivarlo en el futuro sin perder la configuración original.
-           */}
-          {false && (
-            <button
-              onClick={() => setUploadMode("drive")}
-              className={`px-4 py-2 rounded-lg text-sm font-semibold border transition ${uploadMode === "drive"
-                  ? "bg-blue-50 dark:bg-slate-800 border-blue-300 text-blue-700 dark:text-blue-200"
-                  : "bg-white dark:bg-slate-900 border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-200"
-                }`}
+          <div className="relative">
+            <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                className="h-4 w-4"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth="1.8"
+              >
+                <path d="M11 5a6 6 0 014.74 9.69l2.78 2.77" />
+                <circle cx="11" cy="11" r="6" />
+              </svg>
+            </span>
+            <select
+              id="category-filter"
+              value={categoryFilter}
+              onChange={(e) => setCategoryFilter(e.target.value)}
+              ref={filterSelectRef}
+              className="w-full appearance-none rounded-2xl border border-slate-200/90 dark:border-slate-700 bg-white/90 dark:bg-slate-900/70 px-12 py-3 pr-12 shadow-sm text-sm font-medium text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             >
-              ☁️ Importar desde Google Drive
-            </button>
+              {focusOptions.map((option) => (
+                <option key={option.valor} value={option.valor}>
+                  {option.etiqueta}
+                </option>
+              ))}
+            </select>
+            <span className="pointer-events-none absolute inset-y-0 right-4 flex items-center text-slate-400 dark:text-slate-500">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                className="h-4 w-4"
+                viewBox="0 0 20 20"
+                fill="currentColor"
+              >
+                <path
+                  fillRule="evenodd"
+                  d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.06 1.06l-4.24 4.24a.75.75 0 01-1.06 0L5.21 8.29a.75.75 0 01.02-1.08z"
+                  clipRule="evenodd"
+                />
+              </svg>
+            </span>
+          </div>
+          {getFocusIndicators().length > 0 && (
+            <div className="grid gap-3 sm:grid-cols-2">
+              {getFocusIndicators().map((indicator) => (
+                <div
+                  key={indicator.title}
+                  className="flex items-start gap-3 rounded-2xl border border-amber-200/70 dark:border-amber-800/60 bg-amber-50/70 dark:bg-amber-900/20 p-4"
+                >
+                  <span className="mt-0.5 text-lg" aria-hidden="true">
+                    📌
+                  </span>
+                  <div>
+                    <p className="text-sm font-semibold text-amber-900 dark:text-amber-100">{indicator.title}</p>
+                    <p className="text-xs text-amber-800/90 dark:text-amber-100/80 leading-relaxed">{indicator.description}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
           )}
         </div>
 
-        {uploadMode === "local" ? (
-          <>
-            <label
-              htmlFor="fileInput"
-              className="w-full sm:w-auto text-sm font-medium text-gray-700 dark:text-slate-200 text-center"
-            >
-              Selecciona uno o varios archivos (.csv, .xlsx o .zip)
-            </label>
-            <input
-              id="fileInput"
-              type="file"
-              onChange={handleFileChange}
-              accept=".csv, .xlsx, .zip"
-              multiple
-              className="w-full sm:w-auto border border-gray-300 dark:border-slate-700 p-3 rounded-lg shadow-sm focus:ring focus:ring-blue-300 bg-white dark:bg-slate-900 dark:text-slate-100 dark:placeholder-slate-400"
-            />
-            {demoMetadata?.is_demo && (
-              <p className="text-xs text-amber-600 dark:text-amber-300 text-center">
-                Estás viendo datos de ejemplo. Sube un archivo para reemplazarlos.
+        <div className="rounded-3xl border border-slate-200/80 dark:border-slate-800 bg-white/80 dark:bg-slate-900/70 shadow-xl p-6 sm:p-7 space-y-5">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="space-y-1">
+              <p className="text-xs uppercase tracking-[0.18em] text-slate-500 dark:text-slate-300">Carga inteligente</p>
+              <h3 className="text-xl font-semibold text-slate-900 dark:text-white">Carga y análisis de archivos</h3>
+              <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
+                Arrastra tus datos o súbelos desde tu equipo. Formatos permitidos: CSV, XLSX o ZIP. Mantén el flujo: subir → elegir enfoque → analizar.
               </p>
-            )}
-          </>
-        ) : (
-          <div className="w-full space-y-2 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-xl p-4 shadow-sm">
-            <p className="text-sm text-gray-700 dark:text-slate-200 font-medium">
-              Importa un archivo de Google Drive
-            </p>
+            </div>
+            <div className="inline-flex items-center gap-2 rounded-full border border-slate-200/80 dark:border-slate-700 bg-white/80 dark:bg-slate-900/60 px-3 py-1 text-xs font-semibold text-blue-700 dark:text-blue-200">
+              <span className="h-2 w-2 rounded-full bg-emerald-400" aria-hidden />
+              Validación automática
+            </div>
+          </div>
+
+          <div className="flex flex-wrap gap-2">
             <button
-              onClick={openDrivePicker}
-              disabled={driveLoading || !drivePickerReady}
-              className={`w-full sm:w-auto px-6 py-3 rounded-lg font-semibold transition-all duration-300 ${driveLoading || !drivePickerReady
-                  ? "bg-gray-400 text-white cursor-not-allowed"
-                  : "bg-emerald-600 hover:bg-emerald-700 text-white shadow"
+              type="button"
+              onClick={() => setUploadMode("local")}
+              className={`flex items-center gap-2 rounded-2xl border px-4 py-2 text-sm font-semibold transition ${uploadMode === "local"
+                  ? "border-blue-300 bg-blue-50 text-blue-800 dark:border-blue-700 dark:bg-blue-900/40 dark:text-blue-100"
+                  : "border-slate-200 bg-white text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
                 }`}
             >
-              {driveLoading
-                ? "Conectando con Google..."
-                : "Elegir archivo en Google Drive"}
+              <span className="text-lg" aria-hidden>
+                📁
+              </span>
+              Subir desde tu equipo
             </button>
-            <p className="text-xs text-gray-500 dark:text-slate-400">
-              Se abrirá una ventana de Google para autorizar y elegir el archivo sin escribir tokens.
-            </p>
-            {selectedDriveFileName && (
-              <p className="text-xs text-emerald-700 dark:text-emerald-300 font-semibold">
-                Archivo seleccionado: {selectedDriveFileName}
-              </p>
+            {false && (
+              <button
+                type="button"
+                onClick={() => setUploadMode("drive")}
+                className={`flex items-center gap-2 rounded-2xl border px-4 py-2 text-sm font-semibold transition ${uploadMode === "drive"
+                    ? "border-blue-300 bg-blue-50 text-blue-800 dark:border-blue-700 dark:bg-blue-900/40 dark:text-blue-100"
+                    : "border-slate-200 bg-white text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                  }`}
+              >
+                <span className="text-lg" aria-hidden>
+                  ☁️
+                </span>
+                Importar desde Google Drive
+              </button>
             )}
           </div>
-        )}
 
-        {files.length > 0 && (
-          <p className="text-xs text-gray-500 dark:text-slate-400 text-center sm:text-left">
-            {files.length === 1
-              ? `Archivo listo: ${files[0].name}`
-              : `${files.length} archivos listos para analizar`}
-          </p>
-        )}
+          {uploadMode === "local" ? (
+            <>
+              <div
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
+                className={`group relative w-full rounded-2xl border-2 border-dashed p-6 sm:p-7 transition ${isDragging
+                    ? "border-blue-500 bg-blue-50/70 dark:bg-blue-900/20 shadow-lg shadow-blue-500/20"
+                    : "border-slate-300/80 dark:border-slate-700/80 bg-white/70 dark:bg-slate-900/50"
+                  }`}
+              >
+                <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+                  <div className="flex items-start gap-4">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-600 text-white shadow-lg shadow-blue-500/30">
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        className="h-5 w-5"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                        strokeWidth="1.8"
+                      >
+                        <path d="M7 10l5 5 5-5" />
+                        <path d="M12 15V4" />
+                        <rect x="4" y="17" width="16" height="3" rx="1.5" />
+                      </svg>
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-lg font-semibold text-slate-900 dark:text-white">
+                        Arrastra y suelta tus archivos
+                      </p>
+                      <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
+                        También puedes buscarlos en tu dispositivo y prepararlos para el análisis asistido por IA.
+                      </p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">Formatos permitidos: CSV, XLSX, ZIP.</p>
+                    </div>
+                  </div>
+                  <div className="flex w-full flex-col gap-2 sm:w-auto">
+                    <button
+                      type="button"
+                      onClick={openFileDialog}
+                      className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-slate-900 text-white px-5 py-3 text-sm font-semibold shadow-lg shadow-slate-900/20 transition hover:-translate-y-0.5 hover:shadow-slate-900/30 dark:bg-white dark:text-slate-900"
+                    >
+                      <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-white/20 dark:bg-slate-200/90 text-base">
+                        ⬆️
+                      </span>
+                      Subir desde tu equipo
+                    </button>
+                    <p className="text-[11px] text-center text-slate-500 dark:text-slate-400">Compatible con arrastrar y soltar.</p>
+                  </div>
+                </div>
+                <input
+                  ref={fileInputRef}
+                  id="fileInput"
+                  type="file"
+                  onChange={handleFileChange}
+                  accept=".csv, .xlsx, .zip"
+                  multiple
+                  className="hidden"
+                />
+              </div>
+              {demoMetadata?.is_demo && (
+                <p className="text-xs text-amber-600 dark:text-amber-300 text-left">
+                  Estás viendo datos de ejemplo. Sube un archivo para reemplazarlos.
+                </p>
+              )}
+            </>
+          ) : (
+            <div className="w-full space-y-2 bg-white/80 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-sm">
+              <p className="text-sm text-slate-700 dark:text-slate-200 font-medium">Importa un archivo de Google Drive</p>
+              <button
+                onClick={openDrivePicker}
+                disabled={driveLoading || !drivePickerReady}
+                className={`w-full sm:w-auto px-6 py-3 rounded-2xl font-semibold transition-all duration-300 ${driveLoading || !drivePickerReady
+                    ? "bg-slate-400 text-white cursor-not-allowed"
+                    : "bg-emerald-600 hover:bg-emerald-700 text-white shadow"
+                  }`}
+              >
+                {driveLoading ? "Conectando con Google..." : "Elegir archivo en Google Drive"}
+              </button>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                Se abrirá una ventana de Google para autorizar y elegir el archivo sin escribir tokens.
+              </p>
+              {selectedDriveFileName && (
+                <p className="text-xs text-emerald-700 dark:text-emerald-300 font-semibold">
+                  Archivo seleccionado: {selectedDriveFileName}
+                </p>
+              )}
+            </div>
+          )}
 
-        <div className="flex flex-col sm:flex-row gap-3 w-full">
-          <AppButton
-            onClick={handleUpload}
-            disabled={files.length === 0}
-            loading={loading || isAnalyzing}
-            loadingText="Analizando..."
-            fullWidth
-            className="sm:flex-1"
-          >
-            Analizar archivo(s)
-          </AppButton>
+          {files.length > 0 && (
+            <div className="flex items-center gap-2 rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/60 px-4 py-3 text-xs text-slate-600 dark:text-slate-300">
+              <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-blue-600 text-white text-xs font-bold">
+                {files.length}
+              </span>
+              {files.length === 1
+                ? `Archivo listo: ${files[0].name}`
+                : `${files.length} archivos listos para analizar`}
+            </div>
+          )}
 
-          <AppButton
-            onClick={handleDemoAnalyze}
-            disabled={isAnalyzing}
-            loading={isAnalyzing && !analysis}
-            loadingText="Cargando demo…"
-            variant="secondary"
-            fullWidth
-            className="sm:flex-1"
-          >
-            Probar con datos de ejemplo
-          </AppButton>
+          <div className="flex flex-col sm:flex-row gap-3 w-full">
+            <AppButton
+              onClick={handleUpload}
+              disabled={files.length === 0}
+              loading={loading || isAnalyzing}
+              loadingText="Analizando..."
+              fullWidth
+              className="sm:flex-1"
+            >
+              Analizar archivo(s)
+            </AppButton>
+
+            <AppButton
+              onClick={handleDemoAnalyze}
+              disabled={isAnalyzing}
+              loading={isAnalyzing && !analysis}
+              loadingText="Cargando demo…"
+              variant="secondary"
+              fullWidth
+              className="sm:flex-1"
+            >
+              Probar con datos de ejemplo
+            </AppButton>
+          </div>
         </div>
       </div>
 
