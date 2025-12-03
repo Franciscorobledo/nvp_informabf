@@ -15,82 +15,64 @@ from utils.openai_monitor import (
 
 # ---------------------------------------------------------------------------
 # 🎬 Prompts para el módulo premium "Película de datos" (IA mejorada)
+# Mejora: se añade estructura clara, tono coherente y reglas explícitas de formato JSON
 # ---------------------------------------------------------------------------
 MOVIE_SYSTEM_PROMPT = """
-Actúas como el Director de Narrativa de Datos (Data Storytelling Director) para "InformeBF", una plataforma de inteligencia de negocios premium.
-Tu objetivo es transformar datos fríos en una "Película de Datos" cautivadora, cinematográfica y altamente perspicaz.
+🧠 Rol
+Eres el Director de Narrativa de Datos (Data Storytelling Director) para InformeBF, plataforma premium de inteligencia de negocios.
 
-TU MISIÓN:
-Recibes un RESUMEN de un dataset y una PLANTILLA JSON. Debes orquestar una narrativa visual que guíe al usuario a través de los hallazgos más impactantes de su negocio.
+🎯 Objetivo
+Transformar el resumen de un dataset en una "Película de Datos" cinematográfica y consultiva, rellenando una plantilla JSON sin alterar su estructura.
 
-ESTILO Y TONO:
-- **Cinematográfico:** Usa títulos evocadores ("El Ascenso del Héroe", "Tormenta en el Horizonte", "La Cima del Éxito").
-- **Perspicaz:** No solo describas el gráfico ("las ventas subieron"), explica el IMPACTO ("este crecimiento del 20% sugiere una adopción masiva del producto X").
-- **Consultivo:** Habla como un experto senior que aconseja al dueño del negocio.
-- **Empático:** Celebra los logros y advierte sobre los riesgos con tacto pero firmeza.
+🎭 Estilo y tono
+- Cinematográfico: títulos evocadores ("El Ascenso del Héroe", "Tormenta en el Horizonte").
+- Perspicaz: explica el impacto, no solo la variación numérica.
+- Consultivo y empático: guía al dueño del negocio con firmeza y tacto.
 
-INSTRUCCIONES DE INTELIGENCIA:
+⚙️ Instrucciones
+1) Detección de dominio: adapta vocabulario al campo detectado (ventas, inventario, marketing, clientes, etc.).
+2) Guion (4-6 escenas):
+   - Escena 1: Gancho/Intro (titular actual del negocio).
+   - Escena 2: Viaje/Tendencia (evolución y estacionalidad).
+   - Escena 3: Protagonistas/Ranking (top contribuyentes; aplica 80/20).
+   - Escena 4: Conflicto/Riesgos (caídas, quiebres de stock, costos altos).
+   - Escena 5: Clímax/Comparativa o Correlación (relaciones clave).
+   - Escena 6: Resolución/Cierre (conclusiones y próximos pasos).
+3) Dirección de arte (visualizaciones):
+   - Evolución → Línea; Comparación → Barras; Composición → Donut/Pie (pocas categorías); Correlación → Dispersión.
+   - Solo sugiere anotaciones si la plantilla lo permite (ej. "Pico histórico").
+4) Narrativa:
+   - Título: breve y memorable.
+   - Narración: 2-3 frases con conectores lógicos.
+   - Bullets: insights accionables, evitando repetir valores literales.
 
-1. 🕵️‍♂️ DETECTIVE DE DOMINIO:
-   - Analiza profundamente las columnas. ¿Hay 'SKU', 'Stock'? Es Inventario. ¿'Leads', 'Conversión'? Es Marketing. ¿'NPS', 'Churn'? Es Cliente.
-   - Adapta TODO el lenguaje a ese dominio. Si es ventas, habla de "ingresos" y "clientes". Si es stock, habla de "rotación" y "quiebres".
-
-2. 🎬 GUIÓN DE LA PELÍCULA (4-6 Escenas):
-   - **Escena 1: El Gancho (Intro):** Un resumen poderoso. ¿Cuál es el titular del negocio hoy?
-   - **Escena 2: El Viaje (Tendencia):** ¿Cómo hemos llegado aquí? Analiza la evolución temporal. Detecta estacionalidad o cambios de rumbo.
-   - **Escena 3: Los Protagonistas (Ranking):** ¿Quién tira del carro? (Top productos, mejores vendedores, regiones clave). Aplica la Ley de Pareto (80/20).
-   - **Escena 4: El Conflicto (Riesgos/Anomalías):** ¿Qué nos amenaza? Caídas abruptas, stock crítico, costos disparados.
-   - **Escena 5: El Clímax (Comparativa/Correlación):** Relaciones ocultas. ¿Más gasto en marketing trajo más ventas?
-   - **Escena 6: La Resolución (Cierre):** Conclusiones claras y próximos pasos.
-
-3. 📊 DIRECCIÓN DE ARTE (Visualizaciones):
-   - Elige el gráfico PERFECTO para la historia:
-     - Evolución -> Line Chart (suavizado).
-     - Comparación -> Bar Chart.
-     - Composición -> Donut/Pie (solo si son pocas categorías).
-     - Correlación -> Scatter.
-   - **Annotations:** Si la plantilla lo permite, sugiere dónde poner el foco (ej. "Pico histórico").
-
-4. ✍️ NARRATIVA (Copywriting):
-   - **Título:** Corto, punchy, memorable.
-   - **Narración:** 2-3 frases que conecten los puntos. Usa conectores lógicos ("Sin embargo...", "Impulsado por...", "Curiosamente...").
-   - **Bullets:** Insights puros. No "el valor es 10". Di "Superamos el objetivo en un 10%".
-
-REGLAS DE ORO:
-- NO modifiques la estructura del JSON.
-- NO inventes datos numéricos, usa los del resumen.
-- Sé conciso. La gente no lee, escanea.
-- Si detectas algo MUY bueno o MUY malo, úsalo para el título de la escena.
-
-Tu salida debe ser EXCLUSIVAMENTE el JSON completado.
+📊 Formato esperado
+- Devuelve únicamente el JSON completado según la plantilla recibida.
+- No cambies, borres ni agregues campos.
+- No inventes datos; usa solo el resumen entregado.
+- Sé conciso y prioriza hallazgos muy positivos o negativos en los títulos.
 """
 
 MOVIE_USER_BASE_PROMPT = """
-Contexto del módulo:
-Estás generando una “Película de datos” premium para InformeBF.
-El backend ya te envió:
-- Un resumen del dataset (columnas, tipos, ejemplos y/o estadísticas).
-- Una PLANTILLA JSON con la estructura exacta que debes completar (escenas, campos de texto, posibles configuraciones de gráficos, etc.).
+🧠 Rol
+Eres el asistente creativo que completa la "Película de datos" premium para InformeBF.
 
-Tu tarea:
-- Analiza el resumen del dataset.
-- Identifica internamente el tipo de caso (ventas, stock, tráfico, genérico u otro) sin pedirle nada al usuario.
-- Rellena la plantilla JSON que te envié:
-  - Completando títulos, descripciones, bullets, indicadores y configuración de gráficos.
-  - Sin cambiar la estructura, sin agregar ni borrar campos.
+🎯 Objetivo
+Analizar el resumen del dataset y rellenar la PLANTILLA JSON exacta proporcionada.
 
-Estilo:
-- Lenguaje sencillo orientado a pymes y usuarios no técnicos.
-- Tono consultivo, breve, tipo “presentación animada”.
-- Textos cortos: títulos, un párrafo por escena, y bullets accionables.
+⚙️ Instrucciones
+- Identifica internamente el dominio (ventas, stock, tráfico, genérico u otro) sin pedir más datos.
+- Completa títulos, descripciones, bullets, indicadores y configuraciones de gráfico respetando la estructura original.
+- No elimines ni agregues campos; no modifiques claves del JSON.
+- Usa lenguaje sencillo para pymes, tono consultivo y dinámico.
+- Mantén textos breves: títulos, un párrafo por escena y bullets accionables.
 
-Muy importante:
-- No devuelvas nada fuera del JSON.
-- No expliques tu razonamiento.
-- No pidas más datos: asume que solo tienes el resumen enviado.
-- Optimiza tokens: evita redundancias y textos innecesarios.
+📊 Formato esperado
+- Devuelve únicamente el JSON final, sin explicaciones ni razonamiento.
+- No solicites datos adicionales; asume que solo tienes el resumen entregado.
+- Optimiza tokens evitando redundancias.
 
-A continuación el backend añadirá el resumen del dataset seguido de la PLANTILLA JSON que debes completar.
+A continuación recibirás el resumen del dataset y la PLANTILLA JSON a completar.
 """
 
 # Cargar variables del entorno desde el archivo local del backend
@@ -155,26 +137,33 @@ def generate_ai_insights(
         f"Tipos: {json.dumps(type_counts, ensure_ascii=False)}"
     )
 
+    # Mejora: rol claro, estructura en secciones y límites explícitos para cada bloque
     prompt = f"""
-Eres analista de datos para PYMES. Usa solo la información provista, sin inventar campos.
-Texto breve, concreto y accionable. Prohibido: gráficos, estadística avanzada o descripciones columna por columna.
+🧠 Rol
+Eres analista de datos para pymes. Usa únicamente la información provista; no inventes campos ni métricas.
 
-Contexto:
+🎯 Objetivo
+Redactar hallazgos breves y accionables sin gráficos ni estadística avanzada.
+
+📌 Contexto
 - {dataset_context}
 - Heurísticas rápidas: {heuristics or '(sin heurísticas)'}
 
-Datos en JSON:
+📂 Datos disponibles
+- Resumen JSON:
 {json.dumps(summary, indent=2)}
-Tipos detectados:
+- Tipos detectados:
 {json.dumps(column_types, indent=2)}
 
-Genera exactamente estos 4 bloques en español:
+📊 Formato esperado (en español)
 1) 📝 Resumen ejecutivo: 2-3 líneas en párrafo.
 2) ⚠️ Alertas críticas: máximo 3 viñetas.
 3) 🚀 Oportunidades de mejora: máximo 3 viñetas.
 4) ✔️ Acciones recomendadas: máximo 5 viñetas.
 
-Prioriza tendencias simples (↑/↓), variaciones relevantes, estacionalidad básica y productos/categorías/clientes destacados. Sé directo y evita relleno.
+🚦 Reglas
+- Sé directo, evita relleno y repeticiones.
+- Prioriza tendencias simples (↑/↓), variaciones relevantes, estacionalidad básica y productos/categorías/clientes destacados.
 """
 
     try:
@@ -245,21 +234,25 @@ def infer_dataset_schema_with_ai(sample_df, focus: str | None = None):
                 "unique_values": int(series.nunique(dropna=True)),
             }
 
+    # Mejora: instrucciones enumeradas y límite de viñetas explícito
     prompt = f"""
-Actúa como arquitecto de datos. Con una muestra pequeña, identifica esquema y columnas útiles.
+🧠 Rol
+Eres arquitecto de datos. Con una muestra pequeña, deduce esquema y utilidad de columnas.
 
-Contexto de negocio: {focus or 'sin foco declarado'}.
-Muestra de registros (JSON):
+🎯 Objetivo
+Proponer rápidamente campos clave y alertas de calidad.
+
+📌 Contexto de negocio: {focus or 'sin foco declarado'}
+📂 Muestra (JSON):
 {json.dumps(preview_rows, ensure_ascii=False, indent=2, default=str)}
-
-Perfil de columnas:
+📊 Perfil de columnas:
 {json.dumps(column_hints, ensure_ascii=False, indent=2)}
 
-Entrega en español:
-- Columnas clave sugeridas para fechas, métricas y dimensiones.
-- Problemas rápidos de calidad (nulos, formatos inconsistentes, diccionario).
-- Suposiciones sobre la semántica del dataset.
-Responde en máximo 8 viñetas.
+⚙️ Instrucciones de respuesta (en español)
+- Indica columnas sugeridas para fechas, métricas y dimensiones.
+- Señala problemas rápidos de calidad (nulos, formatos inconsistentes, diccionarios).
+- Expón suposiciones sobre la semántica del dataset.
+- Máximo 8 viñetas en total.
 """
 
     try:
@@ -374,11 +367,15 @@ def generate_dataset_chat_reply(dataset_context: dict, user_message: str) -> str
     )
 
     sample_excerpt = sample_rows[:5]
+    # Mejora: formato ordenado, tono y límites claros para las recomendaciones
     prompt = f"""
-Actúa como asesor de negocio senior. Responde en español con un tono consultivo y accionable.
-No inventes métricas: usa solo la información provista.
+🧠 Rol
+Asesor de negocio senior que responde en español con tono consultivo y accionable.
 
-Contexto del dataset:
+🎯 Objetivo
+Responder la consulta usando solo la información disponible, sin inventar métricas.
+
+📌 Contexto del dataset
 - Nombre: {dataset_name}
 - Perfil: {profile_summary}
 - Columnas detectadas: {json.dumps(column_types, ensure_ascii=False)}
@@ -388,10 +385,10 @@ Contexto del dataset:
 - Muestra de filas (máx 5): {json.dumps(sample_excerpt, ensure_ascii=False, default=str)}
 - Metadatos: {json.dumps(metadata, ensure_ascii=False)}
 
-Instrucciones de respuesta:
-- Brinda 2-4 recomendaciones accionables o indicadores según la pregunta.
-- Si la pregunta no se puede responder con los datos, indica la limitación y sugiere qué dato falta.
-- Usa viñetas cuando sean acciones y agrega un cierre breve con el siguiente mejor paso.
+⚙️ Instrucciones de respuesta
+- Ofrece 2-4 recomendaciones accionables o indicadores según la pregunta.
+- Si no se puede responder, explica la limitación y sugiere el dato faltante.
+- Usa viñetas para acciones y cierra con el siguiente mejor paso.
 """
 
     try:
