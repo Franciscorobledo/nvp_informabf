@@ -126,6 +126,7 @@ allowed_origins = list({
     "https://nvp-informabf-front.onrender.com",
     "https://nvp.informabf.onrender.com",
     "https://nvp.informabf-front.onrender.com",
+    "http://localhost:1000",
 })
 
 allow_origin_regex = None

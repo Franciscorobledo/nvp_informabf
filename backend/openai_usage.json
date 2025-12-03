@@ -1,0 +1,37 @@
+{
+  "total_prompt_tokens": 1378,
+  "total_completion_tokens": 440,
+  "total_cost_usd": 0.00047,
+  "last_call": "2025-12-03T15:53:33.592311",
+  "last_model": "gpt-4o-mini",
+  "events": [
+    {
+      "timestamp": "2025-12-03T15:53:23.914022",
+      "model": "gpt-4o-mini",
+      "prompt_tokens": 689,
+      "completion_tokens": 220,
+      "total_tokens": 909,
+      "cost_usd": 0.000235,
+      "cumulative_cost_usd": 0.000235,
+      "user": "desconocido",
+      "source": "demo_analyze",
+      "files": [
+        "ventas_demo.csv"
+      ]
+    },
+    {
+      "timestamp": "2025-12-03T15:53:33.592311",
+      "model": "gpt-4o-mini",
+      "prompt_tokens": 689,
+      "completion_tokens": 220,
+      "total_tokens": 909,
+      "cost_usd": 0.000235,
+      "cumulative_cost_usd": 0.00047,
+      "user": "desconocido",
+      "source": "demo_analyze",
+      "files": [
+        "ventas_demo.csv"
+      ]
+    }
+  ]
+}

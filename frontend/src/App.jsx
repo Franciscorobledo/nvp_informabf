@@ -729,9 +729,39 @@ const App = () => {
               )}
             </main>
 
-            <footer className="mt-8 text-center text-gray-400 dark:text-slate-500 text-sm border-t border-gray-200 dark:border-slate-800 pt-4">
-              © {new Date().getFullYear()} InformeBF — Desarrollado con ❤️ y IA.
-            </footer>
+              <footer className="mt-16 border-t border-gray-200 dark:border-slate-800 px-6 py-8 text-center text-sm text-gray-500 dark:text-slate-400">
+                <div className="flex flex-col items-center gap-3">
+
+                  <span className="font-semibold text-gray-700 dark:text-slate-200 tracking-tight">
+                    InformeBF • Plataforma de Análisis Inteligente
+                  </span>
+
+                  <p className="max-w-md text-xs text-gray-500 dark:text-slate-500">
+                    Transformando datos en decisiones claras. Tecnología creada para PYMEs, equipos modernos 
+                    y mentes curiosas.
+                  </p>
+
+                  <div className="flex items-center gap-4 mt-2 text-xs">
+                    <a className="hover:text-primary-500 transition-colors" href="/terminos">
+                      Términos & Condiciones
+                    </a>
+                    <span>•</span>
+                    <a className="hover:text-primary-500 transition-colors" href="/privacidad">
+                      Política de Privacidad
+                    </a>
+                    <span>•</span>
+                    <a className="hover:text-primary-500 transition-colors" href="/soporte">
+                      Soporte
+                    </a>
+                  </div>
+
+                  <div className="mt-4 text-xs text-gray-400 dark:text-slate-600">
+                    © {new Date().getFullYear()} InformeBF — Datos que hablan, decisiones que avanzan.
+                  </div>
+
+                </div>
+              </footer>
+
           </div>
         </>
       )}
