@@ -76,8 +76,6 @@ const VisualizationExplorer = ({ analysis }) => {
   const [selectedChartType, setSelectedChartType] = useState("bar");
   const [selectedDateColumn, setSelectedDateColumn] = useState(null);
   const [filters, setFilters] = useState(initialFilterState);
-  const [isMetricSectionOpen, setIsMetricSectionOpen] = useState(true);
-  const [isFiltersSectionOpen, setIsFiltersSectionOpen] = useState(true);
 
   useEffect(() => {
     setSelectedDimensions((prev) => {
@@ -303,282 +301,224 @@ const VisualizationExplorer = ({ analysis }) => {
   };
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+    <div className="space-y-5">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <p className="text-xs uppercase tracking-[0.2em] text-blue-600 dark:text-blue-200">Explorador de visualizaciones</p>
-          <h3 className="text-lg font-bold text-gray-900 dark:text-white">Juega con métricas, segmentos y filtros</h3>
+          <h3 className="text-lg font-bold text-gray-900 dark:text-white">Panel compacto de filtros + gráfico destacado</h3>
           <p className="text-sm text-gray-600 dark:text-slate-300">
-            Elige columna, tipo de gráfico y aplica filtros para crear vistas interactivas al vuelo.
+            Configura métrica, tipo de gráfico y filtros rápidos en la franja superior; debajo queda la visualización amplia.
           </p>
         </div>
         <div className="inline-flex items-center gap-2 bg-blue-50 dark:bg-slate-800/70 border border-blue-100 dark:border-slate-700 rounded-xl px-3 py-2 text-xs text-blue-700 dark:text-blue-200">
           <span className="w-2 h-2 rounded-full bg-emerald-500" />
-          Vista responsiva: panel de filtros + gráfico activo
+          Controles compactos · Gráfico expandido
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <div className="lg:col-span-1 space-y-4">
-          <div className="rounded-2xl border border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 shadow-sm space-y-3">
-            <button
-              onClick={() => setIsMetricSectionOpen((prev) => !prev)}
-              className="w-full flex items-center justify-between text-left"
-            >
-              <div className="space-y-0.5">
-                <label className="text-xs font-semibold text-gray-500 dark:text-slate-400">Métrica (numérica)</label>
-                <p className="text-[11px] text-gray-400">
-                  Configura la métrica, tipo de gráfico y segmentos
-                </p>
-              </div>
-              <span className="inline-flex items-center justify-center w-7 h-7 rounded-full border border-gray-200 dark:border-slate-700 text-lg font-semibold text-gray-600 dark:text-slate-200">
-                {isMetricSectionOpen ? "−" : "+"}
-              </span>
-            </button>
-
-            {isMetricSectionOpen && (
-              <div className="space-y-3">
-                <div className="space-y-2">
-                  <label className="text-xs font-semibold text-gray-500 dark:text-slate-400">Métrica (numérica)</label>
-                  <select
-                    value={selectedMetric || ""}
-                    onChange={(e) => setSelectedMetric(e.target.value)}
-                    className="w-full rounded-xl border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 px-3 py-2 text-sm"
-                  >
-                    <option value="" disabled>
-                      Selecciona una métrica
-                    </option>
-                    {numericColumns.map((col) => (
-                      <option key={col} value={col}>
-                        {col}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between gap-2">
-                    <label className="text-xs font-semibold text-gray-500 dark:text-slate-400">Tipo de gráfico</label>
-                    <span className="text-[11px] text-gray-400">Barras, línea o pastel</span>
-                  </div>
-                  <div className="grid grid-cols-3 gap-2">
-                    {[
-                      { id: "bar", label: "Barras" },
-                      { id: "line", label: "Línea" },
-                      { id: "pie", label: "Pastel" },
-                    ].map((option) => (
-                      <button
-                        key={option.id}
-                        onClick={() => setSelectedChartType(option.id)}
-                        className={`rounded-xl px-3 py-2 text-sm font-semibold border transition ${
-                          selectedChartType === option.id
-                            ? "border-blue-500 text-blue-700 dark:text-blue-200 bg-blue-50 dark:bg-slate-800"
-                            : "border-gray-200 dark:border-slate-700 text-gray-600 dark:text-slate-300"
-                        }`}
-                      >
-                        {option.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <p className="text-xs font-semibold text-gray-500 dark:text-slate-400">Segmentos (categoría)</p>
-                  <p className="text-[11px] text-gray-500 dark:text-slate-400">
-                    Ahora puedes elegir cualquier columna como atributo. Usa los checkboxes de abajo para activar o desactivar filtros.
-                  </p>
-                </div>
-              </div>
-            )}
+      <div className="rounded-2xl border border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm p-4 sm:p-5 space-y-4">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+          <div className="space-y-1">
+            <p className="text-xs font-semibold text-gray-500 dark:text-slate-400">Controles rápidos</p>
+            <p className="text-[12px] text-gray-500 dark:text-slate-400">Elige métrica, gráfico y resetea en un par de clics.</p>
           </div>
-
-          <div className="rounded-2xl border border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 shadow-sm space-y-3">
-            <button
-              onClick={() => setIsFiltersSectionOpen((prev) => !prev)}
-              className="w-full flex items-center justify-between text-left"
-            >
-              <div className="space-y-0.5">
-                <p className="text-xs font-semibold text-gray-500 dark:text-slate-400">Campos y filtros</p>
-                <p className="text-[11px] text-gray-400">Selecciona atributos con checkboxes</p>
-              </div>
-              <span className="inline-flex items-center justify-center w-7 h-7 rounded-full border border-gray-200 dark:border-slate-700 text-lg font-semibold text-gray-600 dark:text-slate-200">
-                {isFiltersSectionOpen ? "−" : "+"}
-              </span>
-            </button>
-
-            {isFiltersSectionOpen && (
-              <div className="space-y-3">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <p className="text-xs font-semibold text-gray-500 dark:text-slate-400">Campos y filtros</p>
-                    <p className="text-[11px] text-gray-400">Selecciona atributos con checkboxes</p>
-                  </div>
-                  <button
-                    onClick={handleResetFilters}
-                    className="text-xs px-3 py-1.5 rounded-full border border-gray-200 dark:border-slate-700 text-gray-600 dark:text-slate-200 hover:border-blue-400 hover:text-blue-600 dark:hover:border-blue-400"
-                  >
-                    Reset filtros
-                  </button>
-                </div>
-
-                <div className="space-y-2">
-                  <p className="text-xs uppercase tracking-[0.15em] text-gray-500 dark:text-slate-400">Filtros activos</p>
-                  {selectedDimensions.length ? (
-                    <div className="flex flex-wrap gap-2">
-                      {selectedDimensions.map((dimension) => (
-                        <span
-                          key={dimension}
-                          className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs bg-blue-50 dark:bg-slate-800 text-blue-700 dark:text-blue-200 border border-blue-100 dark:border-slate-700"
-                        >
-                          {dimension}
-                          <button
-                            onClick={() => handleDimensionToggle(dimension)}
-                            className="text-[11px] text-blue-600 dark:text-blue-300 hover:underline"
-                            aria-label={`Quitar filtro ${dimension}`}
-                          >
-                            Quitar
-                          </button>
-                        </span>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-[12px] text-gray-500 dark:text-slate-500">No hay filtros seleccionados.</p>
-                  )}
-                </div>
-
-                <div className="space-y-2">
-                  <p className="text-xs uppercase tracking-[0.15em] text-gray-500 dark:text-slate-400">Campos disponibles</p>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    {attributeColumns.map((col) => {
-                      const isActive = selectedDimensions.includes(col);
-                      return (
-                        <label
-                          key={col}
-                          className={`flex items-center justify-between gap-2 rounded-xl border px-3 py-2 text-sm cursor-pointer transition ${
-                            isActive
-                              ? "border-blue-400 bg-blue-50 dark:bg-slate-800 text-blue-700 dark:text-blue-200"
-                              : "border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-200"
-                          }`}
-                        >
-                          <div className="flex items-center gap-2">
-                            <input
-                              type="checkbox"
-                              checked={isActive}
-                              onChange={() => handleDimensionToggle(col)}
-                              className="w-4 h-4 rounded border-gray-300 text-blue-500 focus:ring-blue-500"
-                            />
-                            <span>{col}</span>
-                          </div>
-                          <span className="text-[11px] uppercase tracking-[0.12em] text-gray-400 dark:text-slate-500">{detectedTypes[col]}</span>
-                        </label>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {selectedDimensions.map((dimension) => {
-                  const values = uniqueDimensionValues[dimension] || [];
-                  if (!values.length) return null;
-
-                  return (
-                    <div key={dimension} className="space-y-2">
-                      <p className="text-xs uppercase tracking-[0.15em] text-gray-500 dark:text-slate-400">
-                        Valores de {dimension}
-                      </p>
-                      <div className="flex flex-wrap gap-2">
-                        {values.map((value) => {
-                          const isActive = filters.dimensionValues?.[dimension]?.includes(value);
-                          return (
-                            <button
-                              key={`${dimension}-${value}`}
-                              onClick={() => handleDimensionValueToggle(dimension, value)}
-                              className={`px-3 py-1.5 rounded-full text-xs border transition ${
-                                isActive
-                                  ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-300"
-                                  : "bg-gray-50 dark:bg-slate-800 text-gray-600 dark:text-slate-300 border-gray-200 dark:border-slate-700"
-                              }`}
-                            >
-                              {value}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  );
-                })}
-
-                {dateColumns.length > 0 && (
-                  <div className="space-y-2">
-                    <label className="text-xs font-semibold text-gray-500 dark:text-slate-400">Filtrar por fecha</label>
-                    <select
-                      value={selectedDateColumn || ""}
-                      onChange={(e) => setSelectedDateColumn(e.target.value)}
-                      className="w-full rounded-xl border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 px-3 py-2 text-sm"
-                    >
-                      {dateColumns.map((col) => (
-                        <option key={col} value={col}>
-                          {col}
-                        </option>
-                      ))}
-                    </select>
-                    <div className="grid grid-cols-2 gap-2">
-                      <input
-                        type="date"
-                        value={filters.dateRange.start}
-                        onChange={(e) => handleDateRangeChange("start", e.target.value)}
-                        className="rounded-xl border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 px-3 py-2 text-sm"
-                      />
-                      <input
-                        type="date"
-                        value={filters.dateRange.end}
-                        onChange={(e) => handleDateRangeChange("end", e.target.value)}
-                        className="rounded-xl border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 px-3 py-2 text-sm"
-                      />
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
+          <button
+            onClick={handleResetFilters}
+            className="text-xs inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-gray-200 dark:border-slate-700 text-gray-600 dark:text-slate-200 hover:border-blue-400 hover:text-blue-600 dark:hover:border-blue-400"
+          >
+            <span className="text-base">↺</span> Reset filtros
+          </button>
         </div>
 
-        <div className="lg:col-span-2 space-y-3">
-          <div className="rounded-2xl border border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-lg overflow-hidden">
-            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-slate-800 bg-gradient-to-r from-white to-slate-50 dark:from-slate-900 dark:to-slate-950">
-              <div>
-                <p className="text-xs uppercase tracking-[0.12em] text-gray-500 dark:text-slate-400">Vista activa</p>
-                <h4 className="text-base font-semibold text-gray-900 dark:text-white">{chartTitle}</h4>
-              </div>
-              <div className="hidden sm:flex items-center gap-2 text-[11px] text-gray-500 dark:text-slate-400">
-                <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-blue-50 dark:bg-slate-800 border border-blue-100 dark:border-slate-700 text-blue-600 dark:text-blue-200">
-                  <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
-                  Interactivo
-                </span>
-                <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-emerald-50 dark:bg-slate-800 border border-emerald-100 dark:border-slate-700 text-emerald-700 dark:text-emerald-200">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                  Actualiza con filtros
-                </span>
-              </div>
-            </div>
-            <div className="h-[360px] p-3">{renderChart()}</div>
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
+          <div className="space-y-2">
+            <label className="text-xs font-semibold text-gray-500 dark:text-slate-400">Métrica (numérica)</label>
+            <select
+              value={selectedMetric || ""}
+              onChange={(e) => setSelectedMetric(e.target.value)}
+              className="w-full rounded-xl border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 px-3 py-2 text-sm"
+            >
+              <option value="" disabled>
+                Selecciona una métrica
+              </option>
+              {numericColumns.map((col) => (
+                <option key={col} value={col}>
+                  {col}
+                </option>
+              ))}
+            </select>
           </div>
 
-          {stats && (
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              {[{ label: "Total", value: stats.total }, { label: "Máximo", value: stats.max }, { label: "Mínimo", value: stats.min }, { label: "Promedio", value: stats.avg }].map((item) => (
-                <div
-                  key={item.label}
-                  className="rounded-xl border border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-3 py-2 shadow-sm"
+          <div className="space-y-2">
+            <label className="text-xs font-semibold text-gray-500 dark:text-slate-400">Tipo de gráfico</label>
+            <div className="grid grid-cols-3 gap-2">
+              {[{ id: "bar", label: "Barras" }, { id: "line", label: "Línea" }, { id: "pie", label: "Pizza" }].map((type) => (
+                <button
+                  key={type.id}
+                  onClick={() => setSelectedChartType(type.id)}
+                  className={`rounded-xl border px-3 py-2 text-sm font-semibold transition ${
+                    selectedChartType === type.id
+                      ? "border-blue-400 bg-blue-50 text-blue-700 dark:border-blue-600 dark:bg-blue-900/40 dark:text-blue-100"
+                      : "border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-700 dark:text-slate-200"
+                  }`}
                 >
-                  <p className="text-[11px] uppercase tracking-[0.15em] text-gray-500 dark:text-slate-400">{item.label}</p>
-                  <p className="text-lg font-semibold text-gray-900 dark:text-white">
-                    {Number(item.value || 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}
-                  </p>
-                </div>
+                  {type.label}
+                </button>
               ))}
             </div>
+          </div>
+
+          {dateColumns.length > 0 && (
+            <div className="space-y-2">
+              <label className="text-xs font-semibold text-gray-500 dark:text-slate-400">Columna de fecha</label>
+              <select
+                value={selectedDateColumn || ""}
+                onChange={(e) => setSelectedDateColumn(e.target.value)}
+                className="w-full rounded-xl border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 px-3 py-2 text-sm"
+              >
+                {dateColumns.map((col) => (
+                  <option key={col} value={col}>
+                    {col}
+                  </option>
+                ))}
+              </select>
+              <div className="grid grid-cols-2 gap-2">
+                <input
+                  type="date"
+                  value={filters.dateRange.start}
+                  onChange={(e) => handleDateRangeChange("start", e.target.value)}
+                  className="rounded-xl border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 px-3 py-2 text-sm"
+                />
+                <input
+                  type="date"
+                  value={filters.dateRange.end}
+                  onChange={(e) => handleDateRangeChange("end", e.target.value)}
+                  className="rounded-xl border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 px-3 py-2 text-sm"
+                />
+              </div>
+            </div>
           )}
+
+          <div className="space-y-2">
+            <label className="text-xs font-semibold text-gray-500 dark:text-slate-400">Filtros activos</label>
+            {selectedDimensions.length ? (
+              <div className="flex flex-wrap gap-2">
+                {selectedDimensions.map((dimension) => (
+                  <span
+                    key={dimension}
+                    className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs bg-blue-50 dark:bg-slate-800 text-blue-700 dark:text-blue-200 border border-blue-100 dark:border-slate-700"
+                  >
+                    {dimension}
+                    <button
+                      onClick={() => handleDimensionToggle(dimension)}
+                      className="text-[11px] text-blue-600 dark:text-blue-300 hover:underline"
+                      aria-label={`Quitar filtro ${dimension}`}
+                    >
+                      Quitar
+                    </button>
+                  </span>
+                ))}
+              </div>
+            ) : (
+              <p className="text-[12px] text-gray-500 dark:text-slate-500">Aún no seleccionas filtros.</p>
+            )}
+          </div>
         </div>
+
+        <div className="space-y-3">
+          <div className="space-y-2">
+            <p className="text-xs uppercase tracking-[0.15em] text-gray-500 dark:text-slate-400">Campos disponibles</p>
+            <div className="flex flex-wrap gap-2">
+              {attributeColumns.map((col) => {
+                const isActive = selectedDimensions.includes(col);
+                return (
+                  <button
+                    key={col}
+                    onClick={() => handleDimensionToggle(col)}
+                    className={`px-3 py-1.5 rounded-full text-xs border transition ${
+                      isActive
+                        ? "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/40 dark:text-blue-100 dark:border-blue-700"
+                        : "bg-gray-50 text-gray-600 border-gray-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700"
+                    }`}
+                  >
+                    {col}
+                    <span className="ml-2 text-[10px] uppercase tracking-[0.14em] text-gray-400 dark:text-slate-500">{detectedTypes[col]}</span>
+                  </button>
+                );
+              })}
+              {!attributeColumns.length && (
+                <span className="text-[12px] text-gray-500 dark:text-slate-500">Sin campos categóricos detectados.</span>
+              )}
+            </div>
+          </div>
+
+          {selectedDimensions.map((dimension) => {
+            const values = uniqueDimensionValues[dimension] || [];
+            if (!values.length) return null;
+
+            return (
+              <div key={dimension} className="space-y-2">
+                <p className="text-xs uppercase tracking-[0.15em] text-gray-500 dark:text-slate-400">Valores de {dimension}</p>
+                <div className="flex flex-wrap gap-2 max-h-28 overflow-y-auto pr-1">
+                  {values.map((value) => {
+                    const isActive = filters.dimensionValues?.[dimension]?.includes(value);
+                    return (
+                      <button
+                        key={`${dimension}-${value}`}
+                        onClick={() => handleDimensionValueToggle(dimension, value)}
+                        className={`px-3 py-1.5 rounded-full text-xs border transition ${
+                          isActive
+                            ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-300"
+                            : "bg-gray-50 dark:bg-slate-800 text-gray-600 dark:text-slate-300 border-gray-200 dark:border-slate-700"
+                        }`}
+                      >
+                        {value}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="space-y-3">
+        <div className="rounded-2xl border border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-lg overflow-hidden">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-slate-800 bg-gradient-to-r from-white to-slate-50 dark:from-slate-900 dark:to-slate-950">
+            <div>
+              <p className="text-xs uppercase tracking-[0.12em] text-gray-500 dark:text-slate-400">Vista activa</p>
+              <h4 className="text-base font-semibold text-gray-900 dark:text-white">{chartTitle}</h4>
+            </div>
+            <div className="hidden sm:flex items-center gap-2 text-[11px] text-gray-500 dark:text-slate-400">
+              <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-blue-50 dark:bg-slate-800 border border-blue-100 dark:border-slate-700 text-blue-600 dark:text-blue-200">
+                <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+                Interactivo
+              </span>
+              <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-emerald-50 dark:bg-slate-800 border border-emerald-100 dark:border-slate-700 text-emerald-700 dark:text-emerald-200">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                Actualiza con filtros
+              </span>
+            </div>
+          </div>
+          <div className="h-[420px] p-4">{renderChart()}</div>
+        </div>
+
+        {stats && (
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            {[{ label: "Total", value: stats.total }, { label: "Máximo", value: stats.max }, { label: "Mínimo", value: stats.min }, { label: "Promedio", value: stats.avg }].map((item) => (
+              <div
+                key={item.label}
+                className="rounded-xl border border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-3 py-2 shadow-sm"
+              >
+                <p className="text-[11px] uppercase tracking-[0.15em] text-gray-500 dark:text-slate-400">{item.label}</p>
+                <p className="text-lg font-semibold text-gray-900 dark:text-white">
+                  {Number(item.value || 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                </p>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
