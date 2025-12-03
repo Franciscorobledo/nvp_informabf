@@ -3,8 +3,12 @@ import API_URL from "./api";
 import { persistUserSession } from "./session";
 
 const Login = ({ onLogin }) => {
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
+  const isLocalEnv =
+    typeof window !== "undefined" &&
+    ["localhost", "127.0.0.1"].includes(window.location.hostname);
+
+  const [username, setUsername] = useState(() => (isLocalEnv ? "admin" : ""));
+  const [password, setPassword] = useState(() => (isLocalEnv ? "1234" : ""));
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -151,6 +155,12 @@ const Login = ({ onLogin }) => {
               >
                 {loading ? "Ingresando..." : "Entrar"}
               </button>
+
+              {isLocalEnv && (
+                <p className="text-xs text-blue-100/80 text-center">
+                  Entorno local: usa <span className="font-semibold">admin</span> / <span className="font-semibold">1234</span> para entrar rápido.
+                </p>
+              )}
             </form>
           </div>
         </div>
