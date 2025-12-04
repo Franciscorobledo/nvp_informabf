@@ -17,6 +17,7 @@ import API_URL from "../src/api";
 import AppButton from "./AppButton";
 import LoadingBar from "./LoadingBar";
 import focusOptions from "./focusOptions";
+import UploadDropzone from "./UploadDropzone";
 
 const stepMessages = {
   subiendo_archivos: "Subiendo archivos…",
@@ -337,15 +338,17 @@ const DataComparisonModule = ({ onUnauthorized }) => {
               className="w-full rounded-lg border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 px-3 py-2 text-sm"
             />
           </label>
-          <input
-            type="file"
+          <UploadDropzone
+            id="dataset-a"
             accept=".csv,.xlsx,.zip"
-            onChange={(e) => {
+            onFileSelect={(selected) => {
               setDemoMetadata(null);
-              setFileA(e.target.files?.[0] ?? null);
+              setFileA(selected || null);
             }}
+            selectedFileName={fileA?.name}
+            helperText="Formatos permitidos: CSV, XLSX o ZIP. Peso máximo recomendado: 1MB."
+            description="Selecciona o arrastra el primer archivo para comparar."
             disabled={demoMetadata?.is_demo}
-            className="w-full text-sm text-gray-700 dark:text-slate-200"
           />
         </div>
 
@@ -361,15 +364,17 @@ const DataComparisonModule = ({ onUnauthorized }) => {
               className="w-full rounded-lg border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 px-3 py-2 text-sm"
             />
           </label>
-          <input
-            type="file"
+          <UploadDropzone
+            id="dataset-b"
             accept=".csv,.xlsx,.zip"
-            onChange={(e) => {
+            onFileSelect={(selected) => {
               setDemoMetadata(null);
-              setFileB(e.target.files?.[0] ?? null);
+              setFileB(selected || null);
             }}
+            selectedFileName={fileB?.name}
+            helperText="Formatos permitidos: CSV, XLSX o ZIP. Peso máximo recomendado: 1MB."
+            description="Selecciona o arrastra el segundo archivo para comparar."
             disabled={demoMetadata?.is_demo}
-            className="w-full text-sm text-gray-700 dark:text-slate-200"
           />
         </div>
 
