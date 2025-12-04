@@ -530,13 +530,119 @@ def _orders_to_dataframe(orders: List[dict[str, Any]]) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
-@router.get("/credentials/{credential_id}/analyze/orders")
-def analyze_orders(credential_id: int, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
-    data = recent_orders(credential_id, db, current_user, limit=100)
-    orders = data.get("results") or []
-    df = _orders_to_dataframe(orders)
+def _compute_sales_inventory_metrics(
+    df: pd.DataFrame,
+    active_listings: dict[str, Any] | None = None,
+    paused_listings: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    metrics: dict[str, Any] = {"ventas": {}, "inventario": {}}
+
+    if df.empty:
+        return metrics
+
+    total_orders = len(df)
+    total_revenue = float(df.get("total_amount", pd.Series(dtype=float)).sum())
+    customers = df.get("buyer_id", pd.Series(dtype=int)).nunique()
+    success_mask = df.get("status", pd.Series(dtype=str)).str.lower().isin(
+        {"paid", "shipped", "delivered", "closed"}
+    )
+    successful_orders = int(success_mask.sum()) if not success_mask.empty else 0
+
+    parsed_dates = pd.to_datetime(df.get("date_created"), errors="coerce")
+    sorted_dates = parsed_dates.dropna().sort_values()
+    gaps = sorted_dates.diff().dropna()
+    avg_cycle_days = float(gaps.mean().total_seconds() / 86400) if not gaps.empty else 0.0
+    period_days = max((sorted_dates.max() - sorted_dates.min()).days or 1, 1) if not sorted_dates.empty else 30
+
+    metrics["ventas"] = {
+        "ingresos_totales": round(total_revenue, 2),
+        "ordenes_totales": total_orders,
+        "tasa_conversion_aprox": round((successful_orders / total_orders) * 100, 2)
+        if total_orders
+        else 0.0,
+        "valor_promedio_cliente": round(total_revenue / customers, 2) if customers else 0.0,
+        "ticket_promedio": round(total_revenue / total_orders, 2) if total_orders else 0.0,
+        "ciclo_venta_promedio_dias": round(avg_cycle_days, 2),
+        "ventas_por_region": [
+            {"region": str(site), "monto": float(amount)}
+            for site, amount in df.groupby("site_id")["total_amount"].sum().items()
+        ],
+    }
+
+    active_details = (active_listings or {}).get("details", []) or []
+    paused_details = (paused_listings or {}).get("details", []) or []
+    inventory_rows = active_details + paused_details
+
+    if inventory_rows:
+        available_total = sum((item.get("available_quantity") or 0) for item in inventory_rows)
+        sold_total = sum((item.get("sold_quantity") or 0) for item in inventory_rows)
+        avg_inventory = max((available_total + sold_total) / 2, 1)
+        turnover = sold_total / avg_inventory if avg_inventory else 0
+
+        paused_ids = {item.get("id") for item in paused_details}
+        paused_orders = df[df.get("item_id").isin(paused_ids)] if paused_ids else pd.DataFrame()
+        backorder_rate = (
+            round((len(paused_orders) / total_orders) * 100, 2) if total_orders and not paused_orders.empty else 0.0
+        )
+
+        order_qty_by_item = df.groupby("item_id")["quantity"].sum()
+        discrepancy = 0.0
+        reference_total = 0.0
+        for item in inventory_rows:
+            item_id = item.get("id")
+            if not item_id:
+                continue
+            recorded_orders = float(order_qty_by_item.get(item_id, 0))
+            expected = float(item.get("sold_quantity") or 0)
+            reference_total += max(expected, recorded_orders, 0)
+            discrepancy += abs(expected - recorded_orders)
+
+        accuracy = (
+            round((1 - (discrepancy / reference_total)) * 100, 2) if reference_total else 100.0
+        )
+
+        inventory_value = sum(
+            (item.get("price") or 0) * (item.get("available_quantity") or 0) for item in inventory_rows
+        )
+
+        metrics["inventario"] = {
+            "rotacion": round(turnover, 2),
+            "valor_en_stock": round(inventory_value, 2),
+            "dias_venta_inventario": round((avg_inventory / max(sold_total, 1)) * period_days, 2),
+            "tasa_pedidos_pendientes": backorder_rate,
+            "precision_registros": max(min(accuracy, 100.0), 0.0),
+            "resumen_items": [
+                {
+                    "id": item.get("id"),
+                    "titulo": item.get("title"),
+                    "disponible": item.get("available_quantity"),
+                    "vendido": item.get("sold_quantity"),
+                    "estado": item.get("status"),
+                }
+                for item in inventory_rows
+            ],
+        }
+
+    return metrics
+
+
+def _analyze_orders_dataset(
+    orders_payload: List[dict[str, Any]],
+    current_user,
+    *,
+    active_listings: dict[str, Any] | None = None,
+    paused_listings: dict[str, Any] | None = None,
+    demo_metadata: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    df = _orders_to_dataframe(orders_payload)
     if df.empty:
         raise HTTPException(status_code=400, detail="No hay órdenes para analizar")
+
+    user_identifier = None
+    if isinstance(current_user, dict):
+        user_identifier = current_user.get("username") or current_user.get("email")
+    else:
+        user_identifier = getattr(current_user, "username", None)
 
     result = analyze_file(
         df,
@@ -544,12 +650,13 @@ def analyze_orders(credential_id: int, db: Session = Depends(get_db), current_us
         metric_field="total_amount",
         segment_by="status",
         file_types={"mercadolibre"},
-        usage_context={"source": "mercadolibre_orders", "user": current_user.username},
-        user_id=current_user.username,
+        usage_context={"source": "mercadolibre_orders", "user": user_identifier},
+        user_id=user_identifier,
     )
 
     safe_sample = df.head(10).to_dict(orient="records")
-    return {
+
+    response: dict[str, Any] = {
         "summary": result.get("summary", {}),
         "sample": safe_sample,
         "graphs": result.get("graphs", []),
@@ -561,5 +668,30 @@ def analyze_orders(credential_id: int, db: Session = Depends(get_db), current_us
             "columns": list(df.columns),
             "source": "MercadoLibre",
         },
+        "business_metrics": _compute_sales_inventory_metrics(
+            df, active_listings=active_listings, paused_listings=paused_listings
+        ),
     }
+
+    if demo_metadata:
+        response["demo_metadata"] = demo_metadata
+
+    return response
+
+
+@router.get("/credentials/{credential_id}/analyze/orders")
+def analyze_orders(credential_id: int, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
+    if credential_id == 0:
+        return _analyze_orders_dataset(
+            DEMO_ORDERS.get("results") or [],
+            current_user,
+            active_listings=DEMO_ACTIVE_LISTINGS,
+            paused_listings=DEMO_PAUSED_LISTINGS,
+            demo_metadata={"is_demo": True, "source": "mercadolibre_demo"},
+        )
+
+    data = recent_orders(credential_id, db, current_user, limit=100)
+    orders = data.get("results") or []
+
+    return _analyze_orders_dataset(orders, current_user)
 
