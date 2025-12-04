@@ -423,3 +423,46 @@ Responder la consulta usando solo la información disponible, sin inventar métr
     except Exception as exc:  # noqa: BLE001
         logging.error("⚠️ Error en chat de dataset: %s", exc)
         raise
+
+
+def classify_tabular_dataset(columns: list[str], sample_rows: list[dict], schema_definition: str) -> dict:
+    """Mapea un archivo tabular a un esquema estándar usando OpenAI."""
+
+    system_prompt = (
+        "Eres un asistente experto en datos de negocio."
+        " Recibes columnas y filas de ejemplo y debes responder SOLO con JSON."
+    )
+
+    user_prompt = f"""
+Eres un asistente experto en datos de negocio. Recibes un listado de columnas y algunas filas de ejemplo.
+Debes:
+1) determinar si el archivo representa datos de VENTAS ('sales'), de STOCK ('stock') o 'unknown';
+2) mapear las columnas originales a un esquema estándar;
+3) indicar si faltan columnas requeridas.
+
+Esquema estándar disponible:
+{schema_definition}
+
+Columnas detectadas: {columns}
+Filas de ejemplo:
+{json.dumps(sample_rows, ensure_ascii=False)}
+
+Responde únicamente con JSON válido.
+"""
+
+    try:
+        client = _get_openai_client()
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+            temperature=0,
+            max_tokens=300,
+        )
+        content = response.choices[0].message.content.strip()
+        return json.loads(content)
+    except Exception as exc:  # pragma: no cover - llamada externa
+        logging.error("⚠️ No se pudo clasificar dataset con IA: %s", exc)
+        return {"type": "unknown", "reason": str(exc)}

@@ -6,6 +6,7 @@ import SkeletonBlock from "../../components/cards/SkeletonBlock";
 const DataIntegrationsView = ({ onUnauthorized, onOpenMercadoLibre }) => {
   const token = useMemo(() => localStorage.getItem("token"), []);
   const [uploadStatus, setUploadStatus] = useState(null);
+  const [datasets, setDatasets] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -73,11 +74,12 @@ const DataIntegrationsView = ({ onUnauthorized, onOpenMercadoLibre }) => {
     const formData = new FormData(event.target);
 
     try {
-      const data = await authorizedFetch(`${API_URL}/data/upload`, {
+      const data = await authorizedFetch(`${API_URL}/ingest/upload`, {
         method: "POST",
         body: formData,
       });
-      setUploadStatus(data);
+      setUploadStatus({ ...data, updated_at: new Date().toISOString() });
+      setDatasets(data?.datasets || []);
     } catch (err) {
       setError(err.message || "No se pudo subir los archivos");
     } finally {
@@ -132,7 +134,7 @@ const DataIntegrationsView = ({ onUnauthorized, onOpenMercadoLibre }) => {
             </div>
             {uploadStatus ? (
               <span className="rounded-full bg-blue-100 text-blue-700 px-3 py-1 text-xs font-semibold">
-                Actualizado {new Date(uploadStatus.updated_at).toLocaleDateString()}
+                Actualizado {new Date(uploadStatus.updated_at || Date.now()).toLocaleDateString()}
               </span>
             ) : (
               <span className="text-xs text-slate-400">Sin cargas</span>
@@ -144,7 +146,7 @@ const DataIntegrationsView = ({ onUnauthorized, onOpenMercadoLibre }) => {
               <span className="font-semibold text-slate-700 dark:text-slate-200">Archivo de ventas</span>
               <input
                 type="file"
-                name="sales_file"
+                name="archivo_ventas"
                 accept=".csv,.xlsx"
                 className="w-full rounded-xl border border-dashed border-slate-300 dark:border-slate-700 px-3 py-2"
               />
@@ -160,7 +162,7 @@ const DataIntegrationsView = ({ onUnauthorized, onOpenMercadoLibre }) => {
               <span className="font-semibold text-slate-700 dark:text-slate-200">Archivo de stock</span>
               <input
                 type="file"
-                name="stock_file"
+                name="archivo_stock"
                 accept=".csv,.xlsx"
                 className="w-full rounded-xl border border-dashed border-slate-300 dark:border-slate-700 px-3 py-2"
               />
@@ -190,6 +192,35 @@ const DataIntegrationsView = ({ onUnauthorized, onOpenMercadoLibre }) => {
       </div>
 
       {loading && <SkeletonBlock className="h-16" />}
+
+      {datasets.length > 0 && (
+        <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/90 dark:bg-slate-900/70 p-5 space-y-3">
+          <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">Mapeo inteligente (IA)</p>
+          <div className="grid gap-3 md:grid-cols-2">
+            {datasets.map((ds) => (
+              <div key={ds.type} className="rounded-xl border border-slate-200 dark:border-slate-800 p-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-semibold capitalize">{ds.type}</span>
+                  <span className="text-xs text-slate-500">{ds.row_count} filas</span>
+                </div>
+                <div className="text-xs space-y-1">
+                  {Object.entries(ds.column_mapping || {}).map(([standard, original]) => (
+                    <div key={standard} className="flex justify-between gap-2">
+                      <span className="font-semibold text-slate-700 dark:text-slate-200">{standard}</span>
+                      <span className="text-slate-600 dark:text-slate-300">{original}</span>
+                    </div>
+                  ))}
+                </div>
+                {(ds.missing_optional || []).length > 0 && (
+                  <p className="text-xs text-amber-600">
+                    Faltan opcionales: {ds.missing_optional.join(", ")}
+                  </p>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </section>
   );
 };

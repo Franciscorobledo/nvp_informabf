@@ -3,14 +3,16 @@ from __future__ import annotations
 import threading
 from datetime import datetime
 import io
-from typing import Any, Dict, Literal, Optional
+from typing import Any, Dict, Literal, Optional, Tuple
 
+import numpy as np
 import pandas as pd
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from auth import get_current_user
+from ai_module import classify_tabular_dataset
 from database import get_db
 from mercadolibre import fetch_inventory_dataframe, fetch_orders_dataframe
 from utils.data_engine import (
@@ -22,6 +24,32 @@ from utils.data_engine import (
 from utils.dataframe_loader import read_dataframes
 
 router = APIRouter(prefix="/data", tags=["Motor de datos"])
+ingest_router = APIRouter(prefix="/ingest", tags=["Ingesta inteligente"])
+
+
+STANDARD_SCHEMA_DOC = """
+VENTAS (sales):
+- date
+- sku
+- product_name
+- quantity
+- unit_price
+- total
+- channel
+
+STOCK (inventory):
+- sku
+- product_name
+- category
+- current_stock
+- unit_cost
+- location
+"""
+
+SALES_REQUIRED = {"date", "sku"}
+SALES_OPTIONAL = {"product_name", "channel"}
+STOCK_REQUIRED = {"sku", "current_stock"}
+STOCK_OPTIONAL = {"category", "location"}
 
 
 class _DataContext:
@@ -98,6 +126,19 @@ class UploadResponse(BaseModel):
     updated_at: datetime
 
 
+class IngestedDataset(BaseModel):
+    type: str
+    row_count: int
+    column_mapping: Dict[str, str]
+    missing_required: list
+    missing_optional: list
+
+
+class IngestResponse(BaseModel):
+    status: str
+    datasets: list[IngestedDataset]
+
+
 class AutoMetricsResponse(BaseModel):
     source: str
     updated_at: datetime
@@ -125,6 +166,84 @@ def _load_dataframe_from_upload(upload: UploadFile) -> pd.DataFrame:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
+def _dataset_preview(df: pd.DataFrame) -> Tuple[list[str], list[dict]]:
+    columns = list(df.columns)
+    sample_rows = df.head(15).fillna("").to_dict(orient="records")
+    return columns, sample_rows
+
+
+def _normalize_sales(df: pd.DataFrame, mapping: Dict[str, str], source: str) -> pd.DataFrame:
+    renamed = df.rename(columns=mapping)
+    normalized = pd.DataFrame()
+    normalized["date"] = pd.to_datetime(renamed.get("date"), errors="coerce")
+    normalized["sku"] = renamed.get("sku")
+    product_series = renamed.get("product_name")
+    if product_series is None:
+        product_series = renamed.get("sku")
+    normalized["product_name"] = product_series
+    normalized["quantity"] = pd.to_numeric(renamed.get("quantity"), errors="coerce")
+    normalized["unit_price"] = pd.to_numeric(renamed.get("unit_price"), errors="coerce")
+    normalized["total"] = pd.to_numeric(renamed.get("total"), errors="coerce")
+    normalized["channel"] = renamed.get("channel", source) if "channel" in renamed else source
+
+    if normalized["total"].isna().all() and "quantity" in normalized and "unit_price" in normalized:
+        normalized["total"] = (normalized["quantity"].fillna(1) * normalized["unit_price"].fillna(0)).astype(float)
+
+    if normalized["quantity"].isna().all() and "total" in normalized and "unit_price" in normalized:
+        with_price = normalized["unit_price"].replace(0, pd.NA)
+        normalized["quantity"] = (normalized["total"] / with_price).replace([np.inf, -np.inf], pd.NA)
+
+    return normalized
+
+
+def _normalize_stock(df: pd.DataFrame, mapping: Dict[str, str], source: str) -> pd.DataFrame:
+    renamed = df.rename(columns=mapping)
+    normalized = pd.DataFrame()
+    normalized["sku"] = renamed.get("sku")
+    product_series = renamed.get("product_name")
+    if product_series is None:
+        product_series = renamed.get("sku")
+    normalized["product_name"] = product_series
+    normalized["category"] = renamed.get("category")
+    normalized["current_stock"] = pd.to_numeric(renamed.get("current_stock"), errors="coerce")
+    normalized["unit_cost"] = pd.to_numeric(renamed.get("unit_cost"), errors="coerce")
+    normalized["location"] = renamed.get("location")
+    normalized["channel"] = source
+    return normalized
+
+
+def _to_internal_sales(df: pd.DataFrame) -> pd.DataFrame:
+    internal = pd.DataFrame()
+    internal["product_id"] = df.get("sku")
+    internal["product_name"] = df.get("product_name")
+    internal["category"] = None
+    internal["date"] = df.get("date")
+    internal["quantity_sold"] = pd.to_numeric(df.get("quantity"), errors="coerce").fillna(0)
+    internal["revenue"] = pd.to_numeric(df.get("total"), errors="coerce").fillna(0)
+    unit_cost = pd.to_numeric(df.get("unit_cost"), errors="coerce") if "unit_cost" in df else pd.Series(0, index=df.index)
+    internal["cost"] = unit_cost.fillna(0)
+    internal["margin"] = internal["revenue"] - (internal["cost"] * internal["quantity_sold"])
+    internal["current_stock"] = np.nan
+    internal["channel"] = df.get("channel")
+    return internal
+
+
+def _to_internal_stock(df: pd.DataFrame) -> pd.DataFrame:
+    internal = pd.DataFrame()
+    internal["product_id"] = df.get("sku")
+    internal["product_name"] = df.get("product_name")
+    internal["category"] = df.get("category")
+    internal["date"] = pd.NaT
+    internal["quantity_sold"] = 0
+    internal["revenue"] = 0
+    unit_cost = pd.to_numeric(df.get("unit_cost"), errors="coerce") if "unit_cost" in df else pd.Series(0, index=df.index)
+    internal["cost"] = unit_cost.fillna(0)
+    internal["margin"] = 0
+    internal["current_stock"] = pd.to_numeric(df.get("current_stock"), errors="coerce").fillna(0)
+    internal["channel"] = df.get("channel")
+    return internal
+
+
 def _json_safe(data: Any):
     if isinstance(data, pd.DataFrame):
         return data.to_dict(orient="records")
@@ -148,6 +267,109 @@ def _get_or_seed_data(user_id: str) -> Dict[str, Any]:
     stock, _ = harmonize_stock_data(SAMPLE_STOCK.copy(), "demo")
     _DATA_CONTEXT.set_payload(user_id, sales, stock, "demo")
     return _DATA_CONTEXT.get(user_id) or {}
+
+
+@ingest_router.post("/upload", response_model=IngestResponse)
+async def ingest_upload(
+    *,
+    archivo_ventas: Optional[UploadFile] = File(None, description="Archivo de ventas"),
+    archivo_stock: Optional[UploadFile] = File(None, description="Archivo de stock"),
+    current_user=Depends(get_current_user),
+):
+    if archivo_ventas is None and archivo_stock is None:
+        raise HTTPException(status_code=400, detail="Debes enviar al menos un archivo")
+
+    datasets: list[dict] = []
+    sales_df: Optional[pd.DataFrame] = None
+    stock_df: Optional[pd.DataFrame] = None
+
+    def _load(upload: UploadFile) -> pd.DataFrame:
+        try:
+            content = upload.file.read()
+            dfs = read_dataframes(upload, content)
+            if not dfs:
+                raise HTTPException(status_code=400, detail="No se pudo leer el archivo")
+            return dfs[0]
+        except Exception:
+            raise HTTPException(
+                status_code=400,
+                detail="No pude leer este archivo. Asegúrate de que sea una tabla con encabezados en la primera fila (CSV o Excel).",
+            )
+
+    if archivo_ventas is not None:
+        raw_sales = _load(archivo_ventas)
+        sales_internal, _, report = _ingest_dataframe(raw_sales, "files")
+        sales_df = sales_internal
+        datasets.append(report)
+
+    if archivo_stock is not None:
+        raw_stock = _load(archivo_stock)
+        stock_internal, _, report = _ingest_dataframe(raw_stock, "files")
+        stock_df = stock_internal
+        datasets.append(report)
+
+    if sales_df is None and stock_df is None:
+        raise HTTPException(status_code=400, detail="No pude leer ningún dataset válido")
+
+    _DATA_CONTEXT.set_payload(str(current_user.id), sales_df, stock_df, "files")
+
+    return IngestResponse(status="ok", datasets=datasets)
+
+
+def _validate_required(type_name: str, mapping: Dict[str, str]) -> Tuple[list, list]:
+    if type_name == "sales":
+        required = SALES_REQUIRED
+        optional = list(SALES_OPTIONAL)
+        missing = [col for col in required if col not in mapping]
+        if "quantity" not in mapping and "total" not in mapping:
+            missing.append("quantity|total")
+    else:
+        required = STOCK_REQUIRED
+        optional = list(STOCK_OPTIONAL)
+        missing = [col for col in required if col not in mapping]
+    missing_optional = [col for col in optional if col not in mapping]
+    return missing, missing_optional
+
+
+def _ingest_dataframe(df: pd.DataFrame, source: str) -> Tuple[pd.DataFrame, Optional[pd.DataFrame], dict]:
+    columns, sample_rows = _dataset_preview(df)
+    ai_result = classify_tabular_dataset(columns, sample_rows, STANDARD_SCHEMA_DOC)
+
+    dtype = ai_result.get("type")
+    if dtype not in {"sales", "stock", "unknown"}:
+        dtype = "unknown"
+    mapping = ai_result.get("columns") or {}
+    missing_required, missing_optional = _validate_required(dtype, mapping)
+
+    if dtype == "unknown":
+        raise HTTPException(
+            status_code=400,
+            detail="Este archivo no parece contener datos de ventas ni de stock. Revisa que incluya al menos fecha, sku/código, cantidad o stock.",
+        )
+
+    if missing_required:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Faltan columnas requeridas: {', '.join(missing_required)}",
+        )
+
+    normalized_df: Optional[pd.DataFrame] = None
+    internal_df: Optional[pd.DataFrame] = None
+
+    if dtype == "sales":
+        normalized_df = _normalize_sales(df, mapping, source)
+        internal_df = _to_internal_sales(normalized_df)
+    elif dtype == "stock":
+        normalized_df = _normalize_stock(df, mapping, source)
+        internal_df = _to_internal_stock(normalized_df)
+
+    return internal_df, normalized_df, {
+        "type": dtype,
+        "row_count": len(df),
+        "column_mapping": mapping,
+        "missing_required": missing_required,
+        "missing_optional": missing_optional,
+    }
 
 
 @router.post("/upload", response_model=UploadResponse)
