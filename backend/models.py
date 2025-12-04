@@ -27,6 +27,11 @@ class User(Base):
         back_populates="user",
         cascade="all, delete-orphan",
     )
+    ml_connections = relationship(
+        "MLUserConnection",
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
 
 
 class DeletedUser(Base):
@@ -90,3 +95,41 @@ class MercadoLibreCredential(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
     user = relationship("User", back_populates="mercadolibre_credentials")
+
+
+class MLApp(Base):
+    __tablename__ = "ml_apps"
+
+    id = Column(Integer, primary_key=True, index=True)
+    alias = Column(String, unique=True, nullable=False)
+    site_id = Column(String, nullable=False)
+    client_id = Column(String, nullable=False)
+    client_secret_encrypted = Column(String, nullable=False)
+    redirect_uri = Column(String, nullable=False)
+    webhook_url = Column(String, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    connections = relationship(
+        "MLUserConnection",
+        back_populates="app",
+        cascade="all, delete-orphan",
+    )
+
+
+class MLUserConnection(Base):
+    __tablename__ = "ml_user_connections"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    app_id = Column(Integer, ForeignKey("ml_apps.id", ondelete="CASCADE"), nullable=False)
+    seller_id = Column(String, nullable=True)
+    nickname = Column(String, nullable=True)
+    access_token_encrypted = Column(String, nullable=True)
+    refresh_token_encrypted = Column(String, nullable=True)
+    expires_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    app = relationship("MLApp", back_populates="connections")
+    user = relationship("User", back_populates="ml_connections")

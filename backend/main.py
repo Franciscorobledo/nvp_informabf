@@ -44,7 +44,11 @@ from ai_module import (
     infer_dataset_schema_with_ai,
     generate_dataset_chat_reply,
 )
-from mercadolibre import router as mercadolibre_router
+from mercadolibre import (
+    router as mercadolibre_router,
+    ml_admin_router,
+    meli_router,
+)
 from metrics_router import router as metrics_router
 from utils.dataframe_loader import read_dataframes
 from utils.openai_keys import get_openai_api_key, persist_openai_api_key
@@ -158,6 +162,8 @@ if allow_origin_regex:
 app.include_router(auth_router, prefix="/auth", tags=["Autenticación"])
 app.include_router(usage_router)
 app.include_router(mercadolibre_router)
+app.include_router(ml_admin_router)
+app.include_router(meli_router)
 app.include_router(metrics_router)
 
 

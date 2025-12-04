@@ -1,37 +1,15 @@
 import React, { useEffect, useMemo, useState } from "react";
 import API_URL from "./api";
 
-const emptyForm = {
-  account_name: "Principal",
-  client_id: "",
-  client_secret: "",
-  redirect_uri: "",
-  country_code: "MLA",
-  webhook_url: "",
-};
-
-const countryOptions = [
-  "MLA",
-  "MLB",
-  "MLM",
-  "MLC",
-  "MCO",
-  "MPE",
-  "MLU",
-  "MLV",
-  "MCR",
-  "MBO",
-];
-
 const MercadoLibreIntegration = ({ onUnauthorized }) => {
-  const [form, setForm] = useState(emptyForm);
-  const [credentials, setCredentials] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState("");
+  const [appAlias, setAppAlias] = useState(localStorage.getItem("meliAppAlias") || "");
+  const [connection, setConnection] = useState(null);
+  const [seller, setSeller] = useState(null);
+  const [syncMessage, setSyncMessage] = useState("");
   const [error, setError] = useState("");
-  const [syncPreview, setSyncPreview] = useState(null);
-  const [syncing, setSyncing] = useState("");
-
+  const [loading, setLoading] = useState(false);
+  const [lastSync, setLastSync] = useState(null);
+  const [syncData, setSyncData] = useState(null);
   const token = useMemo(() => localStorage.getItem("token"), []);
 
   const authorizedFetch = async (url, options = {}) => {
@@ -57,308 +35,204 @@ const MercadoLibreIntegration = ({ onUnauthorized }) => {
     return res.json();
   };
 
-  const loadCredentials = async () => {
-    if (!token) return;
+  const loadStatus = async () => {
+    if (!appAlias.trim()) {
+      setConnection(null);
+      setSeller(null);
+      return;
+    }
     try {
-      const data = await authorizedFetch(`${API_URL}/mercadolibre/credentials`);
-      setCredentials(data || []);
+      const data = await authorizedFetch(
+        `${API_URL}/meli/status?app_alias=${encodeURIComponent(appAlias.trim())}`
+      );
+      if (data) {
+        setConnection(data);
+      } else {
+        setConnection(null);
+      }
     } catch (err) {
       console.error(err);
     }
   };
 
   useEffect(() => {
-    loadCredentials();
+    loadStatus();
   }, []);
 
-  const handleChange = (evt) => {
-    const { name, value } = evt.target;
-    setForm((prev) => ({ ...prev, [name]: value }));
+  const handleConnect = async () => {
+    setError("");
+    setSyncMessage("");
+    if (!appAlias.trim()) {
+      setError("Debes escribir el alias de la app configurada por el admin.");
+      return;
+    }
+
+    localStorage.setItem("meliAppAlias", appAlias.trim());
+    try {
+      const data = await authorizedFetch(
+        `${API_URL}/meli/auth?app_alias=${encodeURIComponent(appAlias.trim())}`
+      );
+      if (data.authorization_url) {
+        window.open(data.authorization_url, "_blank", "noopener,noreferrer");
+        setSyncMessage("Abre la pestaña de Mercado Libre, acepta y vuelve para sincronizar.");
+      }
+    } catch (err) {
+      setError(err.message || "No se pudo iniciar el proceso de conexión");
+    }
   };
 
-  const handleSave = async (evt) => {
-    evt.preventDefault();
+  const handleSync = async () => {
+    if (!appAlias.trim()) {
+      setError("Define el alias de la app antes de sincronizar.");
+      return;
+    }
     setLoading(true);
-    setMessage("");
     setError("");
+    setSyncMessage("");
     try {
-      const payload = { ...form };
-      if (!payload.webhook_url) delete payload.webhook_url;
-      const data = await authorizedFetch(`${API_URL}/mercadolibre/credentials`, {
-        method: "POST",
-        body: JSON.stringify(payload),
-        headers: { "Content-Type": "application/json" },
-      });
-      setMessage("Credenciales guardadas. Ahora conecta la cuenta para obtener tokens.");
-      setCredentials((prev) => [data, ...prev]);
-      setForm(emptyForm);
+      const data = await authorizedFetch(
+        `${API_URL}/meli/sync?app_alias=${encodeURIComponent(appAlias.trim())}`
+      );
+      setSeller(data.seller);
+      setSyncData(data);
+      setLastSync(data.last_sync || new Date().toISOString());
+      setConnection((prev) =>
+        prev
+          ? { ...prev, seller_id: data?.seller?.id || prev.seller_id, nickname: data?.seller?.nickname || prev.nickname }
+          : prev
+      );
+      setSyncMessage("Sincronización completada");
     } catch (err) {
-      setError(err.message || "No se pudo guardar");
+      setError(err.message || "No se pudo sincronizar");
     } finally {
       setLoading(false);
     }
   };
 
-  const handleAuthorize = async (id) => {
-    if (id === 0) {
-      setMessage("Cuenta demo lista: no requiere autorización adicional.");
-      return;
-    }
+  const handleDisconnect = async () => {
+    if (!appAlias.trim()) return;
     try {
-      const data = await authorizedFetch(`${API_URL}/mercadolibre/credentials/${id}/authorize`, {
+      await authorizedFetch(`${API_URL}/meli/disconnect`, {
         method: "POST",
+        body: JSON.stringify({ app_alias: appAlias.trim() }),
       });
-      if (data.authorization_url) {
-        window.open(data.authorization_url, "_blank", "noopener,noreferrer");
-        setMessage("Redirigido a MercadoLibre. Completa el consentimiento y vuelve a esta pantalla.");
-      }
+      setConnection(null);
+      setSeller(null);
+      setSyncData(null);
+      setLastSync(null);
+      setSyncMessage("Integración desconectada");
     } catch (err) {
-      setError(err.message || "No se pudo iniciar la autorización");
-    }
-  };
-
-  const handleSync = async (id, resource) => {
-    setError("");
-    setMessage("");
-    setSyncing(`${id}-${resource}`);
-    try {
-      const isDemo = id === 0;
-      const endpoint = isDemo
-        ? `${API_URL}/mercadolibre/demo/${resource}`
-        : `${API_URL}/mercadolibre/credentials/${id}/${resource}`;
-      const data = await authorizedFetch(endpoint);
-      setSyncPreview({ resource: isDemo ? `demo/${resource}` : resource, data });
-      setMessage(
-        isDemo
-          ? "Datos demo listos. Úsalos para probar la experiencia sin una cuenta real."
-          : "Datos sincronizados. Revisa el panel de análisis para explotarlos.",
-      );
-    } catch (err) {
-      setError(err.message || "No se pudo sincronizar");
-    } finally {
-      setSyncing("");
+      setError(err.message || "No se pudo desconectar");
     }
   };
 
   return (
-    <section className="space-y-6">
-      <header className="space-y-2">
-        <p className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 dark:bg-amber-900/40 dark:text-amber-100">
-          🛒 Integraciones • MercadoLibre
-        </p>
-        <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Configura credenciales por usuario</h2>
-        <p className="text-sm text-gray-600 dark:text-slate-300">
-          Guarda CLIENT_ID, CLIENT_SECRET, REDIRECT_URI y país sin usar variables de entorno. Cada usuario controla sus propios vendedores.
+    <div className="space-y-6">
+      <header className="space-y-1">
+        <p className="text-xs font-semibold text-blue-600 uppercase tracking-wide">Integraciones</p>
+        <h2 className="text-2xl font-bold text-slate-900 dark:text-white">Mercado Libre</h2>
+        <p className="text-sm text-slate-600 dark:text-slate-300">
+          Conecta tu tienda con OAuth. Solo necesitas el alias que configuró el administrador.
         </p>
       </header>
 
-      <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
-        <form
-          onSubmit={handleSave}
-          className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/70 shadow-sm p-5 space-y-4"
-        >
-          <div className="flex items-center justify-between">
-            <h3 className="text-lg font-semibold text-slate-900 dark:text-white">Nueva credencial</h3>
-            <span className="text-xs text-slate-500 dark:text-slate-300">Campos sensibles se almacenan cifrados</span>
-          </div>
-
-          <div className="grid gap-4 sm:grid-cols-2">
-            <label className="space-y-1">
-              <span className="text-xs font-semibold text-slate-600 dark:text-slate-200">Alias</span>
+      <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/70 shadow-sm p-5 space-y-4">
+        <div className="grid gap-4 sm:grid-cols-[1.2fr_0.8fr]">
+          <div className="space-y-3">
+            <label className="space-y-1 block">
+              <span className="text-xs font-semibold text-slate-600 dark:text-slate-200">Alias de la app</span>
               <input
-                name="account_name"
-                value={form.account_name}
-                onChange={handleChange}
-                required
+                value={appAlias}
+                onChange={(e) => setAppAlias(e.target.value)}
                 className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white/80 dark:bg-slate-800/60 px-3 py-2 text-sm"
-                placeholder="Cuenta principal"
+                placeholder="alias-configurado-por-admin"
               />
             </label>
-            <label className="space-y-1">
-              <span className="text-xs font-semibold text-slate-600 dark:text-slate-200">País / Site ID</span>
-              <select
-                name="country_code"
-                value={form.country_code}
-                onChange={handleChange}
-                className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white/80 dark:bg-slate-800/60 px-3 py-2 text-sm"
+            <div className="flex flex-wrap items-center gap-3">
+              <button
+                onClick={handleConnect}
+                className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 text-white px-5 py-2.5 text-sm font-semibold shadow hover:-translate-y-0.5 transition"
               >
-                {countryOptions.map((option) => (
-                  <option key={option} value={option}>
-                    {option}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
-
-          <div className="grid gap-4 sm:grid-cols-2">
-            <label className="space-y-1">
-              <span className="text-xs font-semibold text-slate-600 dark:text-slate-200">CLIENT_ID</span>
-              <input
-                name="client_id"
-                value={form.client_id}
-                onChange={handleChange}
-                required
-                className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white/80 dark:bg-slate-800/60 px-3 py-2 text-sm"
-                placeholder="App ID de MercadoLibre"
-              />
-            </label>
-            <label className="space-y-1">
-              <span className="text-xs font-semibold text-slate-600 dark:text-slate-200">CLIENT_SECRET</span>
-              <input
-                name="client_secret"
-                value={form.client_secret}
-                onChange={handleChange}
-                required
-                className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white/80 dark:bg-slate-800/60 px-3 py-2 text-sm"
-                placeholder="Se guarda cifrado"
-              />
-            </label>
-          </div>
-
-          <label className="space-y-1">
-            <span className="text-xs font-semibold text-slate-600 dark:text-slate-200">REDIRECT_URI</span>
-            <input
-              name="redirect_uri"
-              value={form.redirect_uri}
-              onChange={handleChange}
-              required
-              className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white/80 dark:bg-slate-800/60 px-3 py-2 text-sm"
-              placeholder="https://tu-backend.com/mercadolibre/oauth/callback"
-            />
-          </label>
-
-          <label className="space-y-1">
-            <span className="text-xs font-semibold text-slate-600 dark:text-slate-200">Webhook URL (opcional)</span>
-            <input
-              name="webhook_url"
-              value={form.webhook_url}
-              onChange={handleChange}
-              className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white/80 dark:bg-slate-800/60 px-3 py-2 text-sm"
-              placeholder="https://miapp.com/webhooks/meli"
-            />
-          </label>
-
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 text-white px-5 py-3 text-sm font-semibold shadow hover:-translate-y-0.5 transition disabled:opacity-60"
-          >
-            {loading ? "Guardando..." : "Guardar credenciales"}
-          </button>
-
-          {message && <p className="text-sm text-emerald-600 dark:text-emerald-300">{message}</p>}
-          {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
-        </form>
-
-        <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/70 shadow-sm p-5 space-y-4">
-          <div className="flex items-center justify-between">
-            <h3 className="text-lg font-semibold text-slate-900 dark:text-white">Cuentas conectadas</h3>
-            <span className="text-xs text-slate-500 dark:text-slate-300">{credentials.length} configurada(s)</span>
-          </div>
-
-          {credentials.length === 0 && (
-            <p className="text-sm text-slate-600 dark:text-slate-300">
-              Aún no hay credenciales. Completa el formulario para agregar una cuenta.
-            </p>
-          )}
-
-          <div className="space-y-4">
-            {credentials.map((cred) => {
-              const isDemo = cred.id === 0;
-              return (
-                <div
-                  key={cred.id}
-                  className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-800/50 p-4 space-y-3"
-                >
-                  <div className="flex flex-wrap items-center gap-3 justify-between">
-                    <div>
-                      <p className="text-sm font-semibold text-slate-900 dark:text-white">{cred.account_name}</p>
-                      <p className="text-xs text-slate-500 dark:text-slate-300">
-                        {cred.country_code} • Redirect: {cred.redirect_uri}
-                      </p>
-                    </div>
-                    <span
-                      className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold ${isDemo
-                        ? "bg-sky-100 text-sky-800 dark:bg-sky-900/40 dark:text-sky-100"
-                        : cred.has_tokens
-                          ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-100"
-                          : "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-100"
-                        }`}
-                    >
-                      {isDemo ? "Demo de pruebas" : cred.has_tokens ? "Tokens listos" : "Falta autorizar"}
-                    </span>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    <button
-                      onClick={() => handleAuthorize(cred.id)}
-                      className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-semibold shadow ${isDemo
-                        ? "bg-sky-700 text-white"
-                        : "bg-slate-900 text-white"
-                        }`}
-                    >
-                      {isDemo ? "Usar cuenta demo" : "Conectar cuenta MercadoLibre"}
-                    </button>
-                    <button
-                      onClick={() => handleSync(cred.id, "seller")}
-                      disabled={syncing === `${cred.id}-seller`}
-                      className="inline-flex items-center gap-2 rounded-xl border border-slate-300 dark:border-slate-700 px-4 py-2 text-xs font-semibold disabled:opacity-60"
-                    >
-                      {syncing === `${cred.id}-seller` ? "Sincronizando..." : isDemo ? "Ver perfil demo" : "Sincronizar vendedor"}
-                    </button>
-                    <button
-                      onClick={() => handleSync(cred.id, "listings/active")}
-                      disabled={syncing === `${cred.id}-listings/active`}
-                      className="inline-flex items-center gap-2 rounded-xl border border-slate-300 dark:border-slate-700 px-4 py-2 text-xs font-semibold disabled:opacity-60"
-                    >
-                      {syncing === `${cred.id}-listings/active` ? "Sincronizando..." : isDemo ? "Publicaciones demo" : "Publicaciones activas"}
-                    </button>
-                    <button
-                      onClick={() => handleSync(cred.id, "orders")}
-                      disabled={syncing === `${cred.id}-orders`}
-                      className="inline-flex items-center gap-2 rounded-xl border border-slate-300 dark:border-slate-700 px-4 py-2 text-xs font-semibold disabled:opacity-60"
-                    >
-                      {syncing === `${cred.id}-orders` ? "Sincronizando..." : isDemo ? "Ventas demo" : "Ventas / órdenes"}
-                    </button>
-                    <button
-                      onClick={() => handleSync(cred.id, "listings/paused")}
-                      disabled={syncing === `${cred.id}-listings/paused`}
-                      className="inline-flex items-center gap-2 rounded-xl border border-slate-300 dark:border-slate-700 px-4 py-2 text-xs font-semibold disabled:opacity-60"
-                    >
-                      {syncing === `${cred.id}-listings/paused` ? "Sincronizando..." : isDemo ? "Pausados demo" : "Productos pausados"}
-                    </button>
-                  </div>
-                  {isDemo && (
-                    <p className="text-xs text-slate-500 dark:text-slate-300">
-                      Usa esta cuenta para probar la integración sin credenciales reales de vendedor.
-                    </p>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-
-          {syncPreview && (
-            <div className="rounded-xl bg-slate-100 dark:bg-slate-800/80 p-3 text-xs text-slate-800 dark:text-slate-200 overflow-x-auto">
-              <p className="font-semibold mb-2">Resultado rápido ({syncPreview.resource}):</p>
-              <pre className="whitespace-pre-wrap">
-                {JSON.stringify(syncPreview.data, null, 2)}
-              </pre>
+                Conectar Mercado Libre
+              </button>
+              <button
+                onClick={handleConnect}
+                className="inline-flex items-center justify-center gap-2 rounded-xl border border-dashed border-slate-300 dark:border-slate-700 px-4 py-2 text-sm font-semibold text-slate-700 dark:text-slate-200"
+              >
+                Conectar con QR
+              </button>
             </div>
-          )}
-        </div>
-      </div>
+          </div>
 
-      <div className="rounded-2xl border border-blue-100 dark:border-blue-900/50 bg-blue-50/70 dark:bg-blue-900/30 p-4 text-sm text-blue-900 dark:text-blue-100 space-y-2">
-        <p className="font-semibold">Flujo recomendado</p>
-        <ol className="list-decimal list-inside space-y-1">
-          <li>Registra la aplicación en MercadoLibre y copia el CLIENT_ID/CLIENT_SECRET.</li>
-          <li>Configura el redirect hacia <code className="px-1 bg-white/60 dark:bg-slate-800/60 rounded">/mercadolibre/oauth/callback</code> de este backend.</li>
-          <li>Guarda las credenciales, pulsa "Conectar cuenta" y acepta el consentimiento.</li>
-          <li>Usa los botones de sincronización o el análisis automático en el módulo de cargas para graficar los datos.</li>
-        </ol>
+          <div className="rounded-xl border border-slate-200 dark:border-slate-800 p-4 bg-slate-50/70 dark:bg-slate-800/60">
+            {connection ? (
+              <div className="space-y-1">
+                <p className="text-sm font-semibold text-slate-900 dark:text-white">Cuenta conectada</p>
+                <p className="text-xs text-slate-600 dark:text-slate-300">Seller: {connection.nickname || connection.seller_id || "por sincronizar"}</p>
+                <p className="text-xs text-slate-600 dark:text-slate-300">Última sincronización: {lastSync ? new Date(lastSync).toLocaleString() : "pendiente"}</p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <p className="text-sm font-semibold text-slate-900 dark:text-white">No tienes Mercado Libre conectado</p>
+                <p className="text-xs text-slate-600 dark:text-slate-300">
+                  Usa el botón conectar para iniciar el flujo OAuth.
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            onClick={handleSync}
+            disabled={loading}
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 text-white px-4 py-2 text-sm font-semibold shadow hover:-translate-y-0.5 transition disabled:opacity-60"
+          >
+            {loading ? "Sincronizando..." : "Sincronizar vendedor"}
+          </button>
+          <button
+            onClick={handleSync}
+            disabled={loading}
+            className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-300 dark:border-slate-700 px-4 py-2 text-sm font-semibold text-slate-800 dark:text-slate-200"
+          >
+            Ver ventas
+          </button>
+          <button
+            onClick={handleSync}
+            disabled={loading}
+            className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-300 dark:border-slate-700 px-4 py-2 text-sm font-semibold text-slate-800 dark:text-slate-200"
+          >
+            Ver stock
+          </button>
+          <button
+            onClick={handleDisconnect}
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-red-500 text-white px-4 py-2 text-sm font-semibold shadow hover:-translate-y-0.5 transition"
+          >
+            Desconectar
+          </button>
+        </div>
+
+        {syncMessage && <p className="text-sm text-emerald-600 dark:text-emerald-300">{syncMessage}</p>}
+        {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
+
+        {syncData && (
+          <div className="grid gap-4 md:grid-cols-3">
+            <div className="rounded-xl border border-slate-200 dark:border-slate-800 p-4 bg-slate-50/70 dark:bg-slate-800/60">
+              <p className="text-sm font-semibold text-slate-900 dark:text-white">Vendedor</p>
+              <p className="text-xs text-slate-600 dark:text-slate-300">{seller?.nickname || seller?.id || "-"}</p>
+            </div>
+            <div className="rounded-xl border border-slate-200 dark:border-slate-800 p-4 bg-slate-50/70 dark:bg-slate-800/60">
+              <p className="text-sm font-semibold text-slate-900 dark:text-white">Órdenes</p>
+              <p className="text-xs text-slate-600 dark:text-slate-300">{(syncData.orders?.results || syncData.orders?.orders || []).length || syncData.orders?.results?.length || 0} recibidas</p>
+            </div>
+            <div className="rounded-xl border border-slate-200 dark:border-slate-800 p-4 bg-slate-50/70 dark:bg-slate-800/60">
+              <p className="text-sm font-semibold text-slate-900 dark:text-white">Stock</p>
+              <p className="text-xs text-slate-600 dark:text-slate-300">{(syncData.inventory?.active?.item_ids || []).length} activos</p>
+            </div>
+          </div>
+        )}
       </div>
-    </section>
+    </div>
   );
 };
 
