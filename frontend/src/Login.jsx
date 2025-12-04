@@ -75,20 +75,20 @@ const Login = ({ onLogin }) => {
   };
 
   return (
-    <div className="login-layout">
+    <div className="login-layout min-h-screen flex items-center justify-center px-4 py-10">
       <div className="absolute inset-0 pointer-events-none">
         <div className="absolute -left-10 -top-10 h-56 w-56 rounded-full bg-blue-600/20 blur-3xl" aria-hidden="true" />
         <div className="absolute -right-6 top-12 h-48 w-48 rounded-full bg-cyan-400/20 blur-3xl" aria-hidden="true" />
         <div className="absolute left-1/4 bottom-0 h-60 w-60 rounded-full bg-indigo-500/15 blur-3xl" aria-hidden="true" />
       </div>
 
-      <div className="relative w-full max-w-5xl px-1 sm:px-3 md:px-6">
+      <div className="relative w-full max-w-6xl px-2 sm:px-4 md:px-8">
         <div
           className="absolute inset-0 -z-10 rounded-[36px] bg-gradient-to-br from-blue-500/25 via-indigo-500/15 to-cyan-400/20 blur-3xl"
           aria-hidden="true"
         />
 
-        <div className="login-card overflow-hidden">
+        <div className="login-card overflow-hidden rounded-[32px]">
           <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/25 to-transparent" aria-hidden="true" />
           <div className="absolute -right-20 -top-20 h-64 w-64 rounded-full bg-white/5 blur-3xl" aria-hidden="true" />
 
@@ -120,7 +120,7 @@ const Login = ({ onLogin }) => {
 
             <form
               onSubmit={handleLogin}
-              className="flex flex-col gap-4 sm:gap-5 bg-slate-950/40 rounded-2xl p-5 sm:p-6 md:p-8 border border-white/10 shadow-inner shadow-blue-900/30"
+              className="flex flex-col gap-5 sm:gap-6 bg-slate-950/50 rounded-3xl p-6 sm:p-8 md:p-10 border border-white/10 shadow-inner shadow-blue-900/30"
             >
               <div className="flex flex-col gap-3">
                 <label className="text-sm font-semibold text-blue-100/80">Usuario</label>
@@ -130,7 +130,7 @@ const Login = ({ onLogin }) => {
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
                   autoComplete="username"
-                  className="p-4 rounded-2xl bg-white/5 border border-white/10 focus:border-blue-400/60 focus:ring-2 focus:ring-blue-500/40 text-white placeholder-gray-400 transition-all duration-200 text-lg shadow-[0_10px_40px_rgba(0,0,0,0.35)]"
+                  className="p-4 sm:p-5 rounded-2xl bg-white/5 border border-white/10 focus:border-blue-400/60 focus:ring-2 focus:ring-blue-500/40 text-white placeholder-gray-300 transition-all duration-200 text-lg sm:text-xl shadow-[0_10px_40px_rgba(0,0,0,0.35)]"
                 />
               </div>
 
@@ -142,14 +142,14 @@ const Login = ({ onLogin }) => {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   autoComplete="current-password"
-                  className="p-4 rounded-2xl bg-white/5 border border-white/10 focus:border-blue-400/60 focus:ring-2 focus:ring-blue-500/40 text-white placeholder-gray-400 transition-all duration-200 text-lg shadow-[0_10px_40px_rgba(0,0,0,0.35)]"
+                  className="p-4 sm:p-5 rounded-2xl bg-white/5 border border-white/10 focus:border-blue-400/60 focus:ring-2 focus:ring-blue-500/40 text-white placeholder-gray-300 transition-all duration-200 text-lg sm:text-xl shadow-[0_10px_40px_rgba(0,0,0,0.35)]"
                 />
               </div>
 
               <button
                 type="submit"
                 disabled={loading}
-                className={`mt-2 inline-flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-blue-600 via-indigo-600 to-cyan-500 px-6 py-4 text-lg font-semibold text-white shadow-[0_18px_50px_rgba(59,130,246,0.35)] transition-all duration-300 ${
+                className={`mt-2 inline-flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-blue-600 via-indigo-600 to-cyan-500 px-6 py-4 text-xl font-semibold text-white shadow-[0_18px_50px_rgba(59,130,246,0.35)] transition-all duration-300 ${
                   loading ? "opacity-70" : "hover:translate-y-[-2px] hover:shadow-[0_25px_60px_rgba(59,130,246,0.45)]"
                 }`}
               >
