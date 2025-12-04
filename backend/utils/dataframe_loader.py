@@ -34,6 +34,7 @@ def _read_csv(buffer):
         return pd.read_csv(buffer, engine="pyarrow", **read_kwargs)
     except Exception as exc:
         fallback_kwargs = {k: v for k, v in read_kwargs.items() if k != "low_memory"}
+        buffer.seek(0)
         try:
             return pd.read_csv(buffer, engine="python", **fallback_kwargs)
         except Exception as inner_exc:  # pragma: no cover - solo si fallan ambos parsers
