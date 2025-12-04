@@ -3,10 +3,10 @@ import Login from "./Login";
 import ConfigurationPage from "./ConfigurationPage";
 import MercadoLibreIntegration from "./MercadoLibreIntegration";
 import AdminMercadoLibreApps from "./AdminMercadoLibreApps";
-import DataUploadAnalysis from "../components/DataUploadAnalysis";
-import DataMovieModule from "../components/DataMovieModule";
-import DataComparisonModule from "../components/DataComparisonModule";
 import HomeView from "./views/home/HomeView";
+import SalesView from "./views/sales/SalesView";
+import StockView from "./views/stock/StockView";
+import DataIntegrationsView from "./views/data/DataIntegrationsView";
 import MainLayout from "./layouts/MainLayout";
 import {
   clearStoredSession,
@@ -192,12 +192,9 @@ const App = () => {
   );
 
   const getNavigationFromPath = (path) => {
-    if (path.startsWith("/modules/analyze"))
-      return { page: "home", module: "analyze" };
-    if (path.startsWith("/modules/movie"))
-      return { page: "home", module: "movie" };
-    if (path.startsWith("/modules/compare"))
-      return { page: "home", module: "compare" };
+    if (path.startsWith("/modules/sales")) return { page: "home", module: "sales" };
+    if (path.startsWith("/modules/stock")) return { page: "home", module: "stock" };
+    if (path.startsWith("/modules/data")) return { page: "home", module: "data" };
     if (path.startsWith("/integraciones/mercadolibre"))
       return { page: "meli-user", module: "home" };
     if (path.startsWith("/admin/integraciones/mercadolibre"))
@@ -205,7 +202,7 @@ const App = () => {
     if (path.startsWith("/integrations"))
       return { page: "integrations", module: "home" };
     if (path.startsWith("/config")) return { page: "config", module: "home" };
-    return { page: "home", module: "analyze" };
+    return { page: "home", module: "home" };
   };
 
   const initialNavigation = getNavigationFromPath(window.location.pathname);
@@ -284,7 +281,7 @@ const App = () => {
 
     setSessionMessage("");
     setUser({ username: data.username, role: data.role || "user" });
-    setCurrentModule("analyze");
+    setCurrentModule("home");
   };
 
   const handleLogout = (eventOrMessage = "") => {
@@ -346,7 +343,7 @@ const App = () => {
       setCurrentModule("home");
     } else {
       window.history.pushState({ page }, "", "/");
-      setCurrentModule("analyze");
+      setCurrentModule("home");
     }
   };
 
@@ -384,9 +381,9 @@ const App = () => {
 
   const navigateToModule = (moduleId) => {
     const moduleRoutes = {
-      analyze: "/modules/analyze",
-      movie: "/modules/movie",
-      compare: "/modules/compare",
+      sales: "/modules/sales",
+      stock: "/modules/stock",
+      data: "/modules/data",
     };
 
     setActivePage("home");
@@ -423,20 +420,17 @@ const App = () => {
 
   const renderModuleContent = () => {
     switch (currentModule) {
-      case "analyze":
+      case "sales":
+        return <SalesView onUnauthorized={handleUnauthorized} />;
+      case "stock":
+        return <StockView onUnauthorized={handleUnauthorized} />;
+      case "data":
         return (
-          <DataUploadAnalysis
-            user={user}
+          <DataIntegrationsView
             onUnauthorized={handleUnauthorized}
-            onDataReceived={(data) => console.log("📈 Resultado del análisis:", data)}
-            onNavigateModule={navigateToModule}
-            onOpenIntegrations={() => navigateTo("integrations")}
+            onOpenMercadoLibre={goToMeliUser}
           />
         );
-      case "movie":
-        return <DataMovieModule onUnauthorized={handleUnauthorized} />;
-      case "compare":
-        return <DataComparisonModule onUnauthorized={handleUnauthorized} />;
       default:
         return null;
     }
@@ -508,45 +502,45 @@ const App = () => {
                       {modulesOpen && (
                         <div className="absolute left-0 mt-2 w-64 rounded-2xl border border-white/70 dark:border-slate-800 bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl shadow-xl p-2 space-y-1">
                           <button
-                            onClick={() => navigateToModule("analyze")}
+                            onClick={() => navigateToModule("sales")}
                             className={`group flex w-full items-start justify-between gap-2 rounded-xl px-3 py-2 text-sm text-left transition-all duration-200 hover:-translate-y-0.5 ${
-                              currentModule === "analyze"
+                              currentModule === "sales"
                                 ? "bg-blue-600 text-white shadow-lg shadow-blue-500/30"
                                 : "text-slate-700 dark:text-slate-100 hover:bg-slate-100/80 dark:hover:bg-slate-800/70"
                             }`}
                           >
                             <div className="flex flex-col gap-0.5">
-                              <span className="font-semibold">Carga y análisis</span>
-                              <span className="text-xs text-slate-500 dark:text-slate-300">Análisis rápido</span>
+                              <span className="font-semibold">Ventas</span>
+                              <span className="text-xs text-slate-500 dark:text-slate-300">KPIs y vistas manuales</span>
                             </div>
                             <span className="rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-200 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide">
                               Recomendado
                             </span>
                           </button>
                           <button
-                            onClick={() => navigateToModule("movie")}
+                            onClick={() => navigateToModule("stock")}
                             className={`group flex w-full items-start gap-2 rounded-xl px-3 py-2 text-sm text-left transition-all duration-200 hover:-translate-y-0.5 ${
-                              currentModule === "movie"
+                              currentModule === "stock"
                                 ? "bg-blue-600 text-white shadow-lg shadow-blue-500/30"
                                 : "text-slate-700 dark:text-slate-100 hover:bg-slate-100/80 dark:hover:bg-slate-800/70"
                             }`}
                           >
                             <div className="flex flex-col gap-0.5">
-                              <span className="font-semibold">Película de datos</span>
-                              <span className="text-xs text-slate-500 dark:text-slate-300">Animaciones</span>
+                              <span className="font-semibold">Stock</span>
+                              <span className="text-xs text-slate-500 dark:text-slate-300">Rotación y riesgo</span>
                             </div>
                           </button>
                           <button
-                            onClick={() => navigateToModule("compare")}
+                            onClick={() => navigateToModule("data")}
                             className={`group flex w-full items-start gap-2 rounded-xl px-3 py-2 text-sm text-left transition-all duration-200 hover:-translate-y-0.5 ${
-                              currentModule === "compare"
+                              currentModule === "data"
                                 ? "bg-blue-600 text-white shadow-lg shadow-blue-500/30"
                                 : "text-slate-700 dark:text-slate-100 hover:bg-slate-100/80 dark:hover:bg-slate-800/70"
                             }`}
                           >
                             <div className="flex flex-col gap-0.5">
-                              <span className="font-semibold">Comparativa</span>
-                              <span className="text-xs text-slate-500 dark:text-slate-300">Resultados lado a lado</span>
+                              <span className="font-semibold">Datos / Integraciones</span>
+                              <span className="text-xs text-slate-500 dark:text-slate-300">Mercado Libre y archivos</span>
                             </div>
                           </button>
                         </div>
@@ -666,37 +660,37 @@ const App = () => {
                 <div className="space-y-1">
                   <p className="text-[11px] uppercase tracking-wide text-slate-400 dark:text-slate-500">Módulos</p>
                   <button
-                    onClick={() => navigateToModule("analyze")}
+                    onClick={() => navigateToModule("sales")}
                     className={`flex items-center gap-2 w-full rounded-xl px-3 py-2 text-sm font-semibold transition-all duration-200 hover:-translate-y-0.5 ${
-                      currentModule === "analyze"
+                      currentModule === "sales"
                         ? "bg-blue-600 text-white shadow-lg shadow-blue-500/30"
                         : "text-slate-800 dark:text-slate-100 bg-slate-100/80 dark:bg-slate-800/70"
                     }`}
                   >
-                    <span className="flex-1 text-left">Carga y análisis</span>
+                    <span className="flex-1 text-left">Ventas</span>
                     <span className="rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-200 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide">
                       Recomendado
                     </span>
                   </button>
                   <button
-                    onClick={() => navigateToModule("movie")}
+                    onClick={() => navigateToModule("stock")}
                     className={`flex items-center gap-2 w-full rounded-xl px-3 py-2 text-sm font-semibold transition-all duration-200 hover:-translate-y-0.5 ${
-                      currentModule === "movie"
+                      currentModule === "stock"
                         ? "bg-blue-600 text-white shadow-lg shadow-blue-500/30"
                         : "text-slate-800 dark:text-slate-100 bg-slate-100/80 dark:bg-slate-800/70"
                     }`}
                   >
-                    <span className="flex-1 text-left">Película de datos</span>
+                    <span className="flex-1 text-left">Stock</span>
                   </button>
                   <button
-                    onClick={() => navigateToModule("compare")}
+                    onClick={() => navigateToModule("data")}
                     className={`flex items-center gap-2 w-full rounded-xl px-3 py-2 text-sm font-semibold transition-all duration-200 hover:-translate-y-0.5 ${
-                      currentModule === "compare"
+                      currentModule === "data"
                         ? "bg-blue-600 text-white shadow-lg shadow-blue-500/30"
                         : "text-slate-800 dark:text-slate-100 bg-slate-100/80 dark:bg-slate-800/70"
                     }`}
                   >
-                    <span className="flex-1 text-left">Comparativa</span>
+                    <span className="flex-1 text-left">Datos / Integraciones</span>
                   </button>
                 </div>
 
@@ -805,22 +799,20 @@ const App = () => {
                 <AdminMercadoLibreApps onUnauthorized={handleUnauthorized} />
               ) : (
                 <>
-                  <div ref={moduleContentRef} className="space-y-8">
-                    {renderModuleContent()}
-                  </div>
+                  {currentModule !== "home" && (
+                    <div ref={moduleContentRef} className="space-y-8">
+                      {renderModuleContent()}
+                    </div>
+                  )}
 
                   <HomeView
                     onUnauthorized={handleUnauthorized}
-                    onNavigate={(page, module) => {
-                      if (page === "integrations") {
-                        navigateTo("integrations");
-                        return;
-                      }
+                    onNavigate={(module) => {
                       if (module) {
                         navigateToModule(module);
                         return;
                       }
-                      navigateTo(page || "home");
+                      navigateTo("home");
                     }}
                   />
                 </>

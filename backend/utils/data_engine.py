@@ -10,8 +10,8 @@ from __future__ import annotations
 
 import math
 import unicodedata
-from datetime import datetime
-from typing import Any, Dict, Iterable, List, Tuple
+from datetime import datetime, timedelta
+from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -273,5 +273,284 @@ def summarize_business(df: pd.DataFrame, column_types: Dict[str, str]) -> Dict[s
     return {
         "ai_summary": ai_payload.get("ai_summary"),
         "insights": ai_payload.get("refined_insights") or ai_payload.get("insights"),
+    }
+
+
+# =============================================================
+#   NUEVO MOTOR DE DATOS UNIFICADO (VENTAS + STOCK)
+# =============================================================
+
+
+def harmonize_sales_data(df: pd.DataFrame, source: str = "files") -> Tuple[pd.DataFrame, Dict[str, str]]:
+    """Normaliza ventas para exponer un esquema común orientado a métricas comerciales."""
+
+    standardized, mapping = standardize_dataframe(df)
+    sales = standardized.copy()
+
+    sales["product_id"] = sales.get("sku") or sales.get("product")
+    sales["product_name"] = sales.get("product")
+    sales["date"] = pd.to_datetime(sales.get("date"), errors="coerce")
+    sales["quantity_sold"] = pd.to_numeric(sales.get("quantity", 1), errors="coerce").fillna(0)
+    sales["revenue"] = (
+        pd.to_numeric(sales.get("price", 0), errors="coerce").fillna(0) * sales["quantity_sold"]
+    )
+    sales["cost"] = pd.to_numeric(sales.get("cost", 0), errors="coerce").fillna(0)
+    sales["margin"] = sales["revenue"] - (sales["cost"] * sales["quantity_sold"])
+    sales["current_stock"] = np.nan
+    sales["channel"] = source
+
+    columns = [
+        "product_id",
+        "product_name",
+        "category",
+        "date",
+        "quantity_sold",
+        "revenue",
+        "cost",
+        "margin",
+        "current_stock",
+        "channel",
+    ]
+
+    return sales[columns], mapping
+
+
+def harmonize_stock_data(df: pd.DataFrame, source: str = "files") -> Tuple[pd.DataFrame, Dict[str, str]]:
+    """Normaliza inventario actual al mismo esquema de métricas."""
+
+    standardized, mapping = standardize_dataframe(df)
+    stock = standardized.copy()
+
+    stock["product_id"] = stock.get("sku") or stock.get("product")
+    stock["product_name"] = stock.get("product")
+    stock["current_stock"] = pd.to_numeric(stock.get("stock", 0), errors="coerce").fillna(0)
+    stock["quantity_sold"] = 0
+    stock["revenue"] = 0
+    stock["cost"] = pd.to_numeric(stock.get("cost", 0), errors="coerce").fillna(0)
+    stock["margin"] = 0
+    stock["date"] = pd.NaT
+    stock["channel"] = source
+
+    columns = [
+        "product_id",
+        "product_name",
+        "category",
+        "date",
+        "quantity_sold",
+        "revenue",
+        "cost",
+        "margin",
+        "current_stock",
+        "channel",
+    ]
+
+    return stock[columns], mapping
+
+
+def build_product_summary(sales_df: pd.DataFrame, stock_df: pd.DataFrame) -> pd.DataFrame:
+    """Agrega ventas + stock por producto, calculando rotación y días de inventario."""
+
+    sales_df = sales_df.copy()
+    stock_df = stock_df.copy()
+
+    sales_df["revenue"] = pd.to_numeric(sales_df.get("revenue", 0), errors="coerce").fillna(0)
+    sales_df["margin"] = pd.to_numeric(sales_df.get("margin", 0), errors="coerce").fillna(0)
+    sales_df["quantity_sold"] = pd.to_numeric(sales_df.get("quantity_sold", 0), errors="coerce").fillna(0)
+
+    sales_agg = (
+        sales_df.groupby(["product_id", "product_name", "category"], dropna=False)
+        .agg({"revenue": "sum", "margin": "sum", "quantity_sold": "sum", "date": "max"})
+        .reset_index()
+    )
+
+    stock_agg = (
+        stock_df.groupby(["product_id", "product_name", "category"], dropna=False)["current_stock"]
+        .sum()
+        .reset_index()
+    )
+
+    combined = pd.merge(
+        sales_agg,
+        stock_agg,
+        on=["product_id", "product_name", "category"],
+        how="outer",
+        suffixes=("_sales", "_stock"),
+    )
+
+    combined["revenue"] = combined.get("revenue", 0).fillna(0)
+    combined["margin"] = combined.get("margin", 0).fillna(0)
+    combined["quantity_sold"] = combined.get("quantity_sold", 0).fillna(0)
+    combined["current_stock"] = combined.get("current_stock", 0).fillna(0)
+
+    if not sales_df.empty and "date" in sales_df:
+        last_date = sales_df["date"].max()
+        cutoff = last_date - timedelta(days=30)
+        recent = sales_df[sales_df["date"] >= cutoff]
+        recent_units = recent.groupby("product_name")["quantity_sold"].sum().reset_index()
+        combined = combined.merge(recent_units, on="product_name", how="left", suffixes=("", "_last30"))
+        combined["quantity_sold_last30"] = combined.get("quantity_sold_last30", 0).fillna(0)
+    else:
+        combined["quantity_sold_last30"] = 0
+        last_date = None
+
+    combined["rotation"] = combined.apply(
+        lambda row: float(row["quantity_sold_last30"]) / max(row["current_stock"], 1)
+        if pd.notna(row.get("current_stock"))
+        else 0,
+        axis=1,
+    )
+
+    def _inventory_days(row):
+        daily_units = row["quantity_sold_last30"] / 30 if row["quantity_sold_last30"] else 0
+        if daily_units <= 0:
+            return None
+        return float(row["current_stock"] / daily_units) if row.get("current_stock") is not None else None
+
+    combined["days_inventory"] = combined.apply(_inventory_days, axis=1)
+    combined["last_sale_date"] = combined.get("date")
+    combined["data_freshness"] = last_date
+
+    return combined.fillna({"product_name": "Sin nombre", "category": "Sin categoría"})
+
+
+def compute_auto_metrics(sales_df: pd.DataFrame, stock_df: pd.DataFrame, low_stock_threshold: int = 10) -> Dict[str, Any]:
+    """Calcula KPIs automáticos y datasets listos para gráfica/tabla."""
+
+    summary = build_product_summary(sales_df, stock_df)
+
+    kpis: Dict[str, Any] = {}
+    total_sales = float(summary["revenue"].sum()) if not summary.empty else 0.0
+    total_units = float(summary["quantity_sold"].sum()) if not summary.empty else 0.0
+    total_margin = float(summary["margin"].sum()) if not summary.empty else 0.0
+    orders_count = len(sales_df) if not sales_df.empty else 0
+    avg_ticket = total_sales / orders_count if orders_count else 0.0
+
+    kpis["total_sales"] = _build_kpi("Ventas totales", round(total_sales, 2), "currency")
+    kpis["total_units"] = _build_kpi("Unidades", int(total_units))
+    kpis["avg_ticket"] = _build_kpi("Ticket promedio", round(avg_ticket, 2), "currency")
+    kpis["total_margin"] = _build_kpi("Margen total", round(total_margin, 2), "currency")
+
+    if not summary.empty:
+        top_sales = summary.sort_values("revenue", ascending=False).head(1)
+        top_margin = summary.sort_values("margin", ascending=False).head(1)
+        if not top_sales.empty:
+            kpis["top_product_by_sales"] = _build_kpi(
+                "Top por ventas", top_sales.iloc[0]["product_name"]
+            )
+        if not top_margin.empty:
+            kpis["top_product_by_margin"] = _build_kpi(
+                "Top por margen", top_margin.iloc[0]["product_name"]
+            )
+
+    total_stock_units = float(stock_df.get("current_stock", 0).sum()) if not stock_df.empty else 0.0
+    kpis["total_stock_units"] = _build_kpi("Unidades en stock", round(total_stock_units, 2))
+
+    low_stock_products = summary[summary["current_stock"] < low_stock_threshold]
+    kpis["products_with_low_stock"] = _build_kpi(
+        "SKU con stock bajo", int(len(low_stock_products))
+    )
+
+    if "last_sale_date" in summary.columns:
+        cutoff = datetime.utcnow() - timedelta(days=45)
+        without_movement = summary[(summary["current_stock"] > 0) & (summary["last_sale_date"].fillna(pd.Timestamp(0)) < cutoff)]
+        kpis["products_without_movement"] = _build_kpi("Sin movimiento", int(len(without_movement)))
+    else:
+        kpis["products_without_movement"] = _build_kpi("Sin movimiento", 0)
+
+    slow_rotation = summary[(summary["rotation"] <= 0.2) & (summary["current_stock"] > low_stock_threshold)]
+    kpis["products_with_slow_rotation"] = _build_kpi("Rotación lenta", int(len(slow_rotation)))
+
+    star_candidates = summary[(summary["revenue"] > total_sales * 0.05) & (summary["margin"] > total_margin * 0.05)]
+    kpis["products_star"] = _build_kpi("Productos estrella", int(len(star_candidates)))
+
+    chart_data = None
+    if not summary.empty:
+        ranked = summary.sort_values("quantity_sold", ascending=False).head(10)
+        chart_data = {
+            "type": "bar",
+            "title": "Top 10 productos por unidades vendidas",
+            "x": ranked["product_name"].astype(str).tolist(),
+            "series": [
+                {"name": "Unidades", "data": ranked["quantity_sold"].round(2).tolist()},
+                {"name": "Stock", "data": ranked["current_stock"].round(2).tolist()},
+            ],
+        }
+
+    table_columns = [
+        "product_name",
+        "category",
+        "revenue",
+        "margin",
+        "quantity_sold",
+        "current_stock",
+        "rotation",
+        "days_inventory",
+    ]
+    table_data = summary[table_columns].fillna(0)
+    table_records = table_data.to_dict(orient="records")
+
+    return {
+        "kpis": kpis,
+        "chart_data": chart_data,
+        "table_data": table_records,
+    }
+
+
+def aggregate_manual_metrics(
+    sales_df: pd.DataFrame,
+    stock_df: pd.DataFrame,
+    metric: str,
+    dimension: str,
+    filters: Optional[Dict[str, Any]] = None,
+    chart_type: str = "bar",
+) -> Dict[str, Any]:
+    """Agrega métricas según selección de usuario (modo manual)."""
+
+    filters = filters or {}
+    metric_map = {
+        "sales": "revenue",
+        "units": "quantity_sold",
+        "margin": "margin",
+        "stock": "current_stock",
+        "rotation": "rotation",
+    }
+
+    metric_column = metric_map.get(metric)
+    if not metric_column:
+        raise ValueError("Métrica no soportada")
+
+    if metric in {"stock", "rotation"}:
+        base_df = build_product_summary(sales_df, stock_df)
+    else:
+        base_df = sales_df.copy()
+
+    if "date_from" in filters and "date" in base_df:
+        base_df = base_df[base_df["date"] >= pd.to_datetime(filters["date_from"], errors="coerce")]
+    if "date_to" in filters and "date" in base_df:
+        base_df = base_df[base_df["date"] <= pd.to_datetime(filters["date_to"], errors="coerce")]
+    if filters.get("category") and "category" in base_df:
+        base_df = base_df[base_df["category"] == filters["category"]]
+
+    if dimension not in base_df.columns:
+        raise ValueError("La dimensión seleccionada no existe en los datos")
+
+    grouped = base_df.groupby(dimension)[metric_column].sum().reset_index()
+    grouped = grouped.sort_values(metric_column, ascending=False)
+
+    top_n = int(filters.get("top_n") or 0)
+    if top_n:
+        grouped = grouped.head(top_n)
+
+    chart_payload = {
+        "type": chart_type,
+        "title": f"{metric_column} por {dimension}",
+        "x": grouped[dimension].astype(str).tolist(),
+        "series": [{"name": metric_column, "data": grouped[metric_column].round(2).tolist()}],
+    }
+
+    return {
+        "chart_data": chart_payload,
+        "table_data": grouped.to_dict(orient="records"),
+        "meta": {"metric": metric, "dimension": dimension, "filters": filters},
     }
 
