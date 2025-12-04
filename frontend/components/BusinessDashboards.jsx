@@ -319,6 +319,11 @@ const BusinessDashboards = ({ onUnauthorized }) => {
   };
 
   useEffect(() => {
+    setReportPreview(null);
+    setSaveStatus("");
+  }, [reportConfig]);
+
+  useEffect(() => {
     handleFetchSales();
     handleFetchStock();
     handleFetchComparative();
