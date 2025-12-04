@@ -1,11 +1,12 @@
 import React, { useEffect, useRef, useState } from "react";
 import Login from "./Login";
-import HomeModules from "../components/HomeModules";
 import ConfigurationPage from "./ConfigurationPage";
 import MercadoLibreIntegration from "./MercadoLibreIntegration";
 import DataUploadAnalysis from "../components/DataUploadAnalysis";
 import DataMovieModule from "../components/DataMovieModule";
 import DataComparisonModule from "../components/DataComparisonModule";
+import HomeView from "./views/home/HomeView";
+import MainLayout from "./layouts/MainLayout";
 import {
   clearStoredSession,
   decodeTokenPayload,
@@ -416,7 +417,7 @@ const App = () => {
 
   const appShellClasses = !user
     ? "min-h-screen bg-gradient-to-br from-slate-950 via-blue-950 to-slate-900 flex items-center justify-center font-sans px-4 py-10 text-white"
-    : "min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50/60 dark:from-slate-950 dark:via-slate-950 dark:to-slate-900 flex flex-col items-center font-sans px-4 pt-28 pb-10 text-gray-900 dark:text-slate-100 transition-colors duration-300";
+    : "min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col font-sans text-gray-900 dark:text-slate-100 transition-colors duration-300";
 
   return (
     <div className={appShellClasses}>
@@ -726,7 +727,7 @@ const App = () => {
             </div>
           )}
 
-          <div className="w-full max-w-6xl p-8 bg-white/85 dark:bg-slate-900/80 backdrop-blur-lg rounded-3xl shadow-[0_25px_70px_-30px_rgba(15,23,42,0.45)] border border-white/70 dark:border-slate-800 transition-all duration-300 mt-6">
+          <MainLayout>
             <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-6">
               <div className="space-y-3">
                 <div className="flex flex-wrap items-center gap-2">
@@ -754,45 +755,58 @@ const App = () => {
                     {renderModuleContent()}
                   </div>
 
-                  <HomeModules onUnauthorized={handleUnauthorized} />
+                  <HomeView
+                    onUnauthorized={handleUnauthorized}
+                    onNavigate={(page, module) => {
+                      if (page === "integrations") {
+                        navigateTo("integrations");
+                        return;
+                      }
+                      if (module) {
+                        navigateToModule(module);
+                        return;
+                      }
+                      navigateTo(page || "home");
+                    }}
+                  />
                 </>
               )}
             </main>
 
-              <footer className="mt-16 border-t border-gray-200 dark:border-slate-800 px-6 py-8 text-center text-sm text-gray-500 dark:text-slate-400">
-                <div className="flex flex-col items-center gap-3">
+            <footer className="mt-16 border-t border-gray-200 dark:border-slate-800 px-6 py-8 text-center text-sm text-gray-500 dark:text-slate-400">
+              <div className="flex flex-col items-center gap-3">
 
-                  <span className="font-semibold text-gray-700 dark:text-slate-200 tracking-tight">
-                    InformeBF • Plataforma de Análisis Inteligente
-                  </span>
+                <span className="font-semibold text-gray-700 dark:text-slate-200 tracking-tight">
+                  InformeBF • Plataforma de Análisis Inteligente
+                </span>
 
-                  <p className="max-w-md text-xs text-gray-500 dark:text-slate-500">
-                    Transformando datos en decisiones claras. Tecnología creada para PYMEs, equipos modernos 
-                    y mentes curiosas.
-                  </p>
+                <p className="max-w-md text-xs text-gray-500 dark:text-slate-500">
+                  Transformando datos en decisiones claras. Tecnología creada para PYMEs, equipos modernos
+                  y mentes curiosas.
+                </p>
 
-                  <div className="flex items-center gap-4 mt-2 text-xs">
-                    <a className="hover:text-primary-500 transition-colors" href="/terminos">
-                      Términos & Condiciones
-                    </a>
-                    <span>•</span>
-                    <a className="hover:text-primary-500 transition-colors" href="/privacidad">
-                      Política de Privacidad
-                    </a>
-                    <span>•</span>
-                    <a className="hover:text-primary-500 transition-colors" href="/soporte">
-                      Soporte
-                    </a>
-                  </div>
-
-                  <div className="mt-4 text-xs text-gray-400 dark:text-slate-600">
-                    © {new Date().getFullYear()} InformeBF — Datos que hablan, decisiones que avanzan.
-                  </div>
-
+                <div className="flex items-center gap-4 mt-2 text-xs">
+                  <a className="hover:text-primary-500 transition-colors" href="/terminos">
+                    Términos & Condiciones
+                  </a>
+                  <span>•</span>
+                  <a className="hover:text-primary-500 transition-colors" href="/privacidad">
+                    Política de Privacidad
+                  </a>
+                  <span>•</span>
+                  <a className="hover:text-primary-500 transition-colors" href="/soporte">
+                    Soporte
+                  </a>
                 </div>
-              </footer>
 
-          </div>
+                <div className="mt-4 text-xs text-gray-400 dark:text-slate-600">
+                  © {new Date().getFullYear()} InformeBF — Datos que hablan, decisiones que avanzan.
+                </div>
+
+              </div>
+            </footer>
+
+          </MainLayout>
         </>
       )}
     </div>
