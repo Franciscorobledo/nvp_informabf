@@ -9,7 +9,7 @@ import numpy as np
 import pandas as pd
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from auth import get_current_user
 from ai_module import classify_tabular_dataset
@@ -132,6 +132,8 @@ class IngestedDataset(BaseModel):
     column_mapping: Dict[str, str]
     missing_required: list
     missing_optional: list
+    classification_source: str = "openai"
+    warnings: list[str] = Field(default_factory=list)
 
 
 class IngestResponse(BaseModel):
@@ -170,6 +172,65 @@ def _dataset_preview(df: pd.DataFrame) -> Tuple[list[str], list[dict]]:
     columns = list(df.columns)
     sample_rows = df.head(15).fillna("").to_dict(orient="records")
     return columns, sample_rows
+
+
+def _heuristic_classify(columns: list[str], sample_rows: list[dict]) -> dict:
+    """Clasifica datasets tabulares sin depender de OpenAI.
+
+    Esto es un salvavidas para entornos sin credenciales de IA: detecta patrones
+    comunes en español/inglés y arma un mapping básico de columnas.
+    """
+
+    lower_columns = [col.lower() for col in columns]
+    used_columns: set[str] = set()
+
+    def _match(synonyms: list[str]) -> Optional[str]:
+        for original, lower in zip(columns, lower_columns):
+            if original in used_columns:
+                continue
+            if any(token in lower for token in synonyms):
+                used_columns.add(original)
+                return original
+        return None
+
+    mapping: Dict[str, str] = {}
+
+    # Campos de ventas
+    mapping["date"] = _match(["fecha", "date", "día", "dia"])
+    mapping["sku"] = _match(
+        ["sku", "codigo", "código", "producto", "product_id", "item", "articulo", "artículo", "sucursal", "tienda", "id"]
+    )
+    mapping["product_name"] = _match(
+        ["producto", "product", "item", "articulo", "artículo", "nombre", "descripcion", "categoría", "categoria"]
+    )
+    mapping["quantity"] = _match(["cantidad", "unidades", "qty", "ticket", "tickets"])
+    mapping["unit_price"] = _match(["precio", "price", "unit_price", "p.u", "pu", "importe_unitario"])
+    mapping["total"] = _match(["total", "venta", "ventas", "monto", "importe", "venta_neta", "neto", "facturacion", "ingreso"])
+    mapping["channel"] = _match(["canal", "channel", "sucursal", "tienda", "marketplace", "plataforma"])
+
+    # Campos de stock
+    mapping.setdefault("current_stock", _match(["stock_final", "stock", "inventario", "existencia", "stock_actual", "stock_inicial"]))
+    mapping.setdefault("category", _match(["categoria", "categoría", "familia", "rubro"]))
+    mapping.setdefault("unit_cost", _match(["costo", "coste", "unit_cost", "costo_unitario"]))
+    mapping.setdefault("location", _match(["almacen", "almacén", "bodega", "deposito", "depósito", "ubicacion", "sucursal", "tienda"]))
+
+    sales_signals = any(token in lc for lc in lower_columns for token in ["venta", "ticket", "factur", "precio"])
+    stock_signals = any(token in lc for lc in lower_columns for token in ["stock", "inventario", "existencia"])
+
+    dtype: Literal["sales", "stock", "unknown"] = "unknown"
+
+    if ("current_stock" in mapping and mapping["current_stock"]) or stock_signals:
+        dtype = "stock"
+    elif sales_signals or (mapping.get("date") and (mapping.get("total") or mapping.get("quantity"))):
+        dtype = "sales"
+
+    # Validar campos mínimos para no devolver falsos positivos
+    if dtype == "sales" and (not mapping.get("date") or not mapping.get("sku")):
+        dtype = "unknown"
+    if dtype == "stock" and (not mapping.get("sku") or not mapping.get("current_stock")):
+        dtype = "unknown"
+
+    return {"type": dtype, "columns": {k: v for k, v in mapping.items() if v}}
 
 
 def _normalize_sales(df: pd.DataFrame, mapping: Dict[str, str], source: str) -> pd.DataFrame:
@@ -336,9 +397,28 @@ def _ingest_dataframe(df: pd.DataFrame, source: str) -> Tuple[pd.DataFrame, Opti
     ai_result = classify_tabular_dataset(columns, sample_rows, STANDARD_SCHEMA_DOC)
 
     dtype = ai_result.get("type")
+    mapping = ai_result.get("columns") or {}
+    classification_source = "openai"
+    warnings: list[str] = []
+
+    ai_reason = ai_result.get("reason")
+    if ai_reason:
+        warnings.append(f"No se pudo usar OpenAI: {ai_reason}")
+
     if dtype not in {"sales", "stock", "unknown"}:
         dtype = "unknown"
-    mapping = ai_result.get("columns") or {}
+
+    if dtype == "unknown":
+        heuristic = _heuristic_classify(columns, sample_rows)
+        if heuristic.get("type") != "unknown":
+            dtype = heuristic.get("type")
+            mapping = heuristic.get("columns") or {}
+            classification_source = "heuristic"
+            if ai_reason:
+                warnings.append("Se aplicó el mapeo heurístico porque OpenAI no estuvo disponible.")
+        elif ai_reason:
+            warnings.append("OpenAI no disponible y heurística no pudo reconocer el archivo.")
+
     missing_required, missing_optional = _validate_required(dtype, mapping)
 
     if dtype == "unknown":
@@ -369,6 +449,8 @@ def _ingest_dataframe(df: pd.DataFrame, source: str) -> Tuple[pd.DataFrame, Opti
         "column_mapping": mapping,
         "missing_required": missing_required,
         "missing_optional": missing_optional,
+        "classification_source": classification_source,
+        "warnings": warnings,
     }
 
 
