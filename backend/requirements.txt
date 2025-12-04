@@ -16,3 +16,4 @@ PyJWT
 reportlab
 SQLAlchemy
 psycopg2-binary
+cryptography
