@@ -2,7 +2,8 @@ import React, { useEffect, useMemo, useState } from "react";
 import API_URL from "./api";
 
 const MercadoLibreIntegration = ({ onUnauthorized }) => {
-  const [appAlias, setAppAlias] = useState(localStorage.getItem("meliAppAlias") || "");
+  const APP_ALIAS = "informeBF – Conector Mercado Libre";
+  const [appAlias] = useState(APP_ALIAS);
   const [connection, setConnection] = useState(null);
   const [seller, setSeller] = useState(null);
   const [syncMessage, setSyncMessage] = useState("");
@@ -36,11 +37,6 @@ const MercadoLibreIntegration = ({ onUnauthorized }) => {
   };
 
   const loadStatus = async () => {
-    if (!appAlias.trim()) {
-      setConnection(null);
-      setSeller(null);
-      return;
-    }
     try {
       const data = await authorizedFetch(
         `${API_URL}/meli/status?app_alias=${encodeURIComponent(appAlias.trim())}`
@@ -62,12 +58,6 @@ const MercadoLibreIntegration = ({ onUnauthorized }) => {
   const handleConnect = async () => {
     setError("");
     setSyncMessage("");
-    if (!appAlias.trim()) {
-      setError("Debes escribir el alias de la app configurada por el admin.");
-      return;
-    }
-
-    localStorage.setItem("meliAppAlias", appAlias.trim());
     try {
       const data = await authorizedFetch(
         `${API_URL}/meli/auth?app_alias=${encodeURIComponent(appAlias.trim())}`
@@ -82,10 +72,6 @@ const MercadoLibreIntegration = ({ onUnauthorized }) => {
   };
 
   const handleSync = async () => {
-    if (!appAlias.trim()) {
-      setError("Define el alias de la app antes de sincronizar.");
-      return;
-    }
     setLoading(true);
     setError("");
     setSyncMessage("");
@@ -143,10 +129,10 @@ const MercadoLibreIntegration = ({ onUnauthorized }) => {
               <span className="text-xs font-semibold text-slate-600 dark:text-slate-200">Alias de la app</span>
               <input
                 value={appAlias}
-                onChange={(e) => setAppAlias(e.target.value)}
-                className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white/80 dark:bg-slate-800/60 px-3 py-2 text-sm"
-                placeholder="alias-configurado-por-admin"
+                readOnly
+                className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-800/60 px-3 py-2 text-sm text-slate-600"
               />
+              <p className="text-[11px] text-slate-500 dark:text-slate-400">Alias fijo configurado por el administrador.</p>
             </label>
             <div className="flex flex-wrap items-center gap-3">
               <button
