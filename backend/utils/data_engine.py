@@ -290,14 +290,23 @@ def harmonize_sales_data(df: pd.DataFrame, source: str = "files") -> Tuple[pd.Da
     sales["product_id"] = sales.get("sku") or sales.get("product")
     sales["product_name"] = sales.get("product")
     sales["date"] = pd.to_datetime(sales.get("date"), errors="coerce")
-    sales["quantity_sold"] = pd.to_numeric(sales.get("quantity", 1), errors="coerce").fillna(0)
-    sales["revenue"] = (
-        pd.to_numeric(sales.get("price", 0), errors="coerce").fillna(0) * sales["quantity_sold"]
-    )
-    sales["cost"] = pd.to_numeric(sales.get("cost", 0), errors="coerce").fillna(0)
+
+    def _numeric_series(values, default, index):
+        series = values if isinstance(values, (pd.Series, pd.Index)) else None
+        if series is None:
+            series = pd.Series(default, index=index, dtype=float)
+        return pd.to_numeric(series, errors="coerce").fillna(default)
+
+    sales["quantity_sold"] = _numeric_series(sales.get("quantity"), 1, sales.index)
+    price_series = _numeric_series(sales.get("price"), 0, sales.index)
+    sales["revenue"] = price_series * sales["quantity_sold"]
+    sales["cost"] = _numeric_series(sales.get("cost"), 0, sales.index)
     sales["margin"] = sales["revenue"] - (sales["cost"] * sales["quantity_sold"])
     sales["current_stock"] = np.nan
     sales["channel"] = source
+
+    if "category" not in sales:
+        sales["category"] = None
 
     columns = [
         "product_id",
@@ -323,13 +332,23 @@ def harmonize_stock_data(df: pd.DataFrame, source: str = "files") -> Tuple[pd.Da
 
     stock["product_id"] = stock.get("sku") or stock.get("product")
     stock["product_name"] = stock.get("product")
-    stock["current_stock"] = pd.to_numeric(stock.get("stock", 0), errors="coerce").fillna(0)
+
+    def _numeric_stock(values, default, index):
+        series = values if isinstance(values, (pd.Series, pd.Index)) else None
+        if series is None:
+            series = pd.Series(default, index=index, dtype=float)
+        return pd.to_numeric(series, errors="coerce").fillna(default)
+
+    stock["current_stock"] = _numeric_stock(stock.get("stock"), 0, stock.index)
     stock["quantity_sold"] = 0
     stock["revenue"] = 0
-    stock["cost"] = pd.to_numeric(stock.get("cost", 0), errors="coerce").fillna(0)
+    stock["cost"] = _numeric_stock(stock.get("cost"), 0, stock.index)
     stock["margin"] = 0
     stock["date"] = pd.NaT
     stock["channel"] = source
+
+    if "category" not in stock:
+        stock["category"] = None
 
     columns = [
         "product_id",
