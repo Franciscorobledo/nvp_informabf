@@ -6,6 +6,7 @@ import MercadoLibreIntegration from "./MercadoLibreIntegration";
 import DataUploadAnalysis from "../components/DataUploadAnalysis";
 import DataMovieModule from "../components/DataMovieModule";
 import DataComparisonModule from "../components/DataComparisonModule";
+import BusinessDashboards from "../components/BusinessDashboards";
 import {
   clearStoredSession,
   decodeTokenPayload,
@@ -196,6 +197,8 @@ const App = () => {
       return { page: "home", module: "movie" };
     if (path.startsWith("/modules/compare"))
       return { page: "home", module: "compare" };
+    if (path.startsWith("/modules/dashboards"))
+      return { page: "home", module: "dashboards" };
     if (path.startsWith("/integrations"))
       return { page: "integrations", module: "home" };
     if (path.startsWith("/config")) return { page: "config", module: "home" };
@@ -359,6 +362,7 @@ const App = () => {
       analyze: "/modules/analyze",
       movie: "/modules/movie",
       compare: "/modules/compare",
+      dashboards: "/modules/dashboards",
     };
 
     setActivePage("home");
@@ -409,6 +413,8 @@ const App = () => {
         return <DataMovieModule onUnauthorized={handleUnauthorized} />;
       case "compare":
         return <DataComparisonModule onUnauthorized={handleUnauthorized} />;
+      case "dashboards":
+        return <BusinessDashboards onUnauthorized={handleUnauthorized} />;
       default:
         return null;
     }
@@ -520,6 +526,22 @@ const App = () => {
                               <span className="font-semibold">Comparativa</span>
                               <span className="text-xs text-slate-500 dark:text-slate-300">Resultados lado a lado</span>
                             </div>
+                          </button>
+                          <button
+                            onClick={() => navigateToModule("dashboards")}
+                            className={`group flex w-full items-start gap-2 rounded-xl px-3 py-2 text-sm text-left transition-all duration-200 hover:-translate-y-0.5 ${
+                              currentModule === "dashboards"
+                                ? "bg-blue-600 text-white shadow-lg shadow-blue-500/30"
+                                : "text-slate-700 dark:text-slate-100 hover:bg-slate-100/80 dark:hover:bg-slate-800/70"
+                            }`}
+                          >
+                            <div className="flex flex-col gap-0.5">
+                              <span className="font-semibold">Dashboards</span>
+                              <span className="text-xs text-slate-500 dark:text-slate-300">Ventas y stock</span>
+                            </div>
+                            <span className="rounded-full bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-200 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide">
+                              Nuevo
+                            </span>
                           </button>
                         </div>
                       )}
@@ -669,6 +691,19 @@ const App = () => {
                     }`}
                   >
                     <span className="flex-1 text-left">Comparativa</span>
+                  </button>
+                  <button
+                    onClick={() => navigateToModule("dashboards")}
+                    className={`flex items-center gap-2 w-full rounded-xl px-3 py-2 text-sm font-semibold transition-all duration-200 hover:-translate-y-0.5 ${
+                      currentModule === "dashboards"
+                        ? "bg-blue-600 text-white shadow-lg shadow-blue-500/30"
+                        : "text-slate-800 dark:text-slate-100 bg-slate-100/80 dark:bg-slate-800/70"
+                    }`}
+                  >
+                    <span className="flex-1 text-left">Dashboards</span>
+                    <span className="rounded-full bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-200 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide">
+                      Nuevo
+                    </span>
                   </button>
                 </div>
 
