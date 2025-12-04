@@ -10,7 +10,7 @@ const HomeView = ({ onNavigate }) => {
         subtitle="Selecciona el módulo que necesitas: ventas, stock o integraciones"
         badge="Inicio"
       />
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
         <ModuleCard
           title="Ventas"
           description="KPIs automáticos y vistas manuales"
@@ -24,6 +24,20 @@ const HomeView = ({ onNavigate }) => {
           badge="Inventario"
           actionLabel="Abrir módulo"
           onAction={() => onNavigate?.("stock")}
+        />
+        <ModuleCard
+          title="Comparativas"
+          description="Mes vs mes, categoría y períodos"
+          badge="Analítica"
+          actionLabel="Abrir módulo"
+          onAction={() => onNavigate?.("comparatives")}
+        />
+        <ModuleCard
+          title="Report Builder"
+          description="Métrica + dimensión + visualización"
+          badge="Personalizado"
+          actionLabel="Abrir módulo"
+          onAction={() => onNavigate?.("reports")}
         />
         <ModuleCard
           title="Datos / Integraciones"
