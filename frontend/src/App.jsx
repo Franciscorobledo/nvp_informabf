@@ -199,7 +199,7 @@ const App = () => {
     if (path.startsWith("/integrations"))
       return { page: "integrations", module: "home" };
     if (path.startsWith("/config")) return { page: "config", module: "home" };
-    return { page: "home", module: "home" };
+    return { page: "home", module: "analyze" };
   };
 
   const initialNavigation = getNavigationFromPath(window.location.pathname);
@@ -278,6 +278,7 @@ const App = () => {
 
     setSessionMessage("");
     setUser({ username: data.username, role: data.role || "user" });
+    setCurrentModule("analyze");
   };
 
   const handleLogout = (eventOrMessage = "") => {
@@ -339,7 +340,7 @@ const App = () => {
       setCurrentModule("home");
     } else {
       window.history.pushState({ page }, "", "/");
-      setCurrentModule("home");
+      setCurrentModule("analyze");
     }
   };
 
@@ -401,6 +402,7 @@ const App = () => {
             onUnauthorized={handleUnauthorized}
             onDataReceived={(data) => console.log("📈 Resultado del análisis:", data)}
             onNavigateModule={navigateToModule}
+            onOpenIntegrations={() => navigateTo("integrations")}
           />
         );
       case "movie":
@@ -748,9 +750,11 @@ const App = () => {
                 <MercadoLibreIntegration onUnauthorized={handleUnauthorized} />
               ) : (
                 <>
-                  <HomeModules onUnauthorized={handleUnauthorized} />
+                  <div ref={moduleContentRef} className="space-y-8">
+                    {renderModuleContent()}
+                  </div>
 
-                  <div ref={moduleContentRef}>{renderModuleContent()}</div>
+                  <HomeModules onUnauthorized={handleUnauthorized} />
                 </>
               )}
             </main>
