@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
+import API_URL from "../src/api";
 import {
   Bar,
   BarChart,
@@ -46,6 +47,11 @@ const FileUpload = ({ onDataReceived, onUnauthorized, onNavigateModule }) => {
   const [galleryMode, setGalleryMode] = useState("static");
   const [interactiveLimit, setInteractiveLimit] = useState(10);
   const [isDragging, setIsDragging] = useState(false);
+  const [meliAccounts, setMeliAccounts] = useState([]);
+  const [selectedMeliAccount, setSelectedMeliAccount] = useState("");
+  const [meliDataset, setMeliDataset] = useState("orders");
+  const [meliLoading, setMeliLoading] = useState(false);
+  const [meliError, setMeliError] = useState("");
   const [persistedDatasetId, setPersistedDatasetId] = useState(() => {
     if (typeof window === "undefined") return null;
     return localStorage.getItem("lastDatasetId");
@@ -147,6 +153,32 @@ const FileUpload = ({ onDataReceived, onUnauthorized, onNavigateModule }) => {
   }, [drivePickerReady, googleClientId]);
 
   useEffect(() => {
+    const fetchMeliAccounts = async () => {
+      const token = localStorage.getItem("token");
+      if (!token) return;
+      try {
+        const res = await fetch(`${API_URL}/mercadolibre/credentials`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (res.status === 401 || res.status === 403) {
+          onUnauthorized?.("Tu sesión expiró. Inicia sesión nuevamente.");
+          return;
+        }
+        if (!res.ok) return;
+        const data = await res.json();
+        setMeliAccounts(data || []);
+        if (data?.length && !selectedMeliAccount) {
+          setSelectedMeliAccount(String(data[0].id));
+        }
+      } catch (error) {
+        console.error("No se pudieron cargar las cuentas de MercadoLibre", error);
+      }
+    };
+
+    fetchMeliAccounts();
+  }, []);
+
+  useEffect(() => {
     if (!jobId || !polling) return;
     const token = localStorage.getItem("token");
     if (!token) {
@@ -155,12 +187,12 @@ const FileUpload = ({ onDataReceived, onUnauthorized, onNavigateModule }) => {
       return;
     }
 
-    const API_URL = import.meta.env.VITE_API_URL || "http://localhost:1000";
+    const apiBase = API_URL;
     let cancelled = false;
 
     const fetchStatus = async () => {
       try {
-        const res = await fetch(`${API_URL}/analyze/status/${jobId}`, {
+        const res = await fetch(`${apiBase}/analyze/status/${jobId}`, {
           headers: { Authorization: `Bearer ${token}` },
         });
 
@@ -638,10 +670,10 @@ const FileUpload = ({ onDataReceived, onUnauthorized, onNavigateModule }) => {
     setLoading(true);
 
     try {
-      const API_URL = import.meta.env.VITE_API_URL || "http://localhost:1000";
-      console.log("🌐 Iniciando análisis en:", `${API_URL}/analyze/start`);
+      const apiBase = API_URL;
+      console.log("🌐 Iniciando análisis en:", `${apiBase}/analyze/start`);
 
-      const res = await axios.post(`${API_URL}/analyze/start`, formData, {
+      const res = await axios.post(`${apiBase}/analyze/start`, formData, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -697,10 +729,10 @@ const FileUpload = ({ onDataReceived, onUnauthorized, onNavigateModule }) => {
     setGalleryMode("interactive");
 
     const token = localStorage.getItem("token");
-    const API_URL = import.meta.env.VITE_API_URL || "http://localhost:1000";
+    const apiBase = API_URL;
     try {
       const res = await fetch(
-        `${API_URL}/demo/analyze?scenario=ventas_demo`,
+        `${apiBase}/demo/analyze?scenario=ventas_demo`,
         {
           headers: token ? { Authorization: `Bearer ${token}` } : {},
         }
@@ -738,6 +770,63 @@ const FileUpload = ({ onDataReceived, onUnauthorized, onNavigateModule }) => {
     }
   };
 
+  const handleMercadoLibreAnalyze = async () => {
+    setMeliError("");
+    if (!selectedMeliAccount) {
+      setMeliError("Configura primero una cuenta de MercadoLibre desde Integraciones.");
+      return;
+    }
+
+    const token = localStorage.getItem("token");
+    if (!token) {
+      onUnauthorized?.("Tu sesión expiró. Inicia sesión nuevamente.");
+      return;
+    }
+
+    setMeliLoading(true);
+    setAnalysis(null);
+    setAiCharts([]);
+    setStatusMessage("Consultando MercadoLibre…");
+    setAnalysisError("");
+    setResultNotice("");
+    setIsAnalyzing(true);
+
+    try {
+      const res = await fetch(
+        `${API_URL}/mercadolibre/credentials/${selectedMeliAccount}/analyze/${meliDataset}`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+
+      if ([401, 403].includes(res.status)) {
+        onUnauthorized?.("Tu sesión expiró. Vuelve a iniciar sesión.");
+        setIsAnalyzing(false);
+        return;
+      }
+
+      if (!res.ok) {
+        const msg = await res.text();
+        throw new Error(msg || "No se pudo analizar la data de MercadoLibre.");
+      }
+
+      const data = await res.json();
+      setAnalysis(data);
+      setAiCharts(generateAiCharts(data.sample));
+      setStatusMessage("Análisis listo desde MercadoLibre");
+      setDisplayProgress(100);
+      setResultNotice("Datos sincronizados correctamente. Explora los gráficos sugeridos.");
+      onDataReceived?.(data);
+    } catch (error) {
+      console.error("Error analizando datos de MercadoLibre:", error);
+      setAnalysisError(error.message || "No se pudo analizar la data de MercadoLibre.");
+      setResultNotice("Revisa las credenciales y que la cuenta tenga órdenes recientes.");
+    } finally {
+      setMeliLoading(false);
+      setIsAnalyzing(false);
+    }
+  };
+
   const handleDownloadReport = async () => {
     if (!analysis) return;
     const token = localStorage.getItem("token");
@@ -748,8 +837,8 @@ const FileUpload = ({ onDataReceived, onUnauthorized, onNavigateModule }) => {
 
     try {
       setDownloading(true);
-      const API_URL = import.meta.env.VITE_API_URL || "http://localhost:1000";
-      const res = await fetch(`${API_URL}/report`, {
+      const apiBase = API_URL;
+      const res = await fetch(`${apiBase}/report`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -801,8 +890,8 @@ const FileUpload = ({ onDataReceived, onUnauthorized, onNavigateModule }) => {
     try {
       setSendingReport(true);
       setEmailFeedback("");
-      const API_URL = import.meta.env.VITE_API_URL || "http://localhost:1000";
-      const res = await fetch(`${API_URL}/report/email`, {
+      const apiBase = API_URL;
+      const res = await fetch(`${apiBase}/report/email`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -1146,6 +1235,65 @@ const FileUpload = ({ onDataReceived, onUnauthorized, onNavigateModule }) => {
             >
               Probar con datos de ejemplo
             </AppButton>
+          </div>
+
+          <div className="rounded-2xl border border-emerald-200 dark:border-emerald-800 bg-emerald-50/60 dark:bg-emerald-900/30 p-4 space-y-3 mt-4">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-xs uppercase tracking-[0.18em] text-emerald-700 dark:text-emerald-200">MercadoLibre</p>
+                <h4 className="text-lg font-semibold text-slate-900 dark:text-white">Analizar data en un clic</h4>
+                <p className="text-sm text-slate-700 dark:text-slate-200">Usa tus tokens OAuth guardados para sincronizar ventas y métricas sin subir archivos.</p>
+              </div>
+              <span className="rounded-full bg-white/80 dark:bg-slate-800/70 px-3 py-1 text-[11px] font-semibold text-emerald-700 dark:text-emerald-100">Beta</span>
+            </div>
+
+            {meliAccounts.length === 0 ? (
+              <p className="text-sm text-emerald-900 dark:text-emerald-100">
+                Configura una cuenta en Integraciones → MercadoLibre para habilitar este acceso directo.
+              </p>
+            ) : (
+              <div className="grid gap-3 sm:grid-cols-[1.2fr_0.8fr_0.8fr] items-end">
+                <label className="space-y-1">
+                  <span className="text-xs font-semibold text-slate-700 dark:text-slate-200">Cuenta</span>
+                  <select
+                    value={selectedMeliAccount}
+                    onChange={(e) => setSelectedMeliAccount(e.target.value)}
+                    className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white/90 dark:bg-slate-900/60 px-3 py-2 text-sm"
+                  >
+                    {meliAccounts.map((account) => (
+                      <option key={account.id} value={account.id}>
+                        {account.account_name} ({account.country_code})
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className="space-y-1">
+                  <span className="text-xs font-semibold text-slate-700 dark:text-slate-200">Dataset</span>
+                  <select
+                    value={meliDataset}
+                    onChange={(e) => setMeliDataset(e.target.value)}
+                    className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white/90 dark:bg-slate-900/60 px-3 py-2 text-sm"
+                  >
+                    <option value="orders">Órdenes y ventas</option>
+                  </select>
+                </label>
+
+                <AppButton
+                  onClick={handleMercadoLibreAnalyze}
+                  loading={meliLoading}
+                  disabled={!selectedMeliAccount}
+                  loadingText="Sincronizando..."
+                  fullWidth
+                >
+                  Analizar data de MercadoLibre
+                </AppButton>
+              </div>
+            )}
+
+            {meliError && (
+              <p className="text-sm text-red-700 dark:text-red-300">{meliError}</p>
+            )}
           </div>
         </div>
       </div>

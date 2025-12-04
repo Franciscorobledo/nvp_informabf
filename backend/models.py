@@ -22,6 +22,11 @@ class User(Base):
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
     api_usage = relationship("ApiUsage", back_populates="user", cascade="all, delete-orphan")
+    mercadolibre_credentials = relationship(
+        "MercadoLibreCredential",
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
 
 
 class DeletedUser(Base):
@@ -63,3 +68,25 @@ class ApiUsage(Base):
         if self.user:
             return self.user.username
         return self.username
+
+
+class MercadoLibreCredential(Base):
+    __tablename__ = "mercadolibre_credentials"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    account_name = Column(String, default="Principal", nullable=False)
+    client_id = Column(String, nullable=False)
+    client_secret_encrypted = Column(String, nullable=False)
+    redirect_uri = Column(String, nullable=False)
+    country_code = Column(String, nullable=False)
+    webhook_url = Column(String, nullable=True)
+    seller_id = Column(String, nullable=True)
+    nickname = Column(String, nullable=True)
+    access_token_encrypted = Column(String, nullable=True)
+    refresh_token_encrypted = Column(String, nullable=True)
+    access_token_expires_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    user = relationship("User", back_populates="mercadolibre_credentials")

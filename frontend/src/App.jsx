@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import Login from "./Login";
 import HomeModules from "../components/HomeModules";
 import ConfigurationPage from "./ConfigurationPage";
+import MercadoLibreIntegration from "./MercadoLibreIntegration";
 import DataUploadAnalysis from "../components/DataUploadAnalysis";
 import DataMovieModule from "../components/DataMovieModule";
 import DataComparisonModule from "../components/DataComparisonModule";
@@ -195,6 +196,8 @@ const App = () => {
       return { page: "home", module: "movie" };
     if (path.startsWith("/modules/compare"))
       return { page: "home", module: "compare" };
+    if (path.startsWith("/integrations"))
+      return { page: "integrations", module: "home" };
     if (path.startsWith("/config")) return { page: "config", module: "home" };
     return { page: "home", module: "home" };
   };
@@ -330,6 +333,9 @@ const App = () => {
 
     if (page === "config") {
       window.history.pushState({ page }, "", "/config");
+      setCurrentModule("home");
+    } else if (page === "integrations") {
+      window.history.pushState({ page }, "", "/integrations");
       setCurrentModule("home");
     } else {
       window.history.pushState({ page }, "", "/");
@@ -517,6 +523,18 @@ const App = () => {
                       )}
                     </div>
 
+                    <button
+                      onClick={() => navigateTo("integrations")}
+                      className={`group flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold transition-all duration-200 ${
+                        activePage === "integrations"
+                          ? "bg-emerald-600 text-white shadow-lg shadow-emerald-500/30"
+                          : "text-slate-700 dark:text-slate-100 hover:bg-slate-100/70 dark:hover:bg-slate-800/70"
+                      }`}
+                    >
+                      <SparklesIcon className="h-4 w-4 transition-transform duration-200 group-hover:-translate-y-0.5" />
+                      Integraciones
+                    </button>
+
                     {user?.role === "admin" && (
                       <button
                         onClick={() => navigateTo("config")}
@@ -652,6 +670,18 @@ const App = () => {
                   </button>
                 </div>
 
+                <button
+                  onClick={() => navigateTo("integrations")}
+                  className={`flex items-center gap-2 w-full rounded-xl px-3 py-2 text-sm font-semibold transition-all duration-200 hover:-translate-y-0.5 ${
+                    activePage === "integrations"
+                      ? "bg-emerald-600 text-white shadow-lg shadow-emerald-500/30"
+                      : "text-slate-800 dark:text-slate-100 bg-slate-100/80 dark:bg-slate-800/70"
+                  }`}
+                >
+                  <SparklesIcon className="h-4 w-4" />
+                  Integraciones
+                </button>
+
                 {user?.role === "admin" && (
                   <button
                     onClick={() => navigateTo("config")}
@@ -714,6 +744,8 @@ const App = () => {
                   user={user}
                   onUnauthorized={handleUnauthorized}
                 />
+              ) : activePage === "integrations" ? (
+                <MercadoLibreIntegration onUnauthorized={handleUnauthorized} />
               ) : (
                 <>
                   <HomeModules
