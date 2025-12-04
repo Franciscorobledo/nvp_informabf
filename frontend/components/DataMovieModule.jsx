@@ -3,6 +3,7 @@ import DataMoviePlayer from "./DataMoviePlayer";
 import AppButton from "./AppButton";
 import LoadingBar from "./LoadingBar";
 import focusOptions from "./focusOptions";
+import UploadDropzone from "./UploadDropzone";
 
 const DataMovieModule = ({ onUnauthorized }) => {
   const [file, setFile] = useState(null);
@@ -166,22 +167,17 @@ const DataMovieModule = ({ onUnauthorized }) => {
         </div>
 
         <div className="space-y-3">
-          <label
-            htmlFor="data-movie-file"
-            className="block text-sm font-semibold text-gray-700 dark:text-slate-100"
-          >
+          <p className="block text-sm font-semibold text-gray-700 dark:text-slate-100">
             📁 Archivo base
-          </label>
-          <input
-            id="data-movie-file"
-            type="file"
-            accept=".csv, .xlsx"
-            onChange={(event) => setFile(event.target.files?.[0] || null)}
-            className="w-full rounded-xl border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-400 dark:text-slate-100"
-          />
-          <p className="text-xs text-gray-500 dark:text-slate-400">
-            Se admite un solo archivo .CSV o .XLSX para esta vista dedicada.
           </p>
+          <UploadDropzone
+            id="data-movie-file"
+            accept=".csv,.xlsx"
+            onFileSelect={(selected) => setFile(selected || null)}
+            helperText="Formatos permitidos: CSV, XLSX. Peso máximo recomendado: 1MB."
+            description="Selecciona o arrastra el archivo que quieres convertir en narrativa visual."
+            selectedFileName={file?.name}
+          />
         </div>
       </div>
 
