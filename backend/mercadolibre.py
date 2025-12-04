@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import uuid
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
@@ -11,9 +12,9 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, HttpUrl
 from sqlalchemy.orm import Session
 
-from auth import get_current_user
+from auth import admin_required, get_current_user
 from database import get_db
-from models import MercadoLibreCredential
+from models import MLApp, MLUserConnection, MercadoLibreCredential, User
 from utils.crypto_utils import decrypt_value, encrypt_value
 from analysis import analyze_file
 import pandas as pd
@@ -21,6 +22,8 @@ from utils.data_engine import standardize_dataframe
 
 
 router = APIRouter(prefix="/mercadolibre", tags=["MercadoLibre"])
+ml_admin_router = APIRouter(prefix="/admin/ml", tags=["MercadoLibre Admin"], dependencies=[Depends(admin_required)])
+meli_router = APIRouter(prefix="/meli", tags=["MercadoLibre OAuth"])
 
 SITE_DOMAINS = {
     "MLA": "com.ar",
@@ -34,6 +37,12 @@ SITE_DOMAINS = {
     "MCR": "cr",
     "MBO": "com.bo",
 }
+
+USE_MELI_STUB = (
+    os.getenv("USE_MELI_STUB", "true" if os.getenv("PYTEST_CURRENT_TEST") else "false")
+    .lower()
+    in {"1", "true", "yes"}
+)
 
 DEMO_CREDENTIAL = {
     "account_name": "Cuenta demo MercadoLibre",
@@ -199,6 +208,41 @@ class CredentialOut(BaseModel):
         orm_mode = True
 
 
+class MLAppPayload(BaseModel):
+    alias: str
+    site_id: str
+    client_id: str
+    client_secret: Optional[str] = None
+    redirect_uri: HttpUrl
+    webhook_url: Optional[HttpUrl] = None
+
+
+class MLAppOut(BaseModel):
+    id: int
+    alias: str
+    site_id: str
+    client_id: str
+    redirect_uri: str
+    webhook_url: Optional[str]
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        orm_mode = True
+
+
+class MLConnectionOut(BaseModel):
+    id: int
+    app_alias: str
+    seller_id: Optional[str]
+    nickname: Optional[str]
+    updated_at: Optional[datetime]
+    expires_at: Optional[datetime]
+
+    class Config:
+        orm_mode = True
+
+
 def _get_country_domain(country_code: str) -> str:
     return SITE_DOMAINS.get(country_code.upper(), "com")
 
@@ -215,6 +259,403 @@ def _demo_credential_out() -> CredentialOut:
         has_tokens=True,
         updated_at=datetime.utcnow(),
     )
+
+
+def _normalize_alias(alias: str) -> str:
+    return alias.strip().lower()
+
+
+def _mask_secret(secret: Optional[str]) -> str:
+    if not secret:
+        return ""
+    return "•" * min(len(secret), 8)
+
+
+def _app_to_out(app: MLApp) -> MLAppOut:
+    return MLAppOut(
+        id=app.id,
+        alias=app.alias,
+        site_id=app.site_id,
+        client_id=app.client_id,
+        redirect_uri=app.redirect_uri,
+        webhook_url=app.webhook_url,
+        created_at=app.created_at,
+        updated_at=app.updated_at,
+    )
+
+
+def _get_app_or_404(db: Session, *, app_id: Optional[int] = None, alias: Optional[str] = None) -> MLApp:
+    query = db.query(MLApp)
+    if app_id:
+        query = query.filter(MLApp.id == app_id)
+    if alias:
+        query = query.filter(MLApp.alias == _normalize_alias(alias))
+    app = query.first()
+    if not app:
+        raise HTTPException(status_code=404, detail="Aplicación de Mercado Libre no encontrada")
+    return app
+
+
+def _build_state(app_id: int, user_id: int) -> str:
+    return f"{app_id}:{user_id}:{uuid.uuid4()}"
+
+
+def _perform_token_request(app: MLApp, payload: dict[str, Any]) -> dict[str, Any]:
+    if USE_MELI_STUB:
+        return {
+            "access_token": f"TEST_TOKEN_{uuid.uuid4().hex[:8]}",
+            "refresh_token": f"TEST_REFRESH_{uuid.uuid4().hex[:8]}",
+            "expires_in": 3600,
+            "user_id": "TEST_SELLER_ID",
+            "nickname": "Seller Demo",
+        }
+
+    res = requests.post("https://api.mercadolibre.com/oauth/token", data=payload, timeout=20)
+    if not res.ok:
+        logging.error("MercadoLibre token request failed: %s", res.text)
+        raise HTTPException(status_code=400, detail="No se pudo obtener token de Mercado Libre")
+    return res.json()
+
+
+def _authorization_url_for_app(app: MLApp, state: str) -> str:
+    domain = _get_country_domain(app.site_id)
+    base_url = f"https://auth.mercadolibre.{domain}/authorization"
+    params = {
+        "response_type": "code",
+        "client_id": app.client_id,
+        "redirect_uri": app.redirect_uri,
+        "state": state,
+    }
+    return f"{base_url}?{urlencode(params)}"
+
+
+def _store_user_tokens(db: Session, user: User, app: MLApp, payload: dict[str, Any]) -> MLUserConnection:
+    access_token = payload.get("access_token")
+    if not access_token:
+        raise HTTPException(status_code=400, detail="Mercado Libre no devolvió access_token")
+
+    expires_in = payload.get("expires_in") or 0
+    refresh_token = payload.get("refresh_token")
+    seller_id = payload.get("user_id")
+    nickname = payload.get("nickname")
+
+    connection = (
+        db.query(MLUserConnection)
+        .filter(MLUserConnection.user_id == user.id, MLUserConnection.app_id == app.id)
+        .first()
+    )
+
+    if not connection:
+        connection = MLUserConnection(user_id=user.id, app_id=app.id)
+
+    connection.access_token_encrypted = encrypt_value(access_token)
+    if refresh_token:
+        connection.refresh_token_encrypted = encrypt_value(refresh_token)
+    connection.expires_at = datetime.utcnow() + timedelta(seconds=expires_in) if expires_in else None
+    connection.updated_at = datetime.utcnow()
+    connection.seller_id = seller_id or connection.seller_id
+    connection.nickname = nickname or connection.nickname
+
+    db.add(connection)
+    db.commit()
+    db.refresh(connection)
+    return connection
+
+
+def _ensure_connection_token(db: Session, connection: MLUserConnection, app: MLApp) -> str:
+    now = datetime.utcnow()
+    if connection.expires_at and connection.expires_at > now + timedelta(minutes=2):
+        token = decrypt_value(connection.access_token_encrypted)
+        if token:
+            return token
+
+    refresh_token = decrypt_value(connection.refresh_token_encrypted)
+    if not refresh_token:
+        raise HTTPException(status_code=400, detail="No hay refresh_token guardado para este usuario")
+
+    payload = {
+        "grant_type": "refresh_token",
+        "client_id": app.client_id,
+        "client_secret": decrypt_value(app.client_secret_encrypted),
+        "refresh_token": refresh_token,
+    }
+    data = _perform_token_request(app, payload)
+    connection = _store_user_tokens(db, connection.user, app, data)
+    token = decrypt_value(connection.access_token_encrypted)
+    if not token:
+        raise HTTPException(status_code=500, detail="No se pudo regenerar el token")
+    return token
+
+
+def _meli_get_connection(app: MLApp, connection: MLUserConnection, db: Session, url: str, params: Optional[dict[str, Any]] = None) -> dict[str, Any]:
+    token = _ensure_connection_token(db, connection, app)
+    res = requests.get(url, headers={"Authorization": f"Bearer {token}"}, params=params, timeout=20)
+    if res.status_code == 401:
+        token = _ensure_connection_token(db, connection, app)
+        res = requests.get(url, headers={"Authorization": f"Bearer {token}"}, params=params, timeout=20)
+    if not res.ok:
+        logging.error("MercadoLibre GET %s falló: %s", url, res.text)
+        raise HTTPException(status_code=400, detail=f"MercadoLibre devolvió error: {res.text}")
+    return res.json()
+
+
+def _fetch_seller_profile(db: Session, app: MLApp, connection: MLUserConnection) -> dict[str, Any]:
+    if USE_MELI_STUB:
+        connection.seller_id = connection.seller_id or "TEST_SELLER_ID"
+        connection.nickname = connection.nickname or "Seller Demo"
+        connection.updated_at = datetime.utcnow()
+        db.add(connection)
+        db.commit()
+        return {"id": connection.seller_id, "nickname": connection.nickname}
+
+    try:
+        data = _meli_get_connection(app, connection, db, "https://api.mercadolibre.com/users/me")
+        connection.seller_id = data.get("id") or connection.seller_id
+        connection.nickname = data.get("nickname") or connection.nickname
+        connection.updated_at = datetime.utcnow()
+        db.add(connection)
+        db.commit()
+        return data
+    except HTTPException:
+        return {"id": connection.seller_id, "nickname": connection.nickname}
+
+
+def _connection_to_out(connection: MLUserConnection) -> MLConnectionOut:
+    return MLConnectionOut(
+        id=connection.id,
+        app_alias=connection.app.alias if connection.app else "",
+        seller_id=connection.seller_id,
+        nickname=connection.nickname,
+        updated_at=connection.updated_at,
+        expires_at=connection.expires_at,
+    )
+
+
+def _get_connection_for_user(db: Session, user: User, app_alias: str) -> tuple[MLApp, MLUserConnection]:
+    app = _get_app_or_404(db, alias=app_alias)
+    connection = (
+        db.query(MLUserConnection)
+        .filter(MLUserConnection.app_id == app.id, MLUserConnection.user_id == user.id)
+        .first()
+    )
+    if not connection:
+        raise HTTPException(status_code=404, detail="No tienes conexión activa con Mercado Libre")
+    return app, connection
+
+
+def _sync_orders_payload(app: MLApp, connection: MLUserConnection, db: Session) -> dict[str, Any]:
+    if USE_MELI_STUB:
+        return DEMO_ORDERS
+
+    seller_id = connection.seller_id
+    if not seller_id:
+        seller = _fetch_seller_profile(db, app, connection)
+        seller_id = seller.get("id")
+
+    params = {"seller": seller_id, "order.status": "paid", "limit": 50}
+    return _meli_get_connection(app, connection, db, "https://api.mercadolibre.com/orders/search", params=params)
+
+
+def _sync_inventory_payload(app: MLApp, connection: MLUserConnection, db: Session) -> dict[str, Any]:
+    if USE_MELI_STUB:
+        return {"active": DEMO_ACTIVE_LISTINGS, "paused": DEMO_PAUSED_LISTINGS}
+
+    seller_id = connection.seller_id
+    if not seller_id:
+        seller = _fetch_seller_profile(db, app, connection)
+        seller_id = seller.get("id")
+
+    def _listings(status: str) -> dict[str, Any]:
+        params = {"seller": seller_id, "status": status, "limit": 50}
+        ids = _meli_get_connection(
+            app,
+            connection,
+            db,
+            "https://api.mercadolibre.com/users/{seller_id}/items/search".format(seller_id=seller_id),
+            params=params,
+        ).get("results", [])
+        details = [
+            _meli_get_connection(app, connection, db, f"https://api.mercadolibre.com/items/{item_id}")
+            for item_id in ids[:20]
+        ]
+        return {"item_ids": ids, "details": details}
+
+    return {"active": _listings("active"), "paused": _listings("paused")}
+
+
+# ==============================
+# ADMIN: CRUD DE APPS
+# ==============================
+
+
+@ml_admin_router.get("/apps", response_model=List[MLAppOut])
+def list_apps(db: Session = Depends(get_db)):
+    apps = db.query(MLApp).order_by(MLApp.created_at.desc()).all()
+    return [_app_to_out(app) for app in apps]
+
+
+@ml_admin_router.post("/apps", response_model=MLAppOut)
+def create_app(payload: MLAppPayload, db: Session = Depends(get_db)):
+    alias = _normalize_alias(payload.alias)
+    if db.query(MLApp).filter(MLApp.alias == alias).first():
+        raise HTTPException(status_code=400, detail="Ya existe una app con este alias")
+
+    if not payload.client_secret:
+        raise HTTPException(status_code=400, detail="client_secret es obligatorio")
+
+    app = MLApp(
+        alias=alias,
+        site_id=payload.site_id.upper(),
+        client_id=payload.client_id.strip(),
+        client_secret_encrypted=encrypt_value(payload.client_secret.strip()),
+        redirect_uri=str(payload.redirect_uri),
+        webhook_url=str(payload.webhook_url) if payload.webhook_url else None,
+        created_at=datetime.utcnow(),
+        updated_at=datetime.utcnow(),
+    )
+    db.add(app)
+    db.commit()
+    db.refresh(app)
+    return _app_to_out(app)
+
+
+@ml_admin_router.put("/apps/{app_id}", response_model=MLAppOut)
+def update_app(app_id: int, payload: MLAppPayload, db: Session = Depends(get_db)):
+    app = _get_app_or_404(db, app_id=app_id)
+    alias = _normalize_alias(payload.alias)
+
+    existing = db.query(MLApp).filter(MLApp.alias == alias, MLApp.id != app_id).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="El alias ya está en uso")
+
+    app.alias = alias
+    app.site_id = payload.site_id.upper()
+    app.client_id = payload.client_id.strip()
+    app.redirect_uri = str(payload.redirect_uri)
+    app.webhook_url = str(payload.webhook_url) if payload.webhook_url else None
+    if payload.client_secret:
+        app.client_secret_encrypted = encrypt_value(payload.client_secret.strip())
+    app.updated_at = datetime.utcnow()
+
+    db.add(app)
+    db.commit()
+    db.refresh(app)
+    return _app_to_out(app)
+
+
+@ml_admin_router.delete("/apps/{app_id}")
+def delete_app(app_id: int, db: Session = Depends(get_db)):
+    app = _get_app_or_404(db, app_id=app_id)
+    db.delete(app)
+    db.commit()
+    return {"detail": "Aplicación eliminada"}
+
+
+@ml_admin_router.post("/apps/{app_id}/test")
+def test_app_connection(app_id: int, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
+    app = _get_app_or_404(db, app_id=app_id)
+    state = _build_state(app.id, current_user.id)
+    return {
+        "authorization_url": _authorization_url_for_app(app, state),
+        "state": state,
+        "client_secret_masked": _mask_secret(decrypt_value(app.client_secret_encrypted)),
+    }
+
+
+# ==============================
+# USUARIO: OAUTH & SINCRONIZACIÓN
+# ==============================
+
+
+@meli_router.get("/auth")
+def start_user_auth(app_alias: str, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
+    app = _get_app_or_404(db, alias=app_alias)
+    state = _build_state(app.id, current_user.id)
+    return {
+        "authorization_url": _authorization_url_for_app(app, state),
+        "state": state,
+        "app_alias": app.alias,
+    }
+
+
+@meli_router.get("/callback")
+def handle_callback(code: str, state: str, db: Session = Depends(get_db)):
+    try:
+        app_id_str, user_id_str, *_ = state.split(":")
+        app_id = int(app_id_str)
+        user_id = int(user_id_str)
+    except Exception:  # noqa: BLE001
+        raise HTTPException(status_code=400, detail="Estado inválido")
+
+    app = _get_app_or_404(db, app_id=app_id)
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado para el callback")
+
+    payload = {
+        "grant_type": "authorization_code",
+        "client_id": app.client_id,
+        "client_secret": decrypt_value(app.client_secret_encrypted),
+        "code": code,
+        "redirect_uri": app.redirect_uri,
+    }
+    data = _perform_token_request(app, payload)
+    connection = _store_user_tokens(db, user, app, data)
+    seller = _fetch_seller_profile(db, app, connection)
+    return {
+        "detail": "Cuenta vinculada correctamente",
+        "connection": _connection_to_out(connection),
+        "seller": seller,
+    }
+
+
+class RefreshPayload(BaseModel):
+    app_alias: str
+
+
+@meli_router.post("/refresh")
+def refresh_connection(payload: RefreshPayload, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
+    app, connection = _get_connection_for_user(db, current_user, payload.app_alias)
+    token = _ensure_connection_token(db, connection, app)
+    return {"access_token": token, "expires_at": connection.expires_at}
+
+
+class DisconnectPayload(BaseModel):
+    app_alias: str
+
+
+@meli_router.post("/disconnect")
+def disconnect_account(payload: DisconnectPayload, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
+    app, connection = _get_connection_for_user(db, current_user, payload.app_alias)
+    db.delete(connection)
+    db.commit()
+    return {"detail": f"Conexión con {app.alias} eliminada"}
+
+
+@meli_router.get("/status", response_model=Optional[MLConnectionOut])
+def connection_status(app_alias: str, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
+    try:
+        _, connection = _get_connection_for_user(db, current_user, app_alias)
+        return _connection_to_out(connection)
+    except HTTPException:
+        return None
+
+
+@meli_router.get("/sync")
+def sync_data(app_alias: str, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
+    app, connection = _get_connection_for_user(db, current_user, app_alias)
+    seller = _fetch_seller_profile(db, app, connection)
+    orders = _sync_orders_payload(app, connection, db)
+    inventory = _sync_inventory_payload(app, connection, db)
+    connection.updated_at = datetime.utcnow()
+    db.add(connection)
+    db.commit()
+    return {
+        "seller": seller,
+        "orders": orders,
+        "inventory": inventory,
+        "last_sync": connection.updated_at,
+    }
 
 
 def _authorization_url(credential: MercadoLibreCredential, state: str) -> str:

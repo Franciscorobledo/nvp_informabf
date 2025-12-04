@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import Login from "./Login";
 import ConfigurationPage from "./ConfigurationPage";
 import MercadoLibreIntegration from "./MercadoLibreIntegration";
+import AdminMercadoLibreApps from "./AdminMercadoLibreApps";
 import DataUploadAnalysis from "../components/DataUploadAnalysis";
 import DataMovieModule from "../components/DataMovieModule";
 import DataComparisonModule from "../components/DataComparisonModule";
@@ -197,6 +198,10 @@ const App = () => {
       return { page: "home", module: "movie" };
     if (path.startsWith("/modules/compare"))
       return { page: "home", module: "compare" };
+    if (path.startsWith("/integraciones/mercadolibre"))
+      return { page: "meli-user", module: "home" };
+    if (path.startsWith("/admin/integraciones/mercadolibre"))
+      return { page: "meli-admin", module: "home" };
     if (path.startsWith("/integrations"))
       return { page: "integrations", module: "home" };
     if (path.startsWith("/config")) return { page: "config", module: "home" };
@@ -343,6 +348,28 @@ const App = () => {
       window.history.pushState({ page }, "", "/");
       setCurrentModule("analyze");
     }
+  };
+
+  const goToMeliUser = () => {
+    setActivePage("meli-user");
+    setMenuOpen(false);
+    window.history.pushState({ page: "meli-user" }, "", "/integraciones/mercadolibre");
+    window.scrollTo(0, 0);
+  };
+
+  const goToMeliAdmin = () => {
+    if (user?.role !== "admin") {
+      setSessionMessage("Solo el administrador puede gestionar apps de Mercado Libre.");
+      return;
+    }
+    setActivePage("meli-admin");
+    setMenuOpen(false);
+    window.history.pushState(
+      { page: "meli-admin" },
+      "",
+      "/admin/integraciones/mercadolibre"
+    );
+    window.scrollTo(0, 0);
   };
 
   const scrollToModuleContent = () => {
@@ -748,7 +775,34 @@ const App = () => {
                   onUnauthorized={handleUnauthorized}
                 />
               ) : activePage === "integrations" ? (
+                <div className="space-y-6">
+                  <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/70 shadow-sm p-5 space-y-3">
+                    <h3 className="text-lg font-semibold text-slate-900 dark:text-white">
+                      Integraciones disponibles
+                    </h3>
+                    <p className="text-sm text-slate-600 dark:text-slate-300">
+                      Conecta Mercado Libre en modo usuario u administra apps oficiales si eres administrador.
+                    </p>
+                    <div className="flex flex-wrap items-center gap-3">
+                      <button
+                        onClick={goToMeliUser}
+                        className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 text-white px-5 py-2.5 text-sm font-semibold shadow hover:-translate-y-0.5 transition"
+                      >
+                        Ir a integración de usuario
+                      </button>
+                      <button
+                        onClick={goToMeliAdmin}
+                        className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-300 dark:border-slate-700 px-5 py-2.5 text-sm font-semibold text-slate-800 dark:text-slate-100"
+                      >
+                        Panel admin Mercado Libre
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ) : activePage === "meli-user" ? (
                 <MercadoLibreIntegration onUnauthorized={handleUnauthorized} />
+              ) : activePage === "meli-admin" ? (
+                <AdminMercadoLibreApps onUnauthorized={handleUnauthorized} />
               ) : (
                 <>
                   <div ref={moduleContentRef} className="space-y-8">
