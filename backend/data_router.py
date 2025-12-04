@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import threading
 from datetime import datetime
-from typing import Any, Dict, Optional
+import io
+from typing import Any, Dict, Literal, Optional
 
 import pandas as pd
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from auth import get_current_user
@@ -180,6 +182,24 @@ async def upload_data(
         stock_rows=len(payload.get("stock", [])),
         updated_at=payload.get("updated_at", datetime.utcnow()),
     )
+
+
+@router.get("/sample/{dataset}")
+async def download_sample(
+    dataset: Literal["sales", "stock"],
+    current_user=Depends(get_current_user),
+):
+    """Devuelve un CSV de ejemplo para ventas o stock."""
+
+    data = SAMPLE_SALES if dataset == "sales" else SAMPLE_STOCK
+    filename = "ejemplo_ventas.csv" if dataset == "sales" else "ejemplo_stock.csv"
+
+    buffer = io.StringIO()
+    data.to_csv(buffer, index=False)
+    buffer.seek(0)
+
+    headers = {"Content-Disposition": f"attachment; filename={filename}"}
+    return StreamingResponse(iter([buffer.getvalue()]), media_type="text/csv", headers=headers)
 
 
 @router.post("/source", response_model=UploadResponse)

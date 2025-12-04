@@ -31,6 +31,41 @@ const DataIntegrationsView = ({ onUnauthorized, onOpenMercadoLibre }) => {
     return res.json();
   };
 
+  const downloadSample = async (type) => {
+    setError("");
+    try {
+      const res = await fetch(`${API_URL}/data/sample/${type}`, {
+        headers: {
+          Authorization: token ? `Bearer ${token}` : undefined,
+        },
+      });
+
+      if (res.status === 401 || res.status === 403) {
+        onUnauthorized?.("Tu sesión expiró. Vuelve a iniciar sesión.");
+        throw new Error("unauthorized");
+      }
+
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(text || "No se pudo descargar el ejemplo");
+      }
+
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = type === "sales" ? "ejemplo_ventas.csv" : "ejemplo_stock.csv";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      if (err.message !== "unauthorized") {
+        setError(err.message || "No se pudo descargar el ejemplo");
+      }
+    }
+  };
+
   const handleUpload = async (event) => {
     event.preventDefault();
     setLoading(true);
@@ -110,18 +145,32 @@ const DataIntegrationsView = ({ onUnauthorized, onOpenMercadoLibre }) => {
               <input
                 type="file"
                 name="sales_file"
-                accept=".csv,.xlsx,.xls"
+                accept=".csv,.xlsx"
                 className="w-full rounded-xl border border-dashed border-slate-300 dark:border-slate-700 px-3 py-2"
               />
+              <button
+                type="button"
+                onClick={() => downloadSample("sales")}
+                className="text-xs text-blue-600 hover:text-blue-700"
+              >
+                Descargar ejemplo (CSV)
+              </button>
             </label>
             <label className="space-y-1">
               <span className="font-semibold text-slate-700 dark:text-slate-200">Archivo de stock</span>
               <input
                 type="file"
                 name="stock_file"
-                accept=".csv,.xlsx,.xls"
+                accept=".csv,.xlsx"
                 className="w-full rounded-xl border border-dashed border-slate-300 dark:border-slate-700 px-3 py-2"
               />
+              <button
+                type="button"
+                onClick={() => downloadSample("stock")}
+                className="text-xs text-blue-600 hover:text-blue-700"
+              >
+                Descargar ejemplo (CSV)
+              </button>
             </label>
           </div>
 
