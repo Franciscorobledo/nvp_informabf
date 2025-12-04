@@ -99,6 +99,10 @@ const MercadoLibreIntegration = ({ onUnauthorized }) => {
   };
 
   const handleAuthorize = async (id) => {
+    if (id === 0) {
+      setMessage("Cuenta demo lista: no requiere autorización adicional.");
+      return;
+    }
     try {
       const data = await authorizedFetch(`${API_URL}/mercadolibre/credentials/${id}/authorize`, {
         method: "POST",
@@ -116,9 +120,17 @@ const MercadoLibreIntegration = ({ onUnauthorized }) => {
     setError("");
     setMessage("");
     try {
-      const data = await authorizedFetch(`${API_URL}/mercadolibre/credentials/${id}/${resource}`);
-      setSyncPreview({ resource, data });
-      setMessage("Datos sincronizados. Revisa el panel de análisis para explotarlos.");
+      const isDemo = id === 0;
+      const endpoint = isDemo
+        ? `${API_URL}/mercadolibre/demo/${resource}`
+        : `${API_URL}/mercadolibre/credentials/${id}/${resource}`;
+      const data = await authorizedFetch(endpoint);
+      setSyncPreview({ resource: isDemo ? `demo/${resource}` : resource, data });
+      setMessage(
+        isDemo
+          ? "Datos demo listos. Úsalos para probar la experiencia sin una cuenta real."
+          : "Datos sincronizados. Revisa el panel de análisis para explotarlos.",
+      );
     } catch (err) {
       setError(err.message || "No se pudo sincronizar");
     }
@@ -248,62 +260,74 @@ const MercadoLibreIntegration = ({ onUnauthorized }) => {
           )}
 
           <div className="space-y-4">
-            {credentials.map((cred) => (
-              <div
-                key={cred.id}
-                className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-800/50 p-4 space-y-3"
-              >
-                <div className="flex flex-wrap items-center gap-3 justify-between">
-                  <div>
-                    <p className="text-sm font-semibold text-slate-900 dark:text-white">{cred.account_name}</p>
-                    <p className="text-xs text-slate-500 dark:text-slate-300">
-                      {cred.country_code} • Redirect: {cred.redirect_uri}
-                    </p>
+            {credentials.map((cred) => {
+              const isDemo = cred.id === 0;
+              return (
+                <div
+                  key={cred.id}
+                  className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-800/50 p-4 space-y-3"
+                >
+                  <div className="flex flex-wrap items-center gap-3 justify-between">
+                    <div>
+                      <p className="text-sm font-semibold text-slate-900 dark:text-white">{cred.account_name}</p>
+                      <p className="text-xs text-slate-500 dark:text-slate-300">
+                        {cred.country_code} • Redirect: {cred.redirect_uri}
+                      </p>
+                    </div>
+                    <span
+                      className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold ${isDemo
+                        ? "bg-sky-100 text-sky-800 dark:bg-sky-900/40 dark:text-sky-100"
+                        : cred.has_tokens
+                          ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-100"
+                          : "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-100"
+                        }`}
+                    >
+                      {isDemo ? "Demo de pruebas" : cred.has_tokens ? "Tokens listos" : "Falta autorizar"}
+                    </span>
                   </div>
-                  <span
-                    className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold ${cred.has_tokens
-                      ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-100"
-                      : "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-100"
-                      }`}
-                  >
-                    {cred.has_tokens ? "Tokens listos" : "Falta autorizar"}
-                  </span>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      onClick={() => handleAuthorize(cred.id)}
+                      className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-semibold shadow ${isDemo
+                        ? "bg-sky-700 text-white"
+                        : "bg-slate-900 text-white"
+                        }`}
+                    >
+                      {isDemo ? "Usar cuenta demo" : "Conectar cuenta MercadoLibre"}
+                    </button>
+                    <button
+                      onClick={() => handleSync(cred.id, "seller")}
+                      className="inline-flex items-center gap-2 rounded-xl border border-slate-300 dark:border-slate-700 px-4 py-2 text-xs font-semibold"
+                    >
+                      {isDemo ? "Ver perfil demo" : "Sincronizar vendedor"}
+                    </button>
+                    <button
+                      onClick={() => handleSync(cred.id, "listings/active")}
+                      className="inline-flex items-center gap-2 rounded-xl border border-slate-300 dark:border-slate-700 px-4 py-2 text-xs font-semibold"
+                    >
+                      {isDemo ? "Publicaciones demo" : "Publicaciones activas"}
+                    </button>
+                    <button
+                      onClick={() => handleSync(cred.id, "orders")}
+                      className="inline-flex items-center gap-2 rounded-xl border border-slate-300 dark:border-slate-700 px-4 py-2 text-xs font-semibold"
+                    >
+                      {isDemo ? "Ventas demo" : "Ventas / órdenes"}
+                    </button>
+                    <button
+                      onClick={() => handleSync(cred.id, "listings/paused")}
+                      className="inline-flex items-center gap-2 rounded-xl border border-slate-300 dark:border-slate-700 px-4 py-2 text-xs font-semibold"
+                    >
+                      {isDemo ? "Pausados demo" : "Productos pausados"}
+                    </button>
+                  </div>
+                  {isDemo && (
+                    <p className="text-xs text-slate-500 dark:text-slate-300">
+                      Usa esta cuenta para probar la integración sin credenciales reales de vendedor.
+                    </p>
+                  )}
                 </div>
-
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    onClick={() => handleAuthorize(cred.id)}
-                    className="inline-flex items-center gap-2 rounded-xl bg-slate-900 text-white px-4 py-2 text-xs font-semibold shadow"
-                  >
-                    Conectar cuenta MercadoLibre
-                  </button>
-                  <button
-                    onClick={() => handleSync(cred.id, "seller")}
-                    className="inline-flex items-center gap-2 rounded-xl border border-slate-300 dark:border-slate-700 px-4 py-2 text-xs font-semibold"
-                  >
-                    Sincronizar vendedor
-                  </button>
-                  <button
-                    onClick={() => handleSync(cred.id, "listings/active")}
-                    className="inline-flex items-center gap-2 rounded-xl border border-slate-300 dark:border-slate-700 px-4 py-2 text-xs font-semibold"
-                  >
-                    Publicaciones activas
-                  </button>
-                  <button
-                    onClick={() => handleSync(cred.id, "orders")}
-                    className="inline-flex items-center gap-2 rounded-xl border border-slate-300 dark:border-slate-700 px-4 py-2 text-xs font-semibold"
-                  >
-                    Ventas / órdenes
-                  </button>
-                  <button
-                    onClick={() => handleSync(cred.id, "listings/paused")}
-                    className="inline-flex items-center gap-2 rounded-xl border border-slate-300 dark:border-slate-700 px-4 py-2 text-xs font-semibold"
-                  >
-                    Productos pausados
-                  </button>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
 
           {syncPreview && (
