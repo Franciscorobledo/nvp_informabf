@@ -174,8 +174,10 @@ const BusinessDashboards = ({ onUnauthorized }) => {
     comparative: false,
     summary: false,
     report: false,
+    save: false,
   });
   const [errors, setErrors] = useState("");
+  const [saveStatus, setSaveStatus] = useState("");
 
   const authorizedFetch = async (url, options = {}) => {
     const response = await fetch(url, {
@@ -283,6 +285,7 @@ const BusinessDashboards = ({ onUnauthorized }) => {
   const handleGenerateReport = async () => {
     setLoading((prev) => ({ ...prev, report: true }));
     setErrors("");
+    setSaveStatus("");
     try {
       const data = await authorizedFetch(`${API_URL}/metrics/custom`, {
         method: "POST",
@@ -294,6 +297,24 @@ const BusinessDashboards = ({ onUnauthorized }) => {
       setReportPreview(null);
     } finally {
       setLoading((prev) => ({ ...prev, report: false }));
+    }
+  };
+
+  const handleSaveReport = async () => {
+    setLoading((prev) => ({ ...prev, save: true }));
+    setErrors("");
+    setSaveStatus("");
+    try {
+      const data = await authorizedFetch(`${API_URL}/metrics/custom`, {
+        method: "POST",
+        body: JSON.stringify({ ...reportConfig, save: true }),
+      });
+      setSaveStatus(data.message || "Reporte guardado correctamente.");
+    } catch (error) {
+      setErrors(error.message);
+      setSaveStatus("");
+    } finally {
+      setLoading((prev) => ({ ...prev, save: false }));
     }
   };
 
@@ -780,7 +801,18 @@ const BusinessDashboards = ({ onUnauthorized }) => {
         )}
 
         <div className="mt-4 flex justify-end">
-          <AppButton variant="secondary">Guardar reporte</AppButton>
+          <div className="flex flex-col items-end gap-2">
+            <AppButton
+              variant="secondary"
+              onClick={handleSaveReport}
+              disabled={loading.save || loading.report}
+            >
+              {loading.save ? "Guardando..." : "Guardar reporte"}
+            </AppButton>
+            {saveStatus && (
+              <span className="text-xs text-emerald-600 dark:text-emerald-300">{saveStatus}</span>
+            )}
+          </div>
         </div>
       </div>
     </div>
