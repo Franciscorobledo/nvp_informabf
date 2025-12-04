@@ -7,6 +7,8 @@ import HomeView from "./views/home/HomeView";
 import SalesView from "./views/sales/SalesView";
 import StockView from "./views/stock/StockView";
 import DataIntegrationsView from "./views/data/DataIntegrationsView";
+import ComparativesView from "./views/comparatives/ComparativesView";
+import ReportBuilderView from "./views/reports/ReportBuilderView";
 import MainLayout from "./layouts/MainLayout";
 import {
   clearStoredSession,
@@ -192,9 +194,14 @@ const App = () => {
   );
 
   const getNavigationFromPath = (path) => {
-    if (path.startsWith("/modules/sales")) return { page: "home", module: "sales" };
-    if (path.startsWith("/modules/stock")) return { page: "home", module: "stock" };
-    if (path.startsWith("/modules/data")) return { page: "home", module: "data" };
+    if (path.startsWith("/dashboard/sales") || path.startsWith("/modules/sales"))
+      return { page: "home", module: "sales" };
+    if (path.startsWith("/dashboard/stock") || path.startsWith("/modules/stock"))
+      return { page: "home", module: "stock" };
+    if (path.startsWith("/dashboard/comparatives")) return { page: "home", module: "comparatives" };
+    if (path.startsWith("/dashboard/reports")) return { page: "home", module: "reports" };
+    if (path.startsWith("/dashboard/data") || path.startsWith("/modules/data"))
+      return { page: "home", module: "data" };
     if (path.startsWith("/integraciones/mercadolibre"))
       return { page: "meli-user", module: "home" };
     if (path.startsWith("/admin/integraciones/mercadolibre"))
@@ -381,9 +388,11 @@ const App = () => {
 
   const navigateToModule = (moduleId) => {
     const moduleRoutes = {
-      sales: "/modules/sales",
-      stock: "/modules/stock",
-      data: "/modules/data",
+      sales: "/dashboard/sales",
+      stock: "/dashboard/stock",
+      comparatives: "/dashboard/comparatives",
+      reports: "/dashboard/reports",
+      data: "/dashboard/data",
     };
 
     setActivePage("home");
@@ -424,6 +433,10 @@ const App = () => {
         return <SalesView onUnauthorized={handleUnauthorized} />;
       case "stock":
         return <StockView onUnauthorized={handleUnauthorized} />;
+      case "comparatives":
+        return <ComparativesView onUnauthorized={handleUnauthorized} />;
+      case "reports":
+        return <ReportBuilderView onUnauthorized={handleUnauthorized} />;
       case "data":
         return (
           <DataIntegrationsView
@@ -528,6 +541,32 @@ const App = () => {
                             <div className="flex flex-col gap-0.5">
                               <span className="font-semibold">Stock</span>
                               <span className="text-xs text-slate-500 dark:text-slate-300">Rotación y riesgo</span>
+                            </div>
+                          </button>
+                          <button
+                            onClick={() => navigateToModule("comparatives")}
+                            className={`group flex w-full items-start gap-2 rounded-xl px-3 py-2 text-sm text-left transition-all duration-200 hover:-translate-y-0.5 ${
+                              currentModule === "comparatives"
+                                ? "bg-blue-600 text-white shadow-lg shadow-blue-500/30"
+                                : "text-slate-700 dark:text-slate-100 hover:bg-slate-100/80 dark:hover:bg-slate-800/70"
+                            }`}
+                          >
+                            <div className="flex flex-col gap-0.5">
+                              <span className="font-semibold">Comparativas</span>
+                              <span className="text-xs text-slate-500 dark:text-slate-300">Mes vs mes y períodos</span>
+                            </div>
+                          </button>
+                          <button
+                            onClick={() => navigateToModule("reports")}
+                            className={`group flex w-full items-start gap-2 rounded-xl px-3 py-2 text-sm text-left transition-all duration-200 hover:-translate-y-0.5 ${
+                              currentModule === "reports"
+                                ? "bg-blue-600 text-white shadow-lg shadow-blue-500/30"
+                                : "text-slate-700 dark:text-slate-100 hover:bg-slate-100/80 dark:hover:bg-slate-800/70"
+                            }`}
+                          >
+                            <div className="flex flex-col gap-0.5">
+                              <span className="font-semibold">Report Builder</span>
+                              <span className="text-xs text-slate-500 dark:text-slate-300">Métrica + dimensión</span>
                             </div>
                           </button>
                           <button
@@ -681,6 +720,26 @@ const App = () => {
                     }`}
                   >
                     <span className="flex-1 text-left">Stock</span>
+                  </button>
+                  <button
+                    onClick={() => navigateToModule("comparatives")}
+                    className={`flex items-center gap-2 w-full rounded-xl px-3 py-2 text-sm font-semibold transition-all duration-200 hover:-translate-y-0.5 ${
+                      currentModule === "comparatives"
+                        ? "bg-blue-600 text-white shadow-lg shadow-blue-500/30"
+                        : "text-slate-800 dark:text-slate-100 bg-slate-100/80 dark:bg-slate-800/70"
+                    }`}
+                  >
+                    <span className="flex-1 text-left">Comparativas</span>
+                  </button>
+                  <button
+                    onClick={() => navigateToModule("reports")}
+                    className={`flex items-center gap-2 w-full rounded-xl px-3 py-2 text-sm font-semibold transition-all duration-200 hover:-translate-y-0.5 ${
+                      currentModule === "reports"
+                        ? "bg-blue-600 text-white shadow-lg shadow-blue-500/30"
+                        : "text-slate-800 dark:text-slate-100 bg-slate-100/80 dark:bg-slate-800/70"
+                    }`}
+                  >
+                    <span className="flex-1 text-left">Report Builder</span>
                   </button>
                   <button
                     onClick={() => navigateToModule("data")}
