@@ -748,13 +748,7 @@ const App = () => {
                 <MercadoLibreIntegration onUnauthorized={handleUnauthorized} />
               ) : (
                 <>
-                  <HomeModules
-                    user={user}
-                    onUnauthorized={handleUnauthorized}
-                    onDataReceived={(data) => console.log("📈 Resultado del análisis:", data)}
-                    onNavigateModule={navigateToModule}
-                    currentModule={currentModule}
-                  />
+                  <HomeModules onUnauthorized={handleUnauthorized} />
 
                   <div ref={moduleContentRef}>{renderModuleContent()}</div>
                 </>

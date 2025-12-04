@@ -17,6 +17,7 @@ from models import MercadoLibreCredential
 from utils.crypto_utils import decrypt_value, encrypt_value
 from analysis import analyze_file
 import pandas as pd
+from utils.data_engine import standardize_dataframe
 
 
 router = APIRouter(prefix="/mercadolibre", tags=["MercadoLibre"])
@@ -372,6 +373,13 @@ def start_authorization(credential_id: int, db: Session = Depends(get_db), curre
     return {"authorization_url": _authorization_url(cred, state), "state": state}
 
 
+@router.get("/auth")
+def meli_auth(credential_id: int, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
+    """Endpoint corto para iniciar OAuth desde frontend."""
+
+    return start_authorization(credential_id, db, current_user)
+
+
 @router.get("/oauth/callback")
 def oauth_callback(code: str, state: str, db: Session = Depends(get_db)):
     try:
@@ -402,6 +410,13 @@ def oauth_callback(code: str, state: str, db: Session = Depends(get_db)):
     return {"detail": "Cuenta vinculada correctamente", "credential_id": cred.id}
 
 
+@router.get("/callback")
+def meli_callback(code: str, state: str, db: Session = Depends(get_db)):
+    """Alias amigable para recibir el callback de OAuth."""
+
+    return oauth_callback(code, state, db)
+
+
 @router.get("/credentials/{credential_id}/seller")
 def seller_info(credential_id: int, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
     cred = _credential_or_404(db, credential_id)
@@ -413,6 +428,16 @@ def seller_info(credential_id: int, db: Session = Depends(get_db), current_user=
     db.add(cred)
     db.commit()
     return seller
+
+
+@router.post("/refresh")
+def refresh_token(credential_id: int, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
+    """Refresca manualmente el token de acceso cuando el frontend lo requiera."""
+
+    cred = _credential_or_404(db, credential_id)
+    _require_owner(cred, current_user.id)
+    token = _ensure_token(db, cred)
+    return {"access_token": token, "expires_at": cred.access_token_expires_at}
 
 
 @router.get("/demo/seller")
@@ -679,6 +704,35 @@ def _analyze_orders_dataset(
     return response
 
 
+def fetch_orders_dataframe(credential_id: int, db: Session, current_user) -> tuple[pd.DataFrame, dict[str, Any]]:
+    """Devuelve las órdenes de MercadoLibre en un DataFrame preparado para el motor de métricas."""
+
+    if credential_id == 0:
+        orders = DEMO_ORDERS.get("results") or []
+        return _orders_to_dataframe(orders), {"source": "MercadoLibre (demo)"}
+
+    data = recent_orders(credential_id, db, current_user, limit=200)
+    orders = data.get("results") or []
+    df = _orders_to_dataframe(orders)
+    return df, {"source": "MercadoLibre"}
+
+
+def fetch_inventory_dataframe(credential_id: int, db: Session, current_user) -> tuple[pd.DataFrame, dict[str, Any]]:
+    """Compila inventario activo/pausado en un DataFrame estándar."""
+
+    if credential_id == 0:
+        rows = (DEMO_ACTIVE_LISTINGS.get("details") or []) + (DEMO_PAUSED_LISTINGS.get("details") or [])
+    else:
+        active = active_listings(credential_id, db, current_user)
+        paused = paused_listings(credential_id, db, current_user)
+        rows = (active.get("details") or []) + (paused.get("details") or [])
+
+    inventory_df = pd.DataFrame(rows)
+    if not inventory_df.empty:
+        inventory_df = inventory_df.rename(columns={"title": "product", "category_id": "category", "available_quantity": "stock"})
+    return inventory_df, {"source": "MercadoLibre" if credential_id else "MercadoLibre (demo)"}
+
+
 @router.get("/credentials/{credential_id}/analyze/orders")
 def analyze_orders(credential_id: int, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
     if credential_id == 0:
@@ -694,4 +748,37 @@ def analyze_orders(credential_id: int, db: Session = Depends(get_db), current_us
     orders = data.get("results") or []
 
     return _analyze_orders_dataset(orders, current_user)
+
+
+@router.get("/sync/orders")
+def sync_orders(credential_id: int, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
+    """Entrega las órdenes en formato estándar para el motor de métricas."""
+
+    df, meta = fetch_orders_dataframe(credential_id, db, current_user)
+    standardized, mapping = standardize_dataframe(df)
+    return {
+        "source": meta,
+        "records": standardized.to_dict(orient="records"),
+        "mapping": mapping,
+    }
+
+
+@router.get("/sync/stock")
+def sync_stock(credential_id: int, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
+    """Entrega inventario activo/pausado en formato estándar."""
+
+    df, meta = fetch_inventory_dataframe(credential_id, db, current_user)
+    standardized, mapping = standardize_dataframe(df)
+    return {
+        "source": meta,
+        "records": standardized.to_dict(orient="records"),
+        "mapping": mapping,
+    }
+
+
+@router.get("/sync/products")
+def sync_products(credential_id: int, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
+    """Alias de inventario centrado en catálogo para el frontend."""
+
+    return sync_stock(credential_id, db, current_user)
 

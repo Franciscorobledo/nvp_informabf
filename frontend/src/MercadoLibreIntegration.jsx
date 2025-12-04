@@ -30,6 +30,7 @@ const MercadoLibreIntegration = ({ onUnauthorized }) => {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [syncPreview, setSyncPreview] = useState(null);
+  const [syncing, setSyncing] = useState("");
 
   const token = useMemo(() => localStorage.getItem("token"), []);
 
@@ -119,6 +120,7 @@ const MercadoLibreIntegration = ({ onUnauthorized }) => {
   const handleSync = async (id, resource) => {
     setError("");
     setMessage("");
+    setSyncing(`${id}-${resource}`);
     try {
       const isDemo = id === 0;
       const endpoint = isDemo
@@ -133,6 +135,8 @@ const MercadoLibreIntegration = ({ onUnauthorized }) => {
       );
     } catch (err) {
       setError(err.message || "No se pudo sincronizar");
+    } finally {
+      setSyncing("");
     }
   };
 
@@ -297,27 +301,31 @@ const MercadoLibreIntegration = ({ onUnauthorized }) => {
                     </button>
                     <button
                       onClick={() => handleSync(cred.id, "seller")}
-                      className="inline-flex items-center gap-2 rounded-xl border border-slate-300 dark:border-slate-700 px-4 py-2 text-xs font-semibold"
+                      disabled={syncing === `${cred.id}-seller`}
+                      className="inline-flex items-center gap-2 rounded-xl border border-slate-300 dark:border-slate-700 px-4 py-2 text-xs font-semibold disabled:opacity-60"
                     >
-                      {isDemo ? "Ver perfil demo" : "Sincronizar vendedor"}
+                      {syncing === `${cred.id}-seller` ? "Sincronizando..." : isDemo ? "Ver perfil demo" : "Sincronizar vendedor"}
                     </button>
                     <button
                       onClick={() => handleSync(cred.id, "listings/active")}
-                      className="inline-flex items-center gap-2 rounded-xl border border-slate-300 dark:border-slate-700 px-4 py-2 text-xs font-semibold"
+                      disabled={syncing === `${cred.id}-listings/active`}
+                      className="inline-flex items-center gap-2 rounded-xl border border-slate-300 dark:border-slate-700 px-4 py-2 text-xs font-semibold disabled:opacity-60"
                     >
-                      {isDemo ? "Publicaciones demo" : "Publicaciones activas"}
+                      {syncing === `${cred.id}-listings/active` ? "Sincronizando..." : isDemo ? "Publicaciones demo" : "Publicaciones activas"}
                     </button>
                     <button
                       onClick={() => handleSync(cred.id, "orders")}
-                      className="inline-flex items-center gap-2 rounded-xl border border-slate-300 dark:border-slate-700 px-4 py-2 text-xs font-semibold"
+                      disabled={syncing === `${cred.id}-orders`}
+                      className="inline-flex items-center gap-2 rounded-xl border border-slate-300 dark:border-slate-700 px-4 py-2 text-xs font-semibold disabled:opacity-60"
                     >
-                      {isDemo ? "Ventas demo" : "Ventas / órdenes"}
+                      {syncing === `${cred.id}-orders` ? "Sincronizando..." : isDemo ? "Ventas demo" : "Ventas / órdenes"}
                     </button>
                     <button
                       onClick={() => handleSync(cred.id, "listings/paused")}
-                      className="inline-flex items-center gap-2 rounded-xl border border-slate-300 dark:border-slate-700 px-4 py-2 text-xs font-semibold"
+                      disabled={syncing === `${cred.id}-listings/paused`}
+                      className="inline-flex items-center gap-2 rounded-xl border border-slate-300 dark:border-slate-700 px-4 py-2 text-xs font-semibold disabled:opacity-60"
                     >
-                      {isDemo ? "Pausados demo" : "Productos pausados"}
+                      {syncing === `${cred.id}-listings/paused` ? "Sincronizando..." : isDemo ? "Pausados demo" : "Productos pausados"}
                     </button>
                   </div>
                   {isDemo && (
