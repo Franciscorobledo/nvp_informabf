@@ -34,6 +34,145 @@ SITE_DOMAINS = {
     "MBO": "com.bo",
 }
 
+DEMO_CREDENTIAL = {
+    "account_name": "Cuenta demo MercadoLibre",
+    "country_code": "MLA",
+    "redirect_uri": "https://developers.mercadolibre.com.ar/test",
+    "webhook_url": None,
+    "seller_id": "TEST_SELLER_123",
+    "nickname": "Tienda Demo",
+    "has_tokens": True,
+}
+
+DEMO_SELLER = {
+    "id": "TEST_SELLER_123",
+    "nickname": "Tienda Demo",
+    "permalink": "https://perfil.mercadolibre.com.ar/TEST_SELLER_123",
+    "site_id": "MLA",
+    "seller_reputation": {"level_id": "5_green", "power_seller_status": "gold"},
+}
+
+DEMO_ACTIVE_LISTINGS = {
+    "item_ids": ["MLA_DEMO_001", "MLA_DEMO_002", "MLA_DEMO_003"],
+    "details": [
+        {
+            "id": "MLA_DEMO_001",
+            "title": "Auriculares Bluetooth",
+            "price": 19999.0,
+            "sold_quantity": 148,
+            "available_quantity": 25,
+            "permalink": "https://articulo.mercadolibre.com.ar/MLA_DEMO_001",
+            "status": "active",
+            "category_id": "MLA3697",
+        },
+        {
+            "id": "MLA_DEMO_002",
+            "title": "Silla ergonómica de oficina",
+            "price": 85999.0,
+            "sold_quantity": 62,
+            "available_quantity": 10,
+            "permalink": "https://articulo.mercadolibre.com.ar/MLA_DEMO_002",
+            "status": "active",
+            "category_id": "MLA4367",
+        },
+        {
+            "id": "MLA_DEMO_003",
+            "title": "Mouse inalámbrico recargable",
+            "price": 14999.0,
+            "sold_quantity": 230,
+            "available_quantity": 55,
+            "permalink": "https://articulo.mercadolibre.com.ar/MLA_DEMO_003",
+            "status": "active",
+            "category_id": "MLA1648",
+        },
+    ],
+}
+
+DEMO_PAUSED_LISTINGS = {
+    "item_ids": ["MLA_DEMO_004"],
+    "details": [
+        {
+            "id": "MLA_DEMO_004",
+            "title": "Teclado mecánico RGB",
+            "price": 39999.0,
+            "sold_quantity": 38,
+            "available_quantity": 0,
+            "permalink": "https://articulo.mercadolibre.com.ar/MLA_DEMO_004",
+            "status": "paused",
+            "category_id": "MLA1649",
+        }
+    ],
+}
+
+DEMO_ORDERS = {
+    "results": [
+        {
+            "id": 90010001,
+            "status": "paid",
+            "date_created": "2024-08-01T12:00:00.000-03:00",
+            "currency_id": "ARS",
+            "total_amount": 19999.0,
+            "paid_amount": 19999.0,
+            "buyer": {"id": 444001, "nickname": "comprador_demo"},
+            "shipping": {"mode": "me2"},
+            "site_id": "MLA",
+            "order_items": [
+                {
+                    "quantity": 1,
+                    "unit_price": 19999.0,
+                    "full_unit_price": 19999.0,
+                    "item": {"id": "MLA_DEMO_001", "title": "Auriculares Bluetooth"},
+                }
+            ],
+        },
+        {
+            "id": 90010002,
+            "status": "paid",
+            "date_created": "2024-08-03T15:20:00.000-03:00",
+            "currency_id": "ARS",
+            "total_amount": 100998.0,
+            "paid_amount": 100998.0,
+            "buyer": {"id": 444002, "nickname": "empresa_demo"},
+            "shipping": {"mode": "me1"},
+            "site_id": "MLA",
+            "order_items": [
+                {
+                    "quantity": 1,
+                    "unit_price": 85999.0,
+                    "full_unit_price": 85999.0,
+                    "item": {"id": "MLA_DEMO_002", "title": "Silla ergonómica de oficina"},
+                },
+                {
+                    "quantity": 1,
+                    "unit_price": 14999.0,
+                    "full_unit_price": 14999.0,
+                    "item": {"id": "MLA_DEMO_003", "title": "Mouse inalámbrico recargable"},
+                },
+            ],
+        },
+        {
+            "id": 90010003,
+            "status": "shipped",
+            "date_created": "2024-08-05T09:10:00.000-03:00",
+            "currency_id": "ARS",
+            "total_amount": 39999.0,
+            "paid_amount": 39999.0,
+            "buyer": {"id": 444003, "nickname": "gamer_demo"},
+            "shipping": {"mode": "me2"},
+            "site_id": "MLA",
+            "order_items": [
+                {
+                    "quantity": 1,
+                    "unit_price": 39999.0,
+                    "full_unit_price": 39999.0,
+                    "item": {"id": "MLA_DEMO_004", "title": "Teclado mecánico RGB"},
+                }
+            ],
+        },
+    ],
+    "paging": {"total": 3, "limit": 50, "offset": 0},
+}
+
 
 class CredentialPayload(BaseModel):
     account_name: str = "Principal"
@@ -61,6 +200,20 @@ class CredentialOut(BaseModel):
 
 def _get_country_domain(country_code: str) -> str:
     return SITE_DOMAINS.get(country_code.upper(), "com")
+
+
+def _demo_credential_out() -> CredentialOut:
+    return CredentialOut(
+        id=0,
+        account_name=DEMO_CREDENTIAL["account_name"],
+        country_code=DEMO_CREDENTIAL["country_code"],
+        redirect_uri=DEMO_CREDENTIAL["redirect_uri"],
+        webhook_url=None,
+        seller_id=DEMO_CREDENTIAL["seller_id"],
+        nickname=DEMO_CREDENTIAL["nickname"],
+        has_tokens=True,
+        updated_at=datetime.utcnow(),
+    )
 
 
 def _authorization_url(credential: MercadoLibreCredential, state: str) -> str:
@@ -188,7 +341,7 @@ def list_credentials(db: Session = Depends(get_db), current_user=Depends(get_cur
         .order_by(MercadoLibreCredential.created_at.desc())
         .all()
     )
-    return [
+    response = [
         CredentialOut(
             id=c.id,
             account_name=c.account_name,
@@ -202,6 +355,13 @@ def list_credentials(db: Session = Depends(get_db), current_user=Depends(get_cur
         )
         for c in creds
     ]
+    response.insert(0, _demo_credential_out())
+    return response
+
+
+@router.get("/demo/credential", response_model=CredentialOut)
+def demo_credential(current_user=Depends(get_current_user)):
+    return _demo_credential_out()
 
 
 @router.post("/credentials/{credential_id}/authorize")
@@ -255,6 +415,11 @@ def seller_info(credential_id: int, db: Session = Depends(get_db), current_user=
     return seller
 
 
+@router.get("/demo/seller")
+def demo_seller(current_user=Depends(get_current_user)):
+    return DEMO_SELLER
+
+
 def _list_items(cred: MercadoLibreCredential, db: Session, status: str) -> List[str]:
     if not cred.seller_id:
         seller = _meli_get(cred, "https://api.mercadolibre.com/users/me", db)
@@ -289,12 +454,22 @@ def active_listings(credential_id: int, db: Session = Depends(get_db), current_u
     return {"item_ids": ids, "details": _fetch_items_details(cred, db, ids[:20])}
 
 
+@router.get("/demo/listings/active")
+def demo_active_listings(current_user=Depends(get_current_user)):
+    return DEMO_ACTIVE_LISTINGS
+
+
 @router.get("/credentials/{credential_id}/listings/paused")
 def paused_listings(credential_id: int, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
     cred = _credential_or_404(db, credential_id)
     _require_owner(cred, current_user.id)
     ids = _list_items(cred, db, status="paused")
     return {"item_ids": ids, "details": _fetch_items_details(cred, db, ids[:20])}
+
+
+@router.get("/demo/listings/paused")
+def demo_paused_listings(current_user=Depends(get_current_user)):
+    return DEMO_PAUSED_LISTINGS
 
 
 @router.get("/credentials/{credential_id}/orders")
@@ -314,6 +489,11 @@ def recent_orders(
     params = {"seller": cred.seller_id, "order.status": "paid", "limit": limit}
     data = _meli_get(cred, "https://api.mercadolibre.com/orders/search", db, params=params)
     return data
+
+
+@router.get("/demo/orders")
+def demo_orders(current_user=Depends(get_current_user)):
+    return DEMO_ORDERS
 
 
 def _orders_to_dataframe(orders: List[dict[str, Any]]) -> pd.DataFrame:
