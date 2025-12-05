@@ -1,6 +1,7 @@
 import React from "react";
 import UserManagement from "./UserManagement";
 import AdminOpenAIUsage from "./AdminOpenAIUsage";
+import AdminLogsPanel from "./components/AdminLogsPanel";
 
 const ConfigurationPage = ({ user, onUnauthorized }) => {
   const isAdmin = user?.role === "admin";
@@ -40,6 +41,10 @@ const ConfigurationPage = ({ user, onUnauthorized }) => {
 
           <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
             <AdminOpenAIUsage onUnauthorized={onUnauthorized} />
+          </div>
+
+          <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+            <AdminLogsPanel onUnauthorized={onUnauthorized} />
           </div>
         </div>
       )}
