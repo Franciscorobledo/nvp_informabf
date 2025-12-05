@@ -147,7 +147,7 @@ const DataIntegrationsView = ({ onUnauthorized, onOpenMercadoLibre }) => {
               <input
                 type="file"
                 name="archivo_ventas"
-                accept=".csv,.xlsx"
+                accept=".csv,.xlsx,.xls"
                 className="w-full rounded-xl border border-dashed border-slate-300 dark:border-slate-700 px-3 py-2"
               />
               <button
@@ -163,7 +163,7 @@ const DataIntegrationsView = ({ onUnauthorized, onOpenMercadoLibre }) => {
               <input
                 type="file"
                 name="archivo_stock"
-                accept=".csv,.xlsx"
+                accept=".csv,.xlsx,.xls"
                 className="w-full rounded-xl border border-dashed border-slate-300 dark:border-slate-700 px-3 py-2"
               />
               <button

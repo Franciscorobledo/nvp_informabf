@@ -5,6 +5,7 @@ pandas
 plotly
 kaleido
 openpyxl
+xlrd
 python-multipart
 python-dotenv
 openai
