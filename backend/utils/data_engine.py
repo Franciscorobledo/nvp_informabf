@@ -86,6 +86,7 @@ def standardize_dataframe(df: pd.DataFrame) -> Tuple[pd.DataFrame, Dict[str, str
     }
 
     renamed = renamed.rename(columns=column_aliases)
+    renamed = renamed.loc[:, ~renamed.columns.duplicated()]
 
     if "date" in renamed.columns:
         renamed["date"] = pd.to_datetime(renamed["date"], errors="coerce")
