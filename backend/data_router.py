@@ -3,6 +3,7 @@ from __future__ import annotations
 import threading
 from datetime import datetime
 import io
+from io import BytesIO
 from typing import Any, Dict, Literal, Optional, Tuple
 
 import numpy as np
@@ -12,11 +13,12 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from auth import get_current_user
-from ai_module import classify_tabular_dataset
+from ai_module import classify_tabular_dataset, generate_ai_insights
 from database import get_db
 from mercadolibre import fetch_inventory_dataframe, fetch_orders_dataframe
 from utils.data_engine import (
     aggregate_manual_metrics,
+    build_product_summary,
     harmonize_sales_data,
     harmonize_stock_data,
     compute_auto_metrics,
@@ -25,6 +27,7 @@ from utils.dataframe_loader import read_dataframes
 
 router = APIRouter(prefix="/data", tags=["Motor de datos"])
 ingest_router = APIRouter(prefix="/ingest", tags=["Ingesta inteligente"])
+analysis_router = APIRouter(prefix="/analysis", tags=["Análisis"])
 
 
 STANDARD_SCHEMA_DOC = """
@@ -81,6 +84,33 @@ class _DataContext:
 
 
 _DATA_CONTEXT = _DataContext()
+
+# Almacenamiento simplificado en memoria para el flujo MVP solicitado
+_SIMPLE_DATA_LOCK = threading.Lock()
+_SIMPLE_DATA: Dict[str, Dict[str, Any]] = {}
+
+
+def _set_simple_data(user_id: str, sales_df: Optional[pd.DataFrame], stock_df: Optional[pd.DataFrame]):
+    """Guarda dataframes normalizados en memoria para el usuario actual."""
+
+    with _SIMPLE_DATA_LOCK:
+        _SIMPLE_DATA[user_id] = {
+            "sales": sales_df if sales_df is not None else pd.DataFrame(),
+            "stock": stock_df if stock_df is not None else pd.DataFrame(),
+            "updated_at": datetime.utcnow(),
+            "source": "files",
+        }
+
+
+def _get_simple_data(user_id: str) -> Dict[str, Any]:
+    with _SIMPLE_DATA_LOCK:
+        payload = _SIMPLE_DATA.get(user_id, {})
+        return {
+            "sales": payload.get("sales", pd.DataFrame()),
+            "stock": payload.get("stock", pd.DataFrame()),
+            "updated_at": payload.get("updated_at"),
+            "source": payload.get("source", "files"),
+        }
 
 
 SAMPLE_SALES = pd.DataFrame(
@@ -330,51 +360,125 @@ def _get_or_seed_data(user_id: str) -> Dict[str, Any]:
     return _DATA_CONTEXT.get(user_id) or {}
 
 
-@ingest_router.post("/upload", response_model=IngestResponse)
+def _read_upload_to_dataframe(upload: UploadFile) -> pd.DataFrame:
+    content = upload.file.read()
+    filename = (upload.filename or "").lower()
+    try:
+        if filename.endswith(".xlsx") or filename.endswith(".xls"):
+            return pd.read_excel(BytesIO(content))
+        return pd.read_csv(BytesIO(content), sep=None, engine="python")
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="No se pudo leer el archivo. Usa CSV o Excel.") from exc
+
+
+def _normalize_sales_columns(df: pd.DataFrame) -> pd.DataFrame:
+    normalized = df.copy()
+    normalized.columns = [str(col).strip() for col in normalized.columns]
+    lower_cols = {col.lower(): col for col in normalized.columns}
+
+    def _find_col(options: list[str]) -> Optional[str]:
+        for opt in options:
+            if opt in lower_cols:
+                return lower_cols[opt]
+            for lower_name, original in lower_cols.items():
+                if opt in lower_name:
+                    return original
+        return None
+
+    mapping = {
+        "sku": _find_col(["sku", "ean", "codigo", "code", "id_producto", "producto_id"]),
+        "product_name": _find_col(["producto", "product", "nombre", "descripcion"]),
+        "quantity": _find_col(["cantidad", "quantity", "qty", "unidades", "units"]),
+        "unit_price": _find_col(["precio", "price", "unit_price", "precio_unitario", "unitario"]),
+        "total": _find_col(["total", "importe", "monto", "valor", "subtotal"]),
+    }
+
+    for target, source_col in mapping.items():
+        if source_col and source_col != target:
+            normalized[target] = normalized[source_col]
+
+    return normalized
+
+
+def _normalize_stock_columns(df: pd.DataFrame) -> pd.DataFrame:
+    normalized = df.copy()
+    normalized.columns = [str(col).strip() for col in normalized.columns]
+    lower_cols = {col.lower(): col for col in normalized.columns}
+
+    def _find_col(options: list[str]) -> Optional[str]:
+        for opt in options:
+            if opt in lower_cols:
+                return lower_cols[opt]
+            for lower_name, original in lower_cols.items():
+                if opt in lower_name:
+                    return original
+        return None
+
+    mapping = {
+        "sku": _find_col(["sku", "ean", "codigo", "code", "id_producto", "producto_id"]),
+        "product_name": _find_col(["producto", "product", "nombre", "descripcion"]),
+        "current_stock": _find_col(["stock", "inventario", "existencia", "existencias", "cantidad_disponible"]),
+    }
+
+    for target, source_col in mapping.items():
+        if source_col and source_col != target:
+            normalized[target] = normalized[source_col]
+
+    return normalized
+
+
+def _detect_dataset_type(df: pd.DataFrame) -> Literal["sales", "stock", "unknown"]:
+    lower_cols = [str(col).lower() for col in df.columns]
+    if any(token in "|".join(lower_cols) for token in ["stock", "inventario", "existencia"]):
+        return "stock"
+    if any(token in "|".join(lower_cols) for token in ["cantidad", "quantity", "qty", "total", "precio"]):
+        return "sales"
+    return "unknown"
+
+
+@ingest_router.post("/upload")
 async def ingest_upload(
     *,
     archivo_ventas: Optional[UploadFile] = File(None, description="Archivo de ventas"),
     archivo_stock: Optional[UploadFile] = File(None, description="Archivo de stock"),
     current_user=Depends(get_current_user),
 ):
+    """Sube archivos de ventas y/o stock y los almacena en memoria (MVP)."""
+
     if archivo_ventas is None and archivo_stock is None:
         raise HTTPException(status_code=400, detail="Debes enviar al menos un archivo")
 
-    datasets: list[dict] = []
+    sales_rows = 0
+    stock_rows = 0
     sales_df: Optional[pd.DataFrame] = None
     stock_df: Optional[pd.DataFrame] = None
 
-    def _load(upload: UploadFile) -> pd.DataFrame:
-        try:
-            content = upload.file.read()
-            dfs = read_dataframes(upload, content)
-            if not dfs:
-                raise HTTPException(status_code=400, detail="No se pudo leer el archivo")
-            return dfs[0]
-        except Exception:
-            raise HTTPException(
-                status_code=400,
-                detail="No pude leer este archivo. Asegúrate de que sea una tabla con encabezados en la primera fila (CSV o Excel).",
-            )
-
     if archivo_ventas is not None:
-        raw_sales = _load(archivo_ventas)
-        sales_internal, _, report = _ingest_dataframe(raw_sales, "files")
-        sales_df = sales_internal
-        datasets.append(report)
+        ventas_df = _read_upload_to_dataframe(archivo_ventas)
+        dataset_type = _detect_dataset_type(ventas_df)
+        if dataset_type == "sales":
+            sales_df = _normalize_sales_columns(ventas_df)
+            sales_rows = len(sales_df)
+        elif dataset_type == "stock":
+            stock_df = _normalize_stock_columns(ventas_df)
+            stock_rows = len(stock_df)
 
     if archivo_stock is not None:
-        raw_stock = _load(archivo_stock)
-        stock_internal, _, report = _ingest_dataframe(raw_stock, "files")
-        stock_df = stock_internal
-        datasets.append(report)
+        stock_raw = _read_upload_to_dataframe(archivo_stock)
+        dataset_type = _detect_dataset_type(stock_raw)
+        if dataset_type == "stock":
+            stock_df = _normalize_stock_columns(stock_raw)
+            stock_rows = len(stock_df)
+        elif dataset_type == "sales":
+            sales_df = _normalize_sales_columns(stock_raw)
+            sales_rows = len(sales_df)
 
     if sales_df is None and stock_df is None:
-        raise HTTPException(status_code=400, detail="No pude leer ningún dataset válido")
+        raise HTTPException(status_code=400, detail="No se detectaron columnas válidas de ventas o stock")
 
-    _DATA_CONTEXT.set_payload(str(current_user.id), sales_df, stock_df, "files")
+    _set_simple_data(str(current_user.id), sales_df, stock_df)
 
-    return IngestResponse(status="ok", datasets=datasets)
+    return {"status": "ok", "sales_rows": int(sales_rows), "stock_rows": int(stock_rows)}
 
 
 def _validate_required(type_name: str, mapping: Dict[str, str]) -> Tuple[list, list]:
@@ -585,3 +689,124 @@ async def manual_metrics(
         table_data=_json_safe(results.get("table_data", [])),
         meta=_json_safe(results.get("meta", {})),
     )
+
+
+@analysis_router.get("/metrics")
+def get_analysis_metrics(current_user=Depends(get_current_user)):
+    """Calcula KPIs básicos a partir de los archivos subidos en memoria."""
+
+    ctx = _get_simple_data(str(current_user.id))
+    sales_df: pd.DataFrame = ctx.get("sales", pd.DataFrame())
+    stock_df: pd.DataFrame = ctx.get("stock", pd.DataFrame())
+
+    if sales_df.empty and stock_df.empty:
+        return {"status": "error", "message": "No hay datos cargados."}
+
+    # Normalizar columnas clave
+    for col in ["quantity", "unit_price", "total", "current_stock"]:
+        if col in sales_df.columns:
+            sales_df[col] = pd.to_numeric(sales_df[col], errors="coerce").fillna(0)
+        if col in stock_df.columns:
+            stock_df[col] = pd.to_numeric(stock_df[col], errors="coerce").fillna(0)
+
+    if "total" not in sales_df.columns and "unit_price" in sales_df.columns and "quantity" in sales_df.columns:
+        sales_df["total"] = sales_df["unit_price"] * sales_df["quantity"]
+
+    total_sales = float(sales_df.get("total", 0).sum()) if not sales_df.empty else 0.0
+    total_units = float(sales_df.get("quantity", 0).sum()) if not sales_df.empty else 0.0
+
+    group_key = "sku" if "sku" in sales_df.columns else ("product_name" if "product_name" in sales_df.columns else None)
+    chart_data: list[dict] = []
+    table_data: list[dict] = []
+
+    if group_key:
+        grouped = sales_df.groupby(group_key).agg(
+            {
+                "total": "sum" if "total" in sales_df.columns else "sum",
+                "quantity": "sum" if "quantity" in sales_df.columns else "sum",
+                "product_name": "first" if "product_name" in sales_df.columns else "first",
+            }
+        ).reset_index()
+
+        chart_data = [
+            {
+                "label": str(row[group_key]),
+                "ventas": float(row.get("total", 0)),
+            }
+            for _, row in grouped.iterrows()
+        ]
+
+        table_data = [
+            {
+                "sku": row.get("sku") if "sku" in grouped.columns else row.get(group_key),
+                "product_name": row.get("product_name"),
+                "ventas": float(row.get("total", 0)),
+                "unidades": float(row.get("quantity", 0)),
+            }
+            for _, row in grouped.iterrows()
+        ]
+    elif not sales_df.empty:
+        chart_data = [{"label": str(idx), "ventas": float(val)} for idx, val in enumerate(sales_df.get("total", []))]
+        table_data = [
+            {
+                "sku": None,
+                "product_name": row.get("product_name"),
+                "ventas": float(row.get("total", 0)),
+                "unidades": float(row.get("quantity", 0)),
+            }
+            for _, row in sales_df.iterrows()
+        ]
+    elif not stock_df.empty:
+        table_data = [
+            {
+                "sku": row.get("sku"),
+                "product_name": row.get("product_name"),
+                "ventas": 0.0,
+                "unidades": 0.0,
+            }
+            for _, row in stock_df.iterrows()
+        ]
+
+    kpis = {
+        "ventas_totales": round(total_sales, 2),
+        "unidades_totales": int(total_units),
+    }
+
+    return {
+        "status": "ok",
+        "kpis": kpis,
+        "chart_data": chart_data,
+        "table_data": table_data,
+    }
+
+
+@analysis_router.get("/summary")
+def get_analysis_summary(current_user=Depends(get_current_user)):
+    ctx = _get_or_seed_data(str(current_user.id))
+    metrics = get_analysis_metrics(current_user)
+    if metrics.get("status") != "ok":
+        raise HTTPException(status_code=400, detail=metrics.get("message") or "No hay datos para resumir")
+
+    profile = {
+        "row_count": len(ctx.get("sales", pd.DataFrame())) + len(ctx.get("stock", pd.DataFrame())),
+        "column_count": len(ctx.get("sales", pd.DataFrame()).columns | ctx.get("stock", pd.DataFrame()).columns)
+        if not ctx.get("stock", pd.DataFrame()).empty
+        else len(ctx.get("sales", pd.DataFrame()).columns),
+        "type_counts": {},
+        "file_types": [ctx.get("source", "demo")],
+    }
+
+    column_types = {}
+    for frame in [ctx.get("sales", pd.DataFrame()), ctx.get("stock", pd.DataFrame())]:
+        for col, dtype in frame.dtypes.items():
+            column_types[col] = str(dtype)
+
+    summary_text = generate_ai_insights(
+        summary={"kpis": metrics.get("kpis", {}), "warnings": metrics.get("warnings", [])},
+        column_types=column_types,
+        heuristics="Análisis combinado de ventas y stock",
+        dataset_profile=profile,
+        usage_context={"user": str(current_user.id), "source": "analysis"},
+    )
+
+    return {"status": "ok", "summary": summary_text}
