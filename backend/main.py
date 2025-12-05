@@ -124,10 +124,18 @@ allowed_origins = [
     "https://nvp-informabf-front-wxbb.onrender.com",
 ]
 
+if FRONTEND_URL not in allowed_origins:
+    allowed_origins.append(FRONTEND_URL)
+
+allow_origin_regex = None
+if ALLOW_ONRENDER_WILDCARD:
+    allow_origin_regex = r"https://.*\.onrender\.com"
+    logging.info("🌐 CORS regex habilitado para dominios onrender.com")
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
-    allow_origin_regex=None,
+    allow_origin_regex=allow_origin_regex,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
