@@ -430,7 +430,12 @@ const App = () => {
   const renderModuleContent = () => {
     switch (currentModule) {
       case "sales":
-        return <SalesView onUnauthorized={handleUnauthorized} />;
+        return (
+          <SalesView
+            onUnauthorized={handleUnauthorized}
+            onGoToData={() => navigateToModule("data")}
+          />
+        );
       case "stock":
         return <StockView onUnauthorized={handleUnauthorized} />;
       case "comparatives":
