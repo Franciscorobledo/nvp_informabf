@@ -133,6 +133,8 @@ allowed_origins = list({
     # Variantes de producción conocidas
     "https://nvp-informabf.onrender.com",
     "https://nvp-informabf-front.onrender.com",
+    "https://nvp-informabf-front-web.onrender.com",
+    "http://nvp-informabf-front-web.onrender.com",
     "https://nvp.informabf.onrender.com",
     "https://nvp.informabf-front.onrender.com",
     "http://localhost:1000",
