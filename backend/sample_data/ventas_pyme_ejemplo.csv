@@ -1,0 +1,4 @@
+fecha,sku,cantidad,unit_price,total,canal
+2024-07-01,SKU-001,2,15000,30000,online
+2024-07-02,SKU-002,1,20000,20000,tienda
+2024-07-03,SKU-003,4,12000,48000,online

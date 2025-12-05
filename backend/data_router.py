@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import threading
 from datetime import datetime
 import io
@@ -9,7 +10,7 @@ from typing import Any, Dict, Literal, Optional, Tuple
 import numpy as np
 import pandas as pd
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
-from fastapi.responses import StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
 from auth import get_current_user
@@ -445,68 +446,78 @@ async def ingest_upload(
 ):
     """Sube archivos de ventas y/o stock y los almacena en memoria (MVP)."""
 
-    if archivo_ventas is None and archivo_stock is None:
-        raise HTTPException(status_code=400, detail="Debes enviar al menos un archivo")
+    try:
+        if archivo_ventas is None and archivo_stock is None:
+            raise HTTPException(status_code=400, detail="Debes enviar al menos un archivo")
 
-    sales_rows = 0
-    stock_rows = 0
-    sales_df: Optional[pd.DataFrame] = None
-    stock_df: Optional[pd.DataFrame] = None
+        sales_rows = 0
+        stock_rows = 0
+        sales_df: Optional[pd.DataFrame] = None
+        stock_df: Optional[pd.DataFrame] = None
 
-    if archivo_ventas is not None:
-        ventas_df = _read_upload_to_dataframe(archivo_ventas)
-        dataset_type = _detect_dataset_type(ventas_df)
-        if dataset_type == "sales":
-            sales_df = _normalize_sales_columns(ventas_df)
-            sales_rows = len(sales_df)
-        elif dataset_type == "stock":
-            stock_df = _normalize_stock_columns(ventas_df)
-            stock_rows = len(stock_df)
+        if archivo_ventas is not None:
+            ventas_df = _read_upload_to_dataframe(archivo_ventas)
+            dataset_type = _detect_dataset_type(ventas_df)
+            if dataset_type == "sales":
+                sales_df = _normalize_sales_columns(ventas_df)
+                sales_rows = len(sales_df)
+            elif dataset_type == "stock":
+                stock_df = _normalize_stock_columns(ventas_df)
+                stock_rows = len(stock_df)
 
-    if archivo_stock is not None:
-        stock_raw = _read_upload_to_dataframe(archivo_stock)
-        dataset_type = _detect_dataset_type(stock_raw)
-        if dataset_type == "stock":
-            stock_df = _normalize_stock_columns(stock_raw)
-            stock_rows = len(stock_df)
-        elif dataset_type == "sales":
-            sales_df = _normalize_sales_columns(stock_raw)
-            sales_rows = len(sales_df)
+        if archivo_stock is not None:
+            stock_raw = _read_upload_to_dataframe(archivo_stock)
+            dataset_type = _detect_dataset_type(stock_raw)
+            if dataset_type == "stock":
+                stock_df = _normalize_stock_columns(stock_raw)
+                stock_rows = len(stock_df)
+            elif dataset_type == "sales":
+                sales_df = _normalize_sales_columns(stock_raw)
+                sales_rows = len(sales_df)
 
-    if sales_df is None and stock_df is None:
-        raise HTTPException(status_code=400, detail="No se detectaron columnas válidas de ventas o stock")
+        if sales_df is None and stock_df is None:
+            raise HTTPException(status_code=400, detail="No se detectaron columnas válidas de ventas o stock")
 
-    # Prepara columnas estándar para las métricas unificadas
-    if sales_df is not None:
-        if "price" not in sales_df.columns:
-            if "unit_price" in sales_df.columns:
-                sales_df = sales_df.rename(columns={"unit_price": "price"})
-            elif "total" in sales_df.columns:
-                sales_df = sales_df.rename(columns={"total": "price"})
-    if stock_df is not None:
-        if "stock" not in stock_df.columns and "current_stock" in stock_df.columns:
-            stock_df = stock_df.rename(columns={"current_stock": "stock"})
+        # Prepara columnas estándar para las métricas unificadas
+        if sales_df is not None:
+            if "price" not in sales_df.columns:
+                if "unit_price" in sales_df.columns:
+                    sales_df = sales_df.rename(columns={"unit_price": "price"})
+                elif "total" in sales_df.columns:
+                    sales_df = sales_df.rename(columns={"total": "price"})
+        if stock_df is not None:
+            if "stock" not in stock_df.columns and "current_stock" in stock_df.columns:
+                stock_df = stock_df.rename(columns={"current_stock": "stock"})
 
-    # Persiste tanto el contexto simplificado como el de métricas oficiales
-    _set_simple_data(str(current_user.id), sales_df, stock_df)
+        # Persiste tanto el contexto simplificado como el de métricas oficiales
+        _set_simple_data(str(current_user.id), sales_df, stock_df)
 
-    sales_harmonized = None
-    stock_harmonized = None
+        sales_harmonized = None
+        stock_harmonized = None
 
-    if sales_df is not None:
-        sales_harmonized, _ = harmonize_sales_data(sales_df, "files")
-    if stock_df is not None:
-        stock_harmonized, _ = harmonize_stock_data(stock_df, "files")
+        if sales_df is not None:
+            sales_harmonized, _ = harmonize_sales_data(sales_df, "files")
+        if stock_df is not None:
+            stock_harmonized, _ = harmonize_stock_data(stock_df, "files")
 
-    _DATA_CONTEXT.set_payload(str(current_user.id), sales_harmonized, stock_harmonized, "files")
-    payload = _DATA_CONTEXT.get(str(current_user.id))
+        _DATA_CONTEXT.set_payload(str(current_user.id), sales_harmonized, stock_harmonized, "files")
+        payload = _DATA_CONTEXT.get(str(current_user.id))
 
-    return {
-        "status": "ok",
-        "sales_rows": int(sales_rows),
-        "stock_rows": int(stock_rows),
-        "updated_at": payload.get("updated_at", datetime.utcnow()),
-    }
+        return {
+            "status": "ok",
+            "sales_rows": int(sales_rows),
+            "stock_rows": int(stock_rows),
+            "updated_at": payload.get("updated_at", datetime.utcnow()),
+        }
+    except HTTPException as exc:  # noqa: BLE001
+        logging.warning("⚠️ Error en /ingest/upload: %s", exc.detail)
+        return JSONResponse(status_code=exc.status_code, content={"status": "error", "message": exc.detail})
+    except Exception as exc:  # noqa: BLE001
+        logging.exception("❌ Error inesperado al procesar la ingesta")
+        return JSONResponse(
+            status_code=500,
+            content={"status": "error", "message": "Error al procesar los archivos. Verifica el formato e intenta nuevamente."},
+        )
 
 
 def _validate_required(type_name: str, mapping: Dict[str, str]) -> Tuple[list, list]:
