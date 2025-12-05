@@ -40,6 +40,7 @@ const DataIntegrationsView = ({ onUnauthorized, onOpenMercadoLibre }) => {
   const [datasets, setDatasets] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [selectingSource, setSelectingSource] = useState(false);
 
   useEffect(() => {
     const handleStorage = () => setToken(localStorage.getItem("token"));
@@ -113,6 +114,28 @@ const DataIntegrationsView = ({ onUnauthorized, onOpenMercadoLibre }) => {
       setDatasets,
     });
 
+  const handleUseMercadoLibreSource = async () => {
+    setError("");
+    setSelectingSource(true);
+
+    try {
+      const data = await authorizedFetch(`${API_URL}/data/source`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ source: "mercadolibre", credential_id: 0 }),
+      });
+
+      setUploadStatus({ ...data, updated_at: data.updated_at || new Date().toISOString() });
+      setDatasets([]);
+    } catch (err) {
+      if (err.message !== "unauthorized") {
+        setError(err.message || "No se pudo activar MercadoLibre como fuente");
+      }
+    } finally {
+      setSelectingSource(false);
+    }
+  };
+
   return (
     <section className="space-y-6">
       <SectionHeader title="Datos e integraciones" subtitle="Mercado Libre y archivos unificados" badge="Orígenes" />
@@ -137,14 +160,11 @@ const DataIntegrationsView = ({ onUnauthorized, onOpenMercadoLibre }) => {
               Conectar / revisar conexión
             </button>
             <button
-              onClick={() => authorizedFetch(`${API_URL}/data/source`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ source: "mercadolibre" }),
-              })}
-              className="rounded-xl border border-slate-300 dark:border-slate-700 px-4 py-2 text-sm font-semibold"
+              onClick={handleUseMercadoLibreSource}
+              disabled={selectingSource}
+              className="rounded-xl border border-slate-300 dark:border-slate-700 px-4 py-2 text-sm font-semibold disabled:opacity-60"
             >
-              Usar como fuente
+              {selectingSource ? "Activando..." : "Usar como fuente"}
             </button>
           </div>
         </div>
