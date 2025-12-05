@@ -209,7 +209,7 @@ const App = () => {
     if (path.startsWith("/integrations"))
       return { page: "integrations", module: "home" };
     if (path.startsWith("/config")) return { page: "config", module: "home" };
-    return { page: "home", module: "home" };
+    return { page: "home", module: "data" };
   };
 
   const initialNavigation = getNavigationFromPath(window.location.pathname);
@@ -270,15 +270,15 @@ const App = () => {
     localStorage.setItem("theme", theme);
   }, [theme]);
 
-  useEffect(() => {
-    if (user && activePage === "config" && user.role !== "admin") {
-      setSessionMessage(
-        "Solo los administradores pueden acceder al panel de configuración."
-      );
-      setActivePage("home");
-      setCurrentModule("home");
-    }
-  }, [user, activePage]);
+    useEffect(() => {
+      if (user && activePage === "config" && user.role !== "admin") {
+        setSessionMessage(
+          "Solo los administradores pueden acceder al panel de configuración."
+        );
+        setActivePage("home");
+        setCurrentModule("data");
+      }
+    }, [user, activePage]);
 
   const handleLogin = (data) => {
     const token = localStorage.getItem("token");
@@ -288,7 +288,7 @@ const App = () => {
 
     setSessionMessage("");
     setUser({ username: data.username, role: data.role || "user" });
-    setCurrentModule("home");
+    setCurrentModule("data");
   };
 
   const handleLogout = (eventOrMessage = "") => {
@@ -326,33 +326,33 @@ const App = () => {
     setModulesOpen(false);
   };
 
-  const navigateTo = (page) => {
-    if (page === "config" && user?.role !== "admin") {
-      setSessionMessage(
-        "Solo los administradores pueden acceder al panel de configuración."
-      );
-      setActivePage("home");
-      setCurrentModule("home");
-      setMenuOpen(false);
-      setModulesOpen(false);
-      return;
-    }
+    const navigateTo = (page) => {
+      if (page === "config" && user?.role !== "admin") {
+        setSessionMessage(
+          "Solo los administradores pueden acceder al panel de configuración."
+        );
+        setActivePage("home");
+        setCurrentModule("data");
+        setMenuOpen(false);
+        setModulesOpen(false);
+        return;
+      }
 
     setActivePage(page);
     setMenuOpen(false);
     setModulesOpen(false);
 
-    if (page === "config") {
-      window.history.pushState({ page }, "", "/config");
-      setCurrentModule("home");
-    } else if (page === "integrations") {
-      window.history.pushState({ page }, "", "/integrations");
-      setCurrentModule("home");
-    } else {
-      window.history.pushState({ page }, "", "/");
-      setCurrentModule("home");
-    }
-  };
+      if (page === "config") {
+        window.history.pushState({ page }, "", "/config");
+        setCurrentModule("home");
+      } else if (page === "integrations") {
+        window.history.pushState({ page }, "", "/integrations");
+        setCurrentModule("home");
+      } else {
+        window.history.pushState({ page }, "", "/");
+        setCurrentModule("data");
+      }
+    };
 
   const goToMeliUser = () => {
     setActivePage("meli-user");

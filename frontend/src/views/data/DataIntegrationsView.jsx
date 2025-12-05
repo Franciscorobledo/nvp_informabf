@@ -1,14 +1,51 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import API_URL from "../../api";
 import SectionHeader from "../../components/cards/SectionHeader";
 import SkeletonBlock from "../../components/cards/SkeletonBlock";
 
+export const handleUploadSubmission = async (
+  event,
+  {
+    authorizedFetch,
+    setLoading,
+    setError,
+    setUploadStatus,
+    setDatasets,
+    formDataFactory = (target) => new FormData(target),
+    apiUrl = API_URL,
+  },
+) => {
+  event.preventDefault();
+  setLoading(true);
+  setError("");
+  const formData = formDataFactory(event.currentTarget);
+
+  try {
+    const data = await authorizedFetch(`${apiUrl}/ingest/upload`, {
+      method: "POST",
+      body: formData,
+    });
+    setUploadStatus?.({ ...data, updated_at: new Date().toISOString() });
+    setDatasets?.(data?.datasets || []);
+  } catch (err) {
+    setError(err.message || "No se pudo subir los archivos");
+  } finally {
+    setLoading(false);
+  }
+};
+
 const DataIntegrationsView = ({ onUnauthorized, onOpenMercadoLibre }) => {
-  const token = useMemo(() => localStorage.getItem("token"), []);
+  const [token, setToken] = useState(() => localStorage.getItem("token"));
   const [uploadStatus, setUploadStatus] = useState(null);
   const [datasets, setDatasets] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    const handleStorage = () => setToken(localStorage.getItem("token"));
+    window.addEventListener("storage", handleStorage);
+    return () => window.removeEventListener("storage", handleStorage);
+  }, []);
 
   const authorizedFetch = async (url, options = {}) => {
     const res = await fetch(url, {
@@ -67,25 +104,14 @@ const DataIntegrationsView = ({ onUnauthorized, onOpenMercadoLibre }) => {
     }
   };
 
-  const handleUpload = async (event) => {
-    event.preventDefault();
-    setLoading(true);
-    setError("");
-    const formData = new FormData(event.target);
-
-    try {
-      const data = await authorizedFetch(`${API_URL}/ingest/upload`, {
-        method: "POST",
-        body: formData,
-      });
-      setUploadStatus({ ...data, updated_at: new Date().toISOString() });
-      setDatasets(data?.datasets || []);
-    } catch (err) {
-      setError(err.message || "No se pudo subir los archivos");
-    } finally {
-      setLoading(false);
-    }
-  };
+  const handleUpload = async (event) =>
+    handleUploadSubmission(event, {
+      authorizedFetch,
+      setLoading,
+      setError,
+      setUploadStatus,
+      setDatasets,
+    });
 
   return (
     <section className="space-y-6">
