@@ -118,40 +118,16 @@ class DatasetChatPayload(BaseModel):
 # ==============================
 # CONFIGURACIÓN DE CORS
 # ==============================
-# Permite definir múltiples orígenes en la variable FRONTEND_URL separados por comas
-dynamic_origins = [origin.strip() for origin in FRONTEND_URL.split(",") if origin.strip()]
-
-allowed_origins = list({
-    *dynamic_origins,
+allowed_origins = [
     "http://localhost:5173",
-    "http://127.0.0.1:5173",
-    "http://localhost:4173",
-    "http://127.0.0.1:4173",
-    "http://localhost:5174",
-    "http://127.0.0.1:5174",
-    "http://localhost:1000",
-    # Variantes de producción conocidas
-    "https://nvp-informabf.onrender.com",
-    "https://nvp-informabf-front.onrender.com",
-    "https://nvp-informabf-front-web.onrender.com",
+    "http://localhost:3000",
     "https://nvp-informabf-front-wxbb.onrender.com",
-    "http://nvp-informabf-front-web.onrender.com",
-    "https://nvp.informabf.onrender.com",
-    "https://nvp.informabf-front.onrender.com",
-    "http://localhost:1000",
-})
-
-allow_origin_regex = None
-if ALLOW_ONRENDER_WILDCARD:
-    # Render asigna subdominios dinámicos (p. ej., nombre-app.onrender.com).
-    # Esta expresión permite cualquier origen HTTPS dentro de onrender.com
-    # sin exponer el API a orígenes arbitrarios.
-    allow_origin_regex = r"https://.*\.onrender\.com"
+]
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
-    allow_origin_regex=allow_origin_regex,
+    allow_origin_regex=None,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -159,8 +135,6 @@ app.add_middleware(
 
 logging.info(f"🚀 Backend iniciado en modo: {ENV}")
 logging.info(f"🌐 Orígenes permitidos: {allowed_origins}")
-if allow_origin_regex:
-    logging.info(f"🌐 Regex de orígenes permitidos: {allow_origin_regex}")
 
 # ==============================
 # AUTENTICACIÓN
