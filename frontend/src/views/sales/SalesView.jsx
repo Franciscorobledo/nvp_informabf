@@ -5,86 +5,83 @@ import MetricCard from "../../components/cards/MetricCard";
 import ChartCard from "../../components/charts/ChartCard";
 import TableCard from "../../components/tables/TableCard";
 import SkeletonBlock from "../../components/cards/SkeletonBlock";
-import { toChartCardConfig } from "../../components/charts/chartMappers";
 
-const SalesView = ({ onUnauthorized }) => {
+const SalesView = ({ onUnauthorized, onGoToData }) => {
   const token = useMemo(() => localStorage.getItem("token"), []);
-  const [metrics, setMetrics] = useState(null);
-  const [aiSummary, setAiSummary] = useState("");
+  const [analysisData, setAnalysisData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  const fetchWithAuth = async (url, options = {}) => {
-    const res = await fetch(url, {
-      ...options,
-      headers: {
-        "Content-Type": "application/json",
-        ...(options.headers || {}),
-        Authorization: token ? `Bearer ${token}` : undefined,
-      },
-    });
-
-    if (res.status === 401 || res.status === 403) {
-      onUnauthorized?.("Tu sesión expiró. Vuelve a iniciar sesión.");
-      throw new Error("unauthorized");
-    }
-
-    if (!res.ok) {
-      const text = await res.text();
-      throw new Error(text || "Error en la petición");
-    }
-
-    return res.json();
-  };
-
-  const loadMetrics = async () => {
+  const fetchAnalysis = async () => {
     setLoading(true);
     setError("");
     try {
-      const [salesResponse, summaryResponse] = await Promise.all([
-        fetchWithAuth(`${API_URL}/metrics/sales`),
-        fetchWithAuth(`${API_URL}/metrics/summary`),
-      ]);
-      setMetrics(salesResponse);
-      setAiSummary(summaryResponse.ai_summary || "");
+      const res = await fetch(`${API_URL}/analysis/metrics`, {
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: token ? `Bearer ${token}` : undefined,
+        },
+      });
+
+      if (res.status === 401 || res.status === 403) {
+        onUnauthorized?.("Tu sesión expiró. Vuelve a iniciar sesión.");
+        throw new Error("unauthorized");
+      }
+
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(text || "Error en la petición");
+      }
+
+      const data = await res.json();
+      setAnalysisData(data);
     } catch (err) {
-      setError(err.message || "No se pudo cargar el panel de ventas");
+      if (err.message !== "unauthorized") {
+        setError(err.message || "No se pudo cargar el panel de análisis");
+      }
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    loadMetrics();
+    fetchAnalysis();
   }, []);
 
-  const trendChart = toChartCardConfig(metrics?.charts?.trend);
-  const topProductsChart = toChartCardConfig(metrics?.charts?.top_products);
-  const categoriesChart = toChartCardConfig(metrics?.charts?.categories);
-
-  const columns = [
-    { key: "product_name", label: "Producto" },
-    { key: "category", label: "Categoría" },
-    { key: "revenue", label: "Ventas", format: "currency" },
-    { key: "quantity_sold", label: "Unidades", format: "number" },
-    { key: "margin", label: "Margen", format: "currency" },
-  ];
+  const status = analysisData?.status;
+  const chartConfig = analysisData?.chart_data || {};
+  const tableData = analysisData?.table_data || [];
+  const columnTypes = analysisData?.column_types || {};
 
   return (
     <section className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <SectionHeader
-          title="Panel de Ventas"
-          subtitle="KPIs de ingresos, unidades y márgenes"
-          badge="Dashboard oficial"
+          title="Panel de Análisis"
+          subtitle="KPIs básicos y visualizaciones rápidas"
+          badge="Dashboard"
         />
-        <button
-          onClick={loadMetrics}
-          className="rounded-xl border border-slate-300 dark:border-slate-700 px-3 py-2 text-sm font-semibold"
-        >
-          Recargar
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            onClick={onGoToData}
+            className="rounded-xl bg-blue-600 text-white px-3 py-2 text-sm font-semibold shadow hover:bg-blue-700"
+          >
+            Ir a Carga de datos
+          </button>
+          <button
+            onClick={fetchAnalysis}
+            className="rounded-xl border border-slate-300 dark:border-slate-700 px-3 py-2 text-sm font-semibold"
+          >
+            Recargar
+          </button>
+        </div>
       </div>
+
+      {status === "error" && (
+        <p className="text-sm text-rose-600">
+          No hay datos cargados. Sube archivos o conecta Mercado Libre.
+        </p>
+      )}
 
       {error && <p className="text-sm text-rose-600">{error}</p>}
 
@@ -95,53 +92,29 @@ const SalesView = ({ onUnauthorized }) => {
           <SkeletonBlock />
           <SkeletonBlock />
         </div>
-      ) : (
+      ) : status === "ok" ? (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          <MetricCard label="Ventas totales" value={metrics?.kpis?.total_sales} format="currency" />
-          <MetricCard label="Unidades vendidas" value={metrics?.kpis?.units_sold} format="number" />
-          <MetricCard label="Ticket promedio" value={metrics?.kpis?.avg_ticket} format="currency" />
-          <MetricCard label="Margen estimado" value={metrics?.kpis?.margin} format="currency" />
+          <MetricCard label="Ventas totales" value={analysisData?.ventas_totales} format="currency" />
+          <MetricCard label="Unidades totales" value={analysisData?.unidades_totales} format="number" />
+        </div>
+      ) : null}
+
+      {status === "ok" && (
+        <div className="grid gap-4 lg:grid-cols-2">
+          <ChartCard
+            title="Tendencia"
+            type={chartConfig?.type}
+            data={chartConfig?.data || []}
+            xKey={chartConfig?.x_key || chartConfig?.xKey || "label"}
+            series={chartConfig?.series || []}
+          />
+          <TableCard
+            title="Tabla de análisis"
+            data={tableData}
+            columnTypes={columnTypes}
+          />
         </div>
       )}
-
-      <div className="grid gap-4 lg:grid-cols-2">
-        <ChartCard
-          title="Ventas por día / semana"
-          type={trendChart?.type}
-          data={trendChart?.data || []}
-          xKey={trendChart?.xKey}
-          series={trendChart?.series}
-        />
-        <ChartCard
-          title="Top productos"
-          type={topProductsChart?.type}
-          data={topProductsChart?.data || []}
-          xKey={topProductsChart?.xKey}
-          series={topProductsChart?.series}
-        />
-      </div>
-
-      <ChartCard
-        title="Ventas por categoría"
-        type={categoriesChart?.type}
-        data={categoriesChart?.data || []}
-        xKey={categoriesChart?.xKey}
-        series={categoriesChart?.series}
-      />
-
-      <TableCard
-        title="Detalle de productos"
-        data={metrics?.table || []}
-        columns={columns}
-        columnTypes={metrics?.column_types || {}}
-      />
-
-      <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/90 dark:bg-slate-900/70 p-5 space-y-2">
-        <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">Resumen automático (IA)</p>
-        <p className="text-sm text-slate-600 dark:text-slate-300 whitespace-pre-line">
-          {aiSummary || "Aún no hay resumen disponible."}
-        </p>
-      </div>
     </section>
   );
 };
