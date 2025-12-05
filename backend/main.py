@@ -134,6 +134,7 @@ allowed_origins = list({
     "https://nvp-informabf.onrender.com",
     "https://nvp-informabf-front.onrender.com",
     "https://nvp-informabf-front-web.onrender.com",
+    "https://nvp-informabf-front-wxbb.onrender.com",
     "http://nvp-informabf-front-web.onrender.com",
     "https://nvp.informabf.onrender.com",
     "https://nvp.informabf-front.onrender.com",
