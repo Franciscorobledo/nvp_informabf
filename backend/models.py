@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import Boolean, Column, DateTime, Float, ForeignKey, Integer, String
+from sqlalchemy import Boolean, Column, DateTime, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.dialects.sqlite import JSON as SQLiteJSON
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship
@@ -133,3 +133,16 @@ class MLUserConnection(Base):
 
     app = relationship("MLApp", back_populates="connections")
     user = relationship("User", back_populates="ml_connections")
+
+
+class AppLog(Base):
+    __tablename__ = "app_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+    source = Column(String(50), default="backend", nullable=False, index=True)
+    level = Column(String(20), default="INFO", nullable=False, index=True)
+    message = Column(String, nullable=False)
+    details = Column(Text, nullable=True)
+    user = Column(String, nullable=True)
+    path = Column(String, nullable=True)

@@ -9,6 +9,7 @@ from fastapi import (
     Request,
     UploadFile,
 )
+from fastapi.exception_handlers import http_exception_handler, request_validation_exception_handler
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 import pandas as pd
@@ -25,11 +26,13 @@ from datetime import datetime
 import zipfile
 import base64
 import textwrap
+import traceback
 from typing import List
 from dotenv import load_dotenv
 from pydantic import BaseModel, EmailStr
 import smtplib
 from email.message import EmailMessage
+from fastapi.exceptions import RequestValidationError
 
 from utils.file_utils import validate_file
 from analysis import (
@@ -38,7 +41,13 @@ from analysis import (
     generate_data_movie_payload,
     _infer_ai_schema,
 )
-from auth import admin_required, ensure_default_admin, get_current_user, router as auth_router
+from auth import (
+    admin_required,
+    decode_access_token,
+    ensure_default_admin,
+    get_current_user,
+    router as auth_router,
+)
 from ai_module import (
     check_openai_status,
     infer_dataset_schema_with_ai,
@@ -64,6 +73,8 @@ from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
 from reportlab.lib.utils import ImageReader
 from database import Base, SessionLocal, engine
+from logs_router import router as logs_router
+from models import AppLog
 
 # ==============================
 # CONFIGURACIÓN GLOBAL
@@ -156,6 +167,7 @@ app.include_router(metrics_router)
 app.include_router(data_router)
 app.include_router(ingest_router)
 app.include_router(analysis_router)
+app.include_router(logs_router)
 
 
 @app.on_event("startup")
@@ -167,6 +179,51 @@ def startup_event():
 # ==============================
 # FUNCIONES AUXILIARES
 # ==============================
+def _extract_username_from_request(request: Request) -> str | None:
+    auth_header = request.headers.get("authorization")
+    if not auth_header:
+        return None
+
+    try:
+        scheme, token = auth_header.split(" ", 1)
+    except ValueError:
+        return None
+
+    if scheme.lower() != "bearer":
+        return None
+
+    try:
+        payload = decode_access_token(token)
+        return payload.get("sub") or payload.get("username")
+    except Exception:
+        return None
+
+
+def _persist_backend_log(
+    *,
+    level: str,
+    message: str,
+    details: str | None,
+    path: str | None,
+    user: str | None,
+):
+    try:
+        with SessionLocal() as db:
+            db.add(
+                AppLog(
+                    source="backend",
+                    level=level,
+                    message=message[:500],
+                    details=details,
+                    path=path,
+                    user=user,
+                )
+            )
+            db.commit()
+    except Exception as log_exc:  # noqa: BLE001
+        logging.error("No se pudo registrar el log de backend: %s", log_exc)
+
+
 def json_safe(obj):
     """Convierte cualquier tipo no serializable (Timestamp, NaN, numpy types) a algo JSON compatible."""
     if isinstance(obj, (pd.Timestamp, datetime)):
@@ -185,6 +242,30 @@ def json_safe_deep(data):
     if isinstance(data, (list, tuple, set)):
         return [json_safe_deep(v) for v in data]
     return json_safe(data)
+
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    if isinstance(exc, HTTPException):
+        return await http_exception_handler(request, exc)
+
+    if isinstance(exc, RequestValidationError):
+        return await request_validation_exception_handler(request, exc)
+
+    logging.exception("Error no controlado en %s", request.url.path)
+
+    _persist_backend_log(
+        level="ERROR",
+        message=str(exc) if exc else "Error no controlado",
+        details=traceback.format_exc(),
+        path=str(request.url.path),
+        user=_extract_username_from_request(request),
+    )
+
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Internal Server Error"},
+    )
 
 
 def _load_sample_dataframe(file_name: str) -> pd.DataFrame:
