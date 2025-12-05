@@ -476,9 +476,37 @@ async def ingest_upload(
     if sales_df is None and stock_df is None:
         raise HTTPException(status_code=400, detail="No se detectaron columnas válidas de ventas o stock")
 
+    # Prepara columnas estándar para las métricas unificadas
+    if sales_df is not None:
+        if "price" not in sales_df.columns:
+            if "unit_price" in sales_df.columns:
+                sales_df = sales_df.rename(columns={"unit_price": "price"})
+            elif "total" in sales_df.columns:
+                sales_df = sales_df.rename(columns={"total": "price"})
+    if stock_df is not None:
+        if "stock" not in stock_df.columns and "current_stock" in stock_df.columns:
+            stock_df = stock_df.rename(columns={"current_stock": "stock"})
+
+    # Persiste tanto el contexto simplificado como el de métricas oficiales
     _set_simple_data(str(current_user.id), sales_df, stock_df)
 
-    return {"status": "ok", "sales_rows": int(sales_rows), "stock_rows": int(stock_rows)}
+    sales_harmonized = None
+    stock_harmonized = None
+
+    if sales_df is not None:
+        sales_harmonized, _ = harmonize_sales_data(sales_df, "files")
+    if stock_df is not None:
+        stock_harmonized, _ = harmonize_stock_data(stock_df, "files")
+
+    _DATA_CONTEXT.set_payload(str(current_user.id), sales_harmonized, stock_harmonized, "files")
+    payload = _DATA_CONTEXT.get(str(current_user.id))
+
+    return {
+        "status": "ok",
+        "sales_rows": int(sales_rows),
+        "stock_rows": int(stock_rows),
+        "updated_at": payload.get("updated_at", datetime.utcnow()),
+    }
 
 
 def _validate_required(type_name: str, mapping: Dict[str, str]) -> Tuple[list, list]:
