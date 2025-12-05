@@ -54,7 +54,7 @@ from utils.dataframe_loader import read_dataframes
 from utils.openai_keys import get_openai_api_key, persist_openai_api_key
 from utils.openai_monitor import get_usage_snapshot
 from usage_api import router as usage_router
-from data_router import ingest_router, router as data_router
+from data_router import analysis_router, ingest_router, router as data_router
 from utils.job_store import JobStore
 from utils.compare_job_store import CompareJobStore
 from utils.data_movie_store import DataMovieStore
@@ -170,6 +170,7 @@ app.include_router(meli_router)
 app.include_router(metrics_router)
 app.include_router(data_router)
 app.include_router(ingest_router)
+app.include_router(analysis_router)
 
 
 @app.on_event("startup")
