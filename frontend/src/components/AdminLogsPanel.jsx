@@ -41,7 +41,12 @@ const AdminLogsPanel = ({ onUnauthorized }) => {
       const body = await response.json();
       return body?.detail || body?.message || fallbackMessage;
     } catch (err) {
-      return fallbackMessage;
+      try {
+        const text = await response.text();
+        return text || fallbackMessage;
+      } catch {
+        return fallbackMessage;
+      }
     }
   }, []);
 
@@ -67,19 +72,16 @@ const AdminLogsPanel = ({ onUnauthorized }) => {
       });
 
       if (!response.ok) {
+        const detail = await parseBackendMessage(
+          response,
+          "No se pudieron cargar los logs de diagnóstico"
+        );
+
         if ([401, 403].includes(response.status)) {
-          const detail = await parseBackendMessage(
-            response,
-            "No se pudieron cargar los logs. Sesión expirada."
-          );
           onUnauthorized?.(detail);
-          throw new Error(detail);
         }
 
-        const backendMessage = await response.text();
-        throw new Error(
-          backendMessage || "No se pudieron cargar los logs de diagnóstico"
-        );
+        throw new Error(detail);
       }
 
       const data = await response.json();
