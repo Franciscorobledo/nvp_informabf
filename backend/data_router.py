@@ -24,7 +24,6 @@ from utils.data_engine import (
     harmonize_stock_data,
     compute_auto_metrics,
 )
-from utils.dataframe_loader import read_dataframes
 from utils.file_utils import validate_file
 
 router = APIRouter(prefix="/data", tags=["Motor de datos"])
@@ -190,14 +189,25 @@ class ManualMetricsResponse(BaseModel):
 
 
 def _load_dataframe_from_upload(upload: UploadFile) -> pd.DataFrame:
+    validate_file(upload)
     try:
         content = upload.file.read()
-        dataframes = read_dataframes(upload, content)
-        if not dataframes:
-            raise HTTPException(status_code=400, detail="No se pudo leer el archivo")
-        return dataframes[0]
+        filename = (upload.filename or "").lower()
+
+        if filename.endswith(".xlsx") or filename.endswith(".xls"):
+            sheets = pd.read_excel(BytesIO(content), sheet_name=None)
+            if isinstance(sheets, dict):
+                frames = list(sheets.values())
+                if not frames:
+                    raise HTTPException(status_code=400, detail="No se pudo leer el archivo")
+                return pd.concat(frames, ignore_index=True)
+            return sheets
+
+        return pd.read_csv(BytesIO(content), sep=None, engine="python")
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=400, detail="No se pudo leer el archivo. Usa CSV o Excel.") from exc
 
 
 def _dataset_preview(df: pd.DataFrame) -> Tuple[list[str], list[dict]]:
