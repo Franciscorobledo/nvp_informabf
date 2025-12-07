@@ -48,7 +48,7 @@ def test_post_upload_includes_cors_headers(client: TestClient):
             "Authorization": f"Bearer {token}",
         },
         files={
-            "archivo_ventas": ("ventas.csv", sales_csv, "text/csv"),
+            "sales_file": ("ventas.csv", sales_csv, "text/csv"),
         },
     )
 
