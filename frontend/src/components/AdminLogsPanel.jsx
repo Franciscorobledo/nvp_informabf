@@ -36,6 +36,17 @@ const AdminLogsPanel = ({ onUnauthorized }) => {
     return headers;
   }, [token]);
 
+  const getFriendlyError = useCallback((error) => {
+    const message = error?.message || "";
+    const normalized = message.toLowerCase();
+
+    if (normalized.includes("failed to fetch") || normalized.includes("load failed")) {
+      return "No se pudo conectar con el servidor. Verifica tu conexión e intenta nuevamente.";
+    }
+
+    return message || "No se pudieron cargar los logs";
+  }, []);
+
   const parseBackendMessage = useCallback(async (response, fallbackMessage) => {
     try {
       const body = await response.json();
@@ -88,11 +99,19 @@ const AdminLogsPanel = ({ onUnauthorized }) => {
       setLogs(Array.isArray(data?.logs) ? data.logs : []);
     } catch (err) {
       console.error("Error al obtener logs", err);
-      setError(err.message || "No se pudieron cargar los logs");
+      setError(getFriendlyError(err));
     } finally {
       setLoading(false);
     }
-  }, [authHeaders, filterLevel, filterSource, onUnauthorized, parseBackendMessage, token]);
+  }, [
+    authHeaders,
+    filterLevel,
+    filterSource,
+    getFriendlyError,
+    onUnauthorized,
+    parseBackendMessage,
+    token,
+  ]);
 
   useEffect(() => {
     fetchLogs();
