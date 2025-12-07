@@ -57,17 +57,35 @@ const DataIntegrationsView = ({ onUnauthorized, onOpenMercadoLibre }) => {
       },
     });
 
+    const resClone = res.clone();
+    let payload = null;
+
+    try {
+      payload = await res.json();
+    } catch (err) {
+      payload = null;
+    }
+
     if (res.status === 401 || res.status === 403) {
       onUnauthorized?.("Tu sesión expiró. Vuelve a iniciar sesión.");
       throw new Error("unauthorized");
     }
 
     if (!res.ok) {
-      const text = await res.text();
-      throw new Error(text || "Error en la petición");
+      const detail = payload?.message || payload?.detail;
+      if (detail) {
+        throw new Error(detail);
+      }
+
+      const fallbackText = await resClone.text().catch(() => "");
+      throw new Error(fallbackText || "Error en la petición");
     }
 
-    return res.json();
+    if (payload !== null) {
+      return payload;
+    }
+
+    return resClone.text();
   };
 
   const downloadSample = async (type) => {
@@ -171,6 +189,7 @@ const DataIntegrationsView = ({ onUnauthorized, onOpenMercadoLibre }) => {
 
         <form
           onSubmit={handleUpload}
+          encType="multipart/form-data"
           className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/90 dark:bg-slate-900/70 p-5 space-y-3"
         >
           <div className="flex items-center justify-between">
@@ -192,8 +211,9 @@ const DataIntegrationsView = ({ onUnauthorized, onOpenMercadoLibre }) => {
               <span className="font-semibold text-slate-700 dark:text-slate-200">Archivo de ventas</span>
               <input
                 type="file"
-                name="archivo_ventas"
+                name="sales_file"
                 accept=".csv,.xlsx,.xls"
+                multiple
                 className="w-full rounded-xl border border-dashed border-slate-300 dark:border-slate-700 px-3 py-2"
               />
               <button
@@ -208,8 +228,9 @@ const DataIntegrationsView = ({ onUnauthorized, onOpenMercadoLibre }) => {
               <span className="font-semibold text-slate-700 dark:text-slate-200">Archivo de stock</span>
               <input
                 type="file"
-                name="archivo_stock"
+                name="stock_file"
                 accept=".csv,.xlsx,.xls"
+                multiple
                 className="w-full rounded-xl border border-dashed border-slate-300 dark:border-slate-700 px-3 py-2"
               />
               <button
@@ -243,8 +264,11 @@ const DataIntegrationsView = ({ onUnauthorized, onOpenMercadoLibre }) => {
         <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/90 dark:bg-slate-900/70 p-5 space-y-3">
           <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">Mapeo inteligente (IA)</p>
           <div className="grid gap-3 md:grid-cols-2">
-            {datasets.map((ds) => (
-              <div key={ds.type} className="rounded-xl border border-slate-200 dark:border-slate-800 p-3 space-y-2">
+            {datasets.map((ds, idx) => (
+              <div
+                key={`${ds.type}-${idx}`}
+                className="rounded-xl border border-slate-200 dark:border-slate-800 p-3 space-y-2"
+              >
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-semibold capitalize">{ds.type}</span>
                   <span className="text-xs text-slate-500">{ds.row_count} filas</span>
@@ -261,6 +285,13 @@ const DataIntegrationsView = ({ onUnauthorized, onOpenMercadoLibre }) => {
                   <p className="text-xs text-amber-600">
                     Faltan opcionales: {ds.missing_optional.join(", ")}
                   </p>
+                )}
+                {(ds.warnings || []).length > 0 && (
+                  <ul className="text-xs text-amber-600 list-disc list-inside space-y-1">
+                    {ds.warnings.map((warning, warningIdx) => (
+                      <li key={warningIdx}>{warning}</li>
+                    ))}
+                  </ul>
                 )}
               </div>
             ))}

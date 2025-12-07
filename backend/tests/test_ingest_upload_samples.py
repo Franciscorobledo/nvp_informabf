@@ -30,8 +30,8 @@ def test_ingest_upload_accepts_sample_csvs(client: TestClient):
             "/ingest/upload",
             headers={"Authorization": f"Bearer {token}"},
             files={
-                "archivo_ventas": (ventas_path.name, ventas_file, "text/csv"),
-                "archivo_stock": (stock_path.name, stock_file, "text/csv"),
+                "sales_file": (ventas_path.name, ventas_file, "text/csv"),
+                "stock_file": (stock_path.name, stock_file, "text/csv"),
             },
         )
 
@@ -41,3 +41,27 @@ def test_ingest_upload_accepts_sample_csvs(client: TestClient):
     assert payload["status"] == "ok"
     assert payload["sales_rows"] == 3
     assert payload["stock_rows"] == 3
+
+
+def test_ingest_upload_concatenates_multiple_sales_files(client: TestClient):
+    token = _login(client, "admin", "Francisco8")
+
+    first_sales = "sku,quantity,unit_price\nSKU1,1,10\n"
+    second_sales = "sku,quantity,unit_price\nSKU2,2,5\n"
+
+    response = client.post(
+        "/ingest/upload",
+        headers={"Authorization": f"Bearer {token}"},
+        files=[
+            ("sales_file", ("ventas1.csv", first_sales, "text/csv")),
+            ("sales_file", ("ventas2.csv", second_sales, "text/csv")),
+        ],
+    )
+
+    assert response.status_code == 200, response.text
+    payload = response.json()
+
+    assert payload["sales_rows"] == 2
+    assert payload["stock_rows"] == 0
+    assert len(payload.get("datasets", [])) == 2
+    assert {ds["type"] for ds in payload["datasets"]} == {"sales"}

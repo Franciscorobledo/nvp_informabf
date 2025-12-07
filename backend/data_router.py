@@ -234,7 +234,7 @@ def _heuristic_classify(columns: list[str], sample_rows: list[dict]) -> dict:
     mapping["product_name"] = _match(
         ["producto", "product", "item", "articulo", "artículo", "nombre", "descripcion", "categoría", "categoria"]
     )
-    mapping["quantity"] = _match(["cantidad", "unidades", "qty", "ticket", "tickets"])
+    mapping["quantity"] = _match(["cantidad", "unidades", "qty", "ticket", "tickets", "quantity"])
     mapping["unit_price"] = _match(["precio", "price", "unit_price", "p.u", "pu", "importe_unitario"])
     mapping["total"] = _match(["total", "venta", "ventas", "monto", "importe", "venta_neta", "neto", "facturacion", "ingreso"])
     mapping["channel"] = _match(["canal", "channel", "sucursal", "tienda", "marketplace", "plataforma"])
@@ -245,7 +245,7 @@ def _heuristic_classify(columns: list[str], sample_rows: list[dict]) -> dict:
     mapping.setdefault("unit_cost", _match(["costo", "coste", "unit_cost", "costo_unitario"]))
     mapping.setdefault("location", _match(["almacen", "almacén", "bodega", "deposito", "depósito", "ubicacion", "sucursal", "tienda"]))
 
-    sales_signals = any(token in lc for lc in lower_columns for token in ["venta", "ticket", "factur", "precio"])
+    sales_signals = any(token in lc for lc in lower_columns for token in ["venta", "ticket", "factur", "precio", "quantity", "cantidad", "qty"])
     stock_signals = any(token in lc for lc in lower_columns for token in ["stock", "inventario", "existencia"])
 
     dtype: Literal["sales", "stock", "unknown"] = "unknown"
@@ -254,12 +254,6 @@ def _heuristic_classify(columns: list[str], sample_rows: list[dict]) -> dict:
         dtype = "stock"
     elif sales_signals or (mapping.get("date") and (mapping.get("total") or mapping.get("quantity"))):
         dtype = "sales"
-
-    # Validar campos mínimos para no devolver falsos positivos
-    if dtype == "sales" and (not mapping.get("date") or not mapping.get("sku")):
-        dtype = "unknown"
-    if dtype == "stock" and (not mapping.get("sku") or not mapping.get("current_stock")):
-        dtype = "unknown"
 
     return {"type": dtype, "columns": {k: v for k, v in mapping.items() if v}}
 
@@ -364,12 +358,26 @@ def _get_or_seed_data(user_id: str) -> Dict[str, Any]:
 def _read_upload_to_dataframe(upload: UploadFile) -> pd.DataFrame:
     content = upload.file.read()
     filename = (upload.filename or "").lower()
+    allowed_extensions = (".csv", ".xlsx", ".xls")
+
+    if not filename.endswith(allowed_extensions):
+        raise HTTPException(
+            status_code=400,
+            detail="Formato no soportado. Sube archivos CSV o Excel (.xlsx, .xls).",
+        )
+
+    if not content:
+        raise HTTPException(status_code=400, detail="El archivo está vacío o no se pudo leer.")
+
     try:
         if filename.endswith(".xlsx") or filename.endswith(".xls"):
             return pd.read_excel(BytesIO(content))
         return pd.read_csv(BytesIO(content), sep=None, engine="python")
     except Exception as exc:
-        raise HTTPException(status_code=400, detail="No se pudo leer el archivo. Usa CSV o Excel.") from exc
+        raise HTTPException(
+            status_code=400,
+            detail="No se pudo procesar el archivo. Verifica que sea un CSV o Excel válido.",
+        ) from exc
 
 
 def _normalize_sales_columns(df: pd.DataFrame) -> pd.DataFrame:
@@ -440,40 +448,64 @@ def _detect_dataset_type(df: pd.DataFrame) -> Literal["sales", "stock", "unknown
 @ingest_router.post("/upload")
 async def ingest_upload(
     *,
-    archivo_ventas: Optional[UploadFile] = File(None, description="Archivo de ventas"),
-    archivo_stock: Optional[UploadFile] = File(None, description="Archivo de stock"),
+    sales_file: Optional[list[UploadFile]] = File(None, description="Archivo de ventas"),
+    stock_file: Optional[list[UploadFile]] = File(None, description="Archivo de stock"),
+    archivo_ventas: Optional[list[UploadFile]] = File(None, description="Archivo de ventas", alias="archivo_ventas"),
+    archivo_stock: Optional[list[UploadFile]] = File(None, description="Archivo de stock", alias="archivo_stock"),
     current_user=Depends(get_current_user),
 ):
-    """Sube archivos de ventas y/o stock y los almacena en memoria (MVP)."""
+    """Sube archivos de ventas y/o stock y los almacena en memoria (MVP).
+
+    Se aceptan los campos sales_file y stock_file en multipart/form-data. Para
+    compatibilidad también se aceptan archivo_ventas y archivo_stock.
+    """
 
     try:
-        if archivo_ventas is None and archivo_stock is None:
+        ventas_uploads = []
+        stock_uploads = []
+
+        for uploads in [sales_file, archivo_ventas]:
+            if uploads:
+                ventas_uploads.extend(uploads)
+
+        for uploads in [stock_file, archivo_stock]:
+            if uploads:
+                stock_uploads.extend(uploads)
+
+        if not ventas_uploads and not stock_uploads:
             raise HTTPException(status_code=400, detail="Debes enviar al menos un archivo")
 
         sales_rows = 0
         stock_rows = 0
+        sales_frames: list[pd.DataFrame] = []
+        stock_frames: list[pd.DataFrame] = []
+        datasets: list[IngestedDataset] = []
+
+        for upload in [*ventas_uploads, *stock_uploads]:
+            df = _read_upload_to_dataframe(upload)
+            internal_df, normalized_df, dataset_meta = _ingest_dataframe(df, "files", strict_required=False)
+
+            if dataset_meta.get("missing_optional"):
+                dataset_meta["warnings"].append(
+                    f"Faltan columnas opcionales: {', '.join(dataset_meta['missing_optional'])}"
+                )
+
+            datasets.append(IngestedDataset(**dataset_meta))
+
+            if dataset_meta.get("type") == "sales" and normalized_df is not None:
+                sales_rows += len(normalized_df)
+                sales_frames.append(normalized_df)
+            elif dataset_meta.get("type") == "stock" and normalized_df is not None:
+                stock_rows += len(normalized_df)
+                stock_frames.append(normalized_df)
+
         sales_df: Optional[pd.DataFrame] = None
         stock_df: Optional[pd.DataFrame] = None
 
-        if archivo_ventas is not None:
-            ventas_df = _read_upload_to_dataframe(archivo_ventas)
-            dataset_type = _detect_dataset_type(ventas_df)
-            if dataset_type == "sales":
-                sales_df = _normalize_sales_columns(ventas_df)
-                sales_rows = len(sales_df)
-            elif dataset_type == "stock":
-                stock_df = _normalize_stock_columns(ventas_df)
-                stock_rows = len(stock_df)
-
-        if archivo_stock is not None:
-            stock_raw = _read_upload_to_dataframe(archivo_stock)
-            dataset_type = _detect_dataset_type(stock_raw)
-            if dataset_type == "stock":
-                stock_df = _normalize_stock_columns(stock_raw)
-                stock_rows = len(stock_df)
-            elif dataset_type == "sales":
-                sales_df = _normalize_sales_columns(stock_raw)
-                sales_rows = len(sales_df)
+        if sales_frames:
+            sales_df = pd.concat(sales_frames, ignore_index=True)
+        if stock_frames:
+            stock_df = pd.concat(stock_frames, ignore_index=True)
 
         if sales_df is None and stock_df is None:
             raise HTTPException(status_code=400, detail="No se detectaron columnas válidas de ventas o stock")
@@ -508,6 +540,7 @@ async def ingest_upload(
             "sales_rows": int(sales_rows),
             "stock_rows": int(stock_rows),
             "updated_at": payload.get("updated_at", datetime.utcnow()),
+            "datasets": [ds.model_dump() for ds in datasets],
         }
     except HTTPException as exc:  # noqa: BLE001
         logging.warning("⚠️ Error en /ingest/upload: %s", exc.detail)
@@ -535,7 +568,9 @@ def _validate_required(type_name: str, mapping: Dict[str, str]) -> Tuple[list, l
     return missing, missing_optional
 
 
-def _ingest_dataframe(df: pd.DataFrame, source: str) -> Tuple[pd.DataFrame, Optional[pd.DataFrame], dict]:
+def _ingest_dataframe(
+    df: pd.DataFrame, source: str, *, strict_required: bool = True
+) -> Tuple[pd.DataFrame, Optional[pd.DataFrame], dict]:
     columns, sample_rows = _dataset_preview(df)
     ai_result = classify_tabular_dataset(columns, sample_rows, STANDARD_SCHEMA_DOC)
 
@@ -571,10 +606,13 @@ def _ingest_dataframe(df: pd.DataFrame, source: str) -> Tuple[pd.DataFrame, Opti
         )
 
     if missing_required:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Faltan columnas requeridas: {', '.join(missing_required)}",
-        )
+        if not strict_required:
+            warnings.append(f"Faltan columnas requeridas: {', '.join(missing_required)}")
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Faltan columnas requeridas: {', '.join(missing_required)}",
+            )
 
     normalized_df: Optional[pd.DataFrame] = None
     internal_df: Optional[pd.DataFrame] = None

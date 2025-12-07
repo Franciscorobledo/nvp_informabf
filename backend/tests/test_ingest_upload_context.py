@@ -37,8 +37,8 @@ def test_ingest_upload_updates_active_context(client: TestClient):
     response = client.post(
         "/ingest/upload",
         files={
-            "archivo_ventas": ("ventas.csv", sales_csv, "text/csv"),
-            "archivo_stock": ("stock.csv", stock_csv, "text/csv"),
+            "sales_file": ("ventas.csv", sales_csv, "text/csv"),
+            "stock_file": ("stock.csv", stock_csv, "text/csv"),
         },
         headers={"Authorization": f"Bearer {token}"},
     )
