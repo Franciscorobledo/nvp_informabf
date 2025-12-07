@@ -25,6 +25,7 @@ from utils.data_engine import (
     compute_auto_metrics,
 )
 from utils.dataframe_loader import read_dataframes
+from utils.file_utils import validate_file
 
 router = APIRouter(prefix="/data", tags=["Motor de datos"])
 ingest_router = APIRouter(prefix="/ingest", tags=["Ingesta inteligente"])
@@ -362,11 +363,15 @@ def _get_or_seed_data(user_id: str) -> Dict[str, Any]:
 
 
 def _read_upload_to_dataframe(upload: UploadFile) -> pd.DataFrame:
+    validate_file(upload)
     content = upload.file.read()
     filename = (upload.filename or "").lower()
     try:
         if filename.endswith(".xlsx") or filename.endswith(".xls"):
-            return pd.read_excel(BytesIO(content))
+            sheets = pd.read_excel(BytesIO(content), sheet_name=None)
+            if isinstance(sheets, dict):
+                return pd.concat(list(sheets.values()), ignore_index=True)
+            return sheets
         return pd.read_csv(BytesIO(content), sep=None, engine="python")
     except Exception as exc:
         raise HTTPException(status_code=400, detail="No se pudo leer el archivo. Usa CSV o Excel.") from exc
@@ -503,11 +508,16 @@ async def ingest_upload(
         _DATA_CONTEXT.set_payload(str(current_user.id), sales_harmonized, stock_harmonized, "files")
         payload = _DATA_CONTEXT.get(str(current_user.id))
 
+        sales_sample = _json_safe(sales_df.head(5)) if sales_df is not None else []
+        stock_sample = _json_safe(stock_df.head(5)) if stock_df is not None else []
+
         return {
             "status": "ok",
             "sales_rows": int(sales_rows),
             "stock_rows": int(stock_rows),
             "updated_at": payload.get("updated_at", datetime.utcnow()),
+            "sales_sample": sales_sample,
+            "stock_sample": stock_sample,
         }
     except HTTPException as exc:  # noqa: BLE001
         logging.warning("⚠️ Error en /ingest/upload: %s", exc.detail)
