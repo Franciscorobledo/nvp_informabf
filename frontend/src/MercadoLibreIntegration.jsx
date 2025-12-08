@@ -1,9 +1,9 @@
 import React, { useEffect, useMemo, useState } from "react";
 import API_URL from "./api";
+import { MERCADO_LIBRE_APP_ALIAS } from "./constants/mercadoLibre";
 
 const MercadoLibreIntegration = ({ onUnauthorized }) => {
-  const APP_ALIAS = "informeBF – Conector Mercado Libre";
-  const [appAlias] = useState(APP_ALIAS);
+  const [appAlias] = useState(MERCADO_LIBRE_APP_ALIAS);
   const [connection, setConnection] = useState(null);
   const [seller, setSeller] = useState(null);
   const [syncMessage, setSyncMessage] = useState("");

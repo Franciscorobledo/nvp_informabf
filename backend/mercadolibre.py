@@ -1204,6 +1204,58 @@ def sync_orders(credential_id: int, db: Session = Depends(get_db), current_user=
     }
 
 
+@router.get("/sync/orders/full")
+def sync_orders_full(credential_id: int, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
+    """Recupera todas las órdenes históricas paginando de a 200 registros."""
+
+    if credential_id == 0:
+        df = _orders_to_dataframe(DEMO_ORDERS.get("results") or [])
+        standardized, mapping = standardize_dataframe(df)
+        return {
+            "detail": "Importación completa simulada (demo). Puede tardar en cuentas reales.",
+            "total": len(df),
+            "records": standardized.to_dict(orient="records"),
+            "mapping": mapping,
+        }
+
+    cred = _credential_or_404(db, credential_id)
+    _require_owner(cred, current_user.id)
+    if not cred.seller_id:
+        seller = _meli_get(cred, "https://api.mercadolibre.com/users/me", db)
+        cred.seller_id = seller.get("id")
+        db.add(cred)
+        db.commit()
+        db.refresh(cred)
+
+    limit = 200
+    offset = 0
+    all_orders: list[dict[str, Any]] = []
+
+    while True:
+        params = {"seller": cred.seller_id, "order.status": "paid", "limit": limit, "offset": offset}
+        data = _meli_get(cred, "https://api.mercadolibre.com/orders/search", db, params=params)
+        orders = data.get("results") or []
+        all_orders.extend(orders)
+        paging = data.get("paging") or {}
+        total = paging.get("total", 0)
+
+        if offset + limit >= total or not orders:
+            break
+
+        offset += limit
+
+    df = _orders_to_dataframe(all_orders)
+    standardized, mapping = standardize_dataframe(df)
+
+    # TODO: Guardar las órdenes completas en la base para futuros usos/consultas.
+    return {
+        "detail": "Sincronización completa ejecutada. Este proceso puede tardar unos minutos dependiendo del volumen de datos.",
+        "total": len(all_orders),
+        "records": standardized.to_dict(orient="records"),
+        "mapping": mapping,
+    }
+
+
 @router.get("/sync/stock")
 def sync_stock(credential_id: int, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
     """Entrega inventario activo/pausado en formato estándar."""
