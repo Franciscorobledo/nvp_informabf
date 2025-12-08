@@ -613,6 +613,14 @@ class RefreshPayload(BaseModel):
     app_alias: str
 
 
+class WebhookNotification(BaseModel):
+    user_id: Optional[str] = None
+    resource: Optional[str] = None
+    topic: Optional[str] = None
+    application_id: Optional[int] = None
+    attempts: Optional[int] = None
+
+
 @meli_router.post("/refresh")
 def refresh_connection(payload: RefreshPayload, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
     app, connection = _get_connection_for_user(db, current_user, payload.app_alias)
@@ -656,6 +664,109 @@ def sync_data(app_alias: str, current_user=Depends(get_current_user), db: Sessio
         "inventory": inventory,
         "last_sync": connection.updated_at,
     }
+
+
+@router.get("/sync")
+def sync_overview(
+    credential_id: int = Query(0, ge=0),
+    current_user=Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Devuelve seller, órdenes e inventario actualizados para el panel de usuario."""
+
+    if credential_id == 0:
+        return {
+            "seller": DEMO_SELLER,
+            "orders": DEMO_ORDERS,
+            "inventory": {"active": DEMO_ACTIVE_LISTINGS, "paused": DEMO_PAUSED_LISTINGS},
+            "last_sync": datetime.utcnow(),
+        }
+
+    cred = _credential_or_404(db, credential_id)
+    _require_owner(cred, current_user.id)
+
+    seller = _meli_get(cred, "https://api.mercadolibre.com/users/me", db)
+    cred.seller_id = seller.get("id") or cred.seller_id
+    cred.nickname = seller.get("nickname") or cred.nickname
+
+    orders = recent_orders(cred.id, db, current_user)
+    inventory = {
+        "active": active_listings(cred.id, db, current_user),
+        "paused": paused_listings(cred.id, db, current_user),
+    }
+
+    cred.updated_at = datetime.utcnow()
+    db.add(cred)
+    db.commit()
+
+    return {"seller": seller, "orders": orders, "inventory": inventory, "last_sync": cred.updated_at}
+
+
+def _extract_seller_id(notification: WebhookNotification) -> Optional[str]:
+    if notification.user_id:
+        return str(notification.user_id)
+    if notification.resource:
+        parts = notification.resource.strip("/").split("/")
+        if parts:
+            return parts[-1]
+    return None
+
+
+def _refresh_data_context_for_user(cred: MercadoLibreCredential, db: Session, user: Optional[User]) -> None:
+    if not user:
+        return
+
+    try:
+        from data_router import _DATA_CONTEXT
+        from utils.data_engine import harmonize_sales_data, harmonize_stock_data
+
+        sales_raw, _ = fetch_orders_dataframe(cred.id, db, user)
+        stock_raw, _ = fetch_inventory_dataframe(cred.id, db, user)
+        sales_df, _ = harmonize_sales_data(sales_raw, "mercadolibre")
+        stock_df, _ = harmonize_stock_data(stock_raw, "mercadolibre")
+        _DATA_CONTEXT.set_payload(
+            str(user.id),
+            sales_df,
+            stock_df,
+            "mercadolibre",
+            raw_sales_df=sales_raw,
+            raw_stock_df=stock_raw,
+        )
+    except HTTPException:
+        raise
+    except Exception as exc:  # noqa: BLE001
+        logging.exception("No se pudo refrescar el contexto de datos para ML: %s", exc)
+
+
+@router.post("/webhook")
+def mercadolibre_webhook(payload: WebhookNotification, db: Session = Depends(get_db)):
+    """Recibe notificaciones de MercadoLibre y refresca datos en memoria."""
+
+    seller_id = _extract_seller_id(payload)
+    if not seller_id:
+        logging.info("Webhook ML recibido sin seller/user id. Payload: %s", payload.dict())
+        return {"detail": "payload sin seller", "updated_users": []}
+
+    creds = (
+        db.query(MercadoLibreCredential)
+        .filter(MercadoLibreCredential.seller_id == seller_id)
+        .all()
+    )
+    updated_users: set[str] = set()
+
+    if not creds:
+        logging.warning("No se encontraron credenciales para seller_id %s", seller_id)
+        return {"detail": "sin credenciales", "updated_users": []}
+
+    for cred in creds:
+        user = cred.user or db.query(User).filter(User.id == cred.user_id).first()
+        try:
+            _refresh_data_context_for_user(cred, db, user)
+            updated_users.add(str(cred.user_id))
+        except HTTPException as exc:  # noqa: PERF401
+            logging.warning("Webhook ML no pudo actualizar usuario %s: %s", cred.user_id, exc)
+
+    return {"detail": "ok", "updated_users": sorted(updated_users)}
 
 
 def _authorization_url(credential: MercadoLibreCredential, state: str) -> str:

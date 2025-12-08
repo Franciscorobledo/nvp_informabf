@@ -3,6 +3,7 @@ import Login from "./Login";
 import ConfigurationPage from "./ConfigurationPage";
 import MercadoLibreIntegration from "./MercadoLibreIntegration";
 import AdminMercadoLibreApps from "./AdminMercadoLibreApps";
+import MercadoLibreDashboard from "./views/mercadolibre/MercadoLibreDashboard";
 import HomeView from "./views/home/HomeView";
 import SalesView from "./views/sales/SalesView";
 import StockView from "./views/stock/StockView";
@@ -858,7 +859,10 @@ const App = () => {
                   </div>
                 </div>
               ) : activePage === "meli-user" ? (
-                <MercadoLibreIntegration onUnauthorized={handleUnauthorized} />
+                <div className="space-y-6">
+                  <MercadoLibreDashboard onUnauthorized={handleUnauthorized} />
+                  <MercadoLibreIntegration onUnauthorized={handleUnauthorized} />
+                </div>
               ) : activePage === "meli-admin" ? (
                 <AdminMercadoLibreApps onUnauthorized={handleUnauthorized} />
               ) : (
