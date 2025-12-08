@@ -75,6 +75,7 @@ from utils.compare_job_store import CompareJobStore
 from utils.data_movie_store import DataMovieStore
 from utils.dataset_store import DatasetStore
 from utils.app_log import persist_app_log
+from subscriptions import router as subscriptions_router, ensure_default_plans
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
@@ -106,6 +107,12 @@ SMTP_USERNAME = os.getenv("SMTP_USERNAME")
 SMTP_PASSWORD = os.getenv("SMTP_PASSWORD")
 SMTP_FROM = os.getenv("SMTP_FROM", SMTP_USERNAME)
 SMTP_USE_TLS = os.getenv("SMTP_USE_TLS", "true").lower() in {"1", "true", "yes"}
+MP_ACCESS_TOKEN = os.getenv("MP_ACCESS_TOKEN", "")
+MP_WEBHOOK_SECRET = os.getenv("MP_WEBHOOK_SECRET")
+FRONTEND_BASE_URL = os.getenv("FRONTEND_BASE_URL", FRONTEND_URL)
+BACKEND_BASE_URL = os.getenv(
+    "BACKEND_BASE_URL", f"http://{os.getenv('HOST', 'localhost')}:{PORT}"
+)
 SERVER_START_TIME = datetime.utcnow()
 
 logging.basicConfig(
@@ -177,6 +184,7 @@ app.include_router(data_router)
 app.include_router(ingest_router)
 app.include_router(analysis_router)
 app.include_router(logs_router)
+app.include_router(subscriptions_router)
 
 
 @app.on_event("startup")
@@ -184,6 +192,7 @@ def startup_event():
     Base.metadata.create_all(bind=engine)
     with SessionLocal() as db:
         ensure_default_admin(db)
+        ensure_default_plans(db)
     _start_log_cleanup_scheduler()
 
 

@@ -11,6 +11,9 @@ import DataIntegrationsView from "./views/data/DataIntegrationsView";
 import ComparativesView from "./views/comparatives/ComparativesView";
 import ReportBuilderView from "./views/reports/ReportBuilderView";
 import MainLayout from "./layouts/MainLayout";
+import PlansPage from "./PlansPage";
+import SubscriptionStatus from "./SubscriptionStatus";
+import PlanGuard from "./components/PlanGuard";
 import {
   clearStoredSession,
   decodeTokenPayload,
@@ -19,6 +22,8 @@ import {
 
 const App = () => {
   const [user, setUser] = useState(null);
+  const [token, setToken] = useState(null);
+  const [subscription, setSubscription] = useState(null);
   const [sessionMessage, setSessionMessage] = useState("");
   const [loading, setLoading] = useState(true);
   const [theme, setTheme] = useState("light");
@@ -210,6 +215,9 @@ const App = () => {
     if (path.startsWith("/integrations"))
       return { page: "integrations", module: "home" };
     if (path.startsWith("/config")) return { page: "config", module: "home" };
+    if (path.startsWith("/planes")) return { page: "planes", module: "home" };
+    if (path.startsWith("/suscripcion/estado"))
+      return { page: "subscription-status", module: "home" };
     return { page: "home", module: "data" };
   };
 
@@ -219,24 +227,26 @@ const App = () => {
   const [currentModule, setCurrentModule] = useState(initialNavigation.module);
 
   useEffect(() => {
-    const token = localStorage.getItem("token");
+    const storedToken = localStorage.getItem("token");
     const storedUser = localStorage.getItem("user");
 
-    if (token && storedUser) {
-      if (isTokenExpired(token)) {
+    if (storedToken && storedUser) {
+      if (isTokenExpired(storedToken)) {
         clearStoredSession();
         setSessionMessage("Tu sesión expiró. Vuelve a iniciar sesión.");
       } else {
         try {
           const parsed = JSON.parse(storedUser);
-          const payload = decodeTokenPayload(token);
+          const payload = decodeTokenPayload(storedToken);
           const resolvedUser = {
             username: parsed?.username || payload?.sub || storedUser,
             role: parsed?.role || payload?.role || "user",
           };
           setUser(resolvedUser);
+          setToken(storedToken);
         } catch {
           setUser({ username: storedUser, role: "user" });
+          setToken(storedToken);
         }
       }
     }
@@ -282,13 +292,15 @@ const App = () => {
     }, [user, activePage]);
 
   const handleLogin = (data) => {
-    const token = localStorage.getItem("token");
-    if (!token) {
+    const authToken = localStorage.getItem("token");
+    if (!authToken) {
       return;
     }
 
     setSessionMessage("");
     setUser({ username: data.username, role: data.role || "user" });
+    setToken(authToken);
+    refreshSubscription(authToken);
     setCurrentModule("data");
   };
 
@@ -309,6 +321,8 @@ const App = () => {
       message || "Sesión cerrada. Vuelve a iniciar sesión para continuar."
     );
     setUser(null);
+    setToken(null);
+    setSubscription(null);
     setActivePage("home");
     setCurrentModule("home");
     setMenuOpen(false);
@@ -327,33 +341,39 @@ const App = () => {
     setModulesOpen(false);
   };
 
-    const navigateTo = (page) => {
-      if (page === "config" && user?.role !== "admin") {
-        setSessionMessage(
-          "Solo los administradores pueden acceder al panel de configuración."
-        );
-        setActivePage("home");
-        setCurrentModule("data");
-        setMenuOpen(false);
-        setModulesOpen(false);
-        return;
-      }
+  const navigateTo = (page) => {
+    if (page === "config" && user?.role !== "admin") {
+      setSessionMessage(
+        "Solo los administradores pueden acceder al panel de configuración."
+      );
+      setActivePage("home");
+      setCurrentModule("data");
+      setMenuOpen(false);
+      setModulesOpen(false);
+      return;
+    }
 
     setActivePage(page);
     setMenuOpen(false);
     setModulesOpen(false);
 
-      if (page === "config") {
-        window.history.pushState({ page }, "", "/config");
-        setCurrentModule("home");
-      } else if (page === "integrations") {
-        window.history.pushState({ page }, "", "/integrations");
-        setCurrentModule("home");
-      } else {
-        window.history.pushState({ page }, "", "/");
-        setCurrentModule("data");
-      }
-    };
+    if (page === "config") {
+      window.history.pushState({ page }, "", "/config");
+      setCurrentModule("home");
+    } else if (page === "integrations") {
+      window.history.pushState({ page }, "", "/integrations");
+      setCurrentModule("home");
+    } else if (page === "planes") {
+      window.history.pushState({ page }, "", "/planes");
+      setCurrentModule("home");
+    } else if (page === "subscription-status") {
+      window.history.pushState({ page }, "", "/suscripcion/estado");
+      setCurrentModule("home");
+    } else {
+      window.history.pushState({ page }, "", "/");
+      setCurrentModule("data");
+    }
+  };
 
   const goToMeliUser = () => {
     setActivePage("meli-user");
@@ -413,12 +433,34 @@ const App = () => {
     }
   }, [user]);
 
+  const refreshSubscription = async (overrideToken) => {
+    const authToken = overrideToken || token;
+    if (!authToken) return;
+
+    try {
+      const res = await fetch(`${API_URL}/subscriptions/me`, {
+        headers: { Authorization: `Bearer ${authToken}` },
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      setSubscription(data);
+    } catch (err) {
+      console.error("No se pudo actualizar la suscripción", err);
+    }
+  };
+
   useEffect(() => {
     if (currentModule === "home") return;
 
     const timeoutId = setTimeout(scrollToModuleContent, 50);
     return () => clearTimeout(timeoutId);
   }, [currentModule]);
+
+  useEffect(() => {
+    if (token) {
+      refreshSubscription(token);
+    }
+  }, [token]);
 
   if (loading) {
     return (
@@ -442,13 +484,27 @@ const App = () => {
       case "comparatives":
         return <ComparativesView onUnauthorized={handleUnauthorized} />;
       case "reports":
-        return <ReportBuilderView onUnauthorized={handleUnauthorized} />;
+        return (
+          <PlanGuard
+            subscription={subscription}
+            minPlan="pro"
+            onUpgrade={() => navigateTo("planes")}
+          >
+            <ReportBuilderView onUnauthorized={handleUnauthorized} />
+          </PlanGuard>
+        );
       case "data":
         return (
-          <DataIntegrationsView
-            onUnauthorized={handleUnauthorized}
-            onOpenMercadoLibre={goToMeliUser}
-          />
+          <PlanGuard
+            subscription={subscription}
+            minPlan="pro"
+            onUpgrade={() => navigateTo("planes")}
+          >
+            <DataIntegrationsView
+              onUnauthorized={handleUnauthorized}
+              onOpenMercadoLibre={goToMeliUser}
+            />
+          </PlanGuard>
         );
       default:
         return null;
@@ -498,6 +554,18 @@ const App = () => {
                     >
                       <HomeIcon className="h-4 w-4 transition-transform duration-200 group-hover:-translate-y-0.5" />
                       Inicio
+                    </button>
+
+                    <button
+                      onClick={() => navigateTo("planes")}
+                      className={`group flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold transition-all duration-200 ${
+                        activePage === "planes"
+                          ? "bg-indigo-600 text-white shadow-lg shadow-indigo-500/30"
+                          : "text-slate-700 dark:text-slate-100 hover:bg-slate-100/70 dark:hover:bg-slate-800/70"
+                      }`}
+                    >
+                      <ShieldIcon className="h-4 w-4 transition-transform duration-200 group-hover:-translate-y-0.5" />
+                      Planes
                     </button>
 
                     <div className="relative">
@@ -814,6 +882,11 @@ const App = () => {
           )}
 
           <MainLayout>
+            {subscription && subscription.subscription_status !== "active" && (
+              <div className="mb-4 rounded-xl border border-amber-300 bg-amber-50 text-amber-900 dark:bg-amber-900/30 dark:border-amber-700 dark:text-amber-50 px-4 py-3">
+                Tu suscripción no está activa. Activa o mejora tu plan en la sección de planes.
+              </div>
+            )}
             <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-6">
               <div className="space-y-3">
                 <div className="flex flex-wrap items-center gap-2">
@@ -823,6 +896,12 @@ const App = () => {
                   <span className="inline-flex items-center gap-2 rounded-full border border-emerald-200/80 dark:border-emerald-900/50 bg-emerald-50/70 dark:bg-emerald-900/30 px-3 py-1 text-xs font-semibold text-emerald-700 dark:text-emerald-100 shadow-sm">
                     <ClockIcon className="h-4 w-4" /> Listo en minutos
                   </span>
+                  {subscription && (
+                    <span className="inline-flex items-center gap-2 rounded-full border border-indigo-200/80 dark:border-indigo-900/50 bg-indigo-50/70 dark:bg-indigo-900/40 px-3 py-1 text-xs font-semibold text-indigo-700 dark:text-indigo-100 shadow-sm">
+                      <ShieldIcon className="h-4 w-4" />
+                      Plan: {subscription.current_plan?.name || "Sin plan"} ({subscription.subscription_status})
+                    </span>
+                  )}
                 </div>
               </div>
             </header>
@@ -833,6 +912,13 @@ const App = () => {
                   user={user}
                   onUnauthorized={handleUnauthorized}
                 />
+              ) : activePage === "planes" ? (
+                <PlansPage
+                  token={token}
+                  onSubscriptionRefresh={() => refreshSubscription(token)}
+                />
+              ) : activePage === "subscription-status" ? (
+                <SubscriptionStatus token={token} />
               ) : activePage === "integrations" ? (
                 <div className="space-y-6">
                   <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/70 shadow-sm p-5 space-y-3">

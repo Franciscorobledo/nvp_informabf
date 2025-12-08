@@ -20,9 +20,14 @@ from analysis import analyze_file
 import pandas as pd
 from utils.data_engine import standardize_dataframe
 from utils.app_log import persist_app_log, resolve_user_identifier
+from subscriptions import require_plan
 
 
-router = APIRouter(prefix="/mercadolibre", tags=["MercadoLibre"])
+router = APIRouter(
+    prefix="/mercadolibre",
+    tags=["MercadoLibre"],
+    dependencies=[Depends(require_plan("pro"))],
+)
 ml_admin_router = APIRouter(prefix="/admin/ml", tags=["MercadoLibre Admin"], dependencies=[Depends(admin_required)])
 meli_router = APIRouter(prefix="/meli", tags=["MercadoLibre OAuth"])
 
