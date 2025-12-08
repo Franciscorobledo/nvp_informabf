@@ -19,6 +19,7 @@ from utils.crypto_utils import decrypt_value, encrypt_value
 from analysis import analyze_file
 import pandas as pd
 from utils.data_engine import standardize_dataframe
+from utils.app_log import persist_app_log, resolve_user_identifier
 
 
 router = APIRouter(prefix="/mercadolibre", tags=["MercadoLibre"])
@@ -1308,6 +1309,16 @@ def sync_orders(credential_id: int, db: Session = Depends(get_db), current_user=
 
     df, meta = fetch_orders_dataframe(credential_id, db, current_user)
     standardized, mapping = standardize_dataframe(df)
+    user_label = resolve_user_identifier(current_user) or "desconocido"
+    persist_app_log(
+        level="INFO",
+        message=(
+            f"Usuario {user_label} sincronizó órdenes de MercadoLibre "
+            f"({len(standardized)} registros)"
+        ),
+        path="/mercadolibre/sync/orders",
+        user=user_label,
+    )
     return {
         "source": meta,
         "records": standardized.to_dict(orient="records"),
@@ -1358,6 +1369,17 @@ def sync_orders_full(credential_id: int, db: Session = Depends(get_db), current_
     df = _orders_to_dataframe(all_orders)
     standardized, mapping = standardize_dataframe(df)
 
+    user_label = resolve_user_identifier(current_user) or "desconocido"
+    persist_app_log(
+        level="INFO",
+        message=(
+            f"Usuario {user_label} realizó sincronización completa de órdenes "
+            f"de MercadoLibre ({len(standardized)} registros)"
+        ),
+        path="/mercadolibre/sync/orders/full",
+        user=user_label,
+    )
+
     # TODO: Guardar las órdenes completas en la base para futuros usos/consultas.
     return {
         "detail": "Sincronización completa ejecutada. Este proceso puede tardar unos minutos dependiendo del volumen de datos.",
@@ -1373,6 +1395,16 @@ def sync_stock(credential_id: int, db: Session = Depends(get_db), current_user=D
 
     df, meta = fetch_inventory_dataframe(credential_id, db, current_user)
     standardized, mapping = standardize_dataframe(df)
+    user_label = resolve_user_identifier(current_user) or "desconocido"
+    persist_app_log(
+        level="INFO",
+        message=(
+            f"Usuario {user_label} sincronizó inventario de MercadoLibre "
+            f"({len(standardized)} registros)"
+        ),
+        path="/mercadolibre/sync/stock",
+        user=user_label,
+    )
     return {
         "source": meta,
         "records": standardized.to_dict(orient="records"),
