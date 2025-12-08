@@ -74,6 +74,7 @@ from utils.job_store import JobStore
 from utils.compare_job_store import CompareJobStore
 from utils.data_movie_store import DataMovieStore
 from utils.dataset_store import DatasetStore
+from utils.app_log import persist_app_log
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
@@ -291,21 +292,14 @@ def _persist_backend_log(
     path: str | None,
     user: str | None,
 ):
-    try:
-        with SessionLocal() as db:
-            db.add(
-                AppLog(
-                    source="backend",
-                    level=level,
-                    message=message[:500],
-                    details=details,
-                    path=path,
-                    user=user,
-                )
-            )
-            db.commit()
-    except Exception as log_exc:  # noqa: BLE001
-        logging.error("No se pudo registrar el log de backend: %s", log_exc)
+    persist_app_log(
+        level=level,
+        message=message,
+        details=details,
+        path=path,
+        user=user,
+        source="backend",
+    )
 
 
 def json_safe(obj):

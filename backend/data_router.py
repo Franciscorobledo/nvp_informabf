@@ -30,6 +30,7 @@ from utils.data_engine import (
 )
 from utils.dataframe_loader import read_dataframes
 from utils.metrics_cache import invalidate_user_cache
+from utils.app_log import persist_app_log, resolve_user_identifier
 
 router = APIRouter(prefix="/data", tags=["Motor de datos"])
 ingest_router = APIRouter(prefix="/ingest", tags=["Ingesta inteligente"])
@@ -581,6 +582,17 @@ async def ingest_upload(
         )
         invalidate_user_cache(str(current_user.id))
         payload = _DATA_CONTEXT.get(str(current_user.id))
+
+        user_label = resolve_user_identifier(current_user) or "desconocido"
+        persist_app_log(
+            level="INFO",
+            message=(
+                f"Usuario {user_label} cargó ventas ({int(sales_rows)} filas) "
+                f"y stock ({int(stock_rows)} filas)"
+            ),
+            path="/ingest/upload",
+            user=user_label,
+        )
 
         return {
             "status": "ok",
