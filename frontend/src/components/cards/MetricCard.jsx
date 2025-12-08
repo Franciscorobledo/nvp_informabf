@@ -1,6 +1,6 @@
 import React from "react";
 
-const MetricCard = ({ label, value, format = "number", delta, highlight = "" }) => {
+const MetricCard = ({ label, value, format = "number", delta, highlight = "", tooltip }) => {
   const formattedValue = (() => {
     if (format === "currency") {
       return new Intl.NumberFormat("es-AR", {
@@ -18,7 +18,10 @@ const MetricCard = ({ label, value, format = "number", delta, highlight = "" }) 
   return (
     <div className="flex flex-col gap-2 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/90 dark:bg-slate-900/70 p-4 shadow-sm">
       <div className="flex items-center justify-between text-xs font-semibold text-slate-500 dark:text-slate-300 uppercase tracking-wide">
-        <span>{label}</span>
+        <span className="inline-flex items-center gap-1" title={tooltip}>
+          {label}
+          {tooltip && <span className="text-slate-400">ℹ️</span>}
+        </span>
         {highlight && (
           <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-100 px-2 py-0.5 text-[10px] font-bold">
             {highlight}

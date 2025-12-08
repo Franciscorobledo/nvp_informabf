@@ -25,7 +25,7 @@ const palette = [
   "#22c55e",
 ];
 
-const ChartCard = ({ title, type, data = [], xKey = "label", series = [], height = 260 }) => {
+const ChartCard = ({ title, type, data = [], xKey = "label", series = [], height = 260, tooltip }) => {
   const resolvedType = type || "bar";
 
   const renderChart = () => {
@@ -103,7 +103,10 @@ const ChartCard = ({ title, type, data = [], xKey = "label", series = [], height
   return (
     <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/90 dark:bg-slate-900/70 p-4 shadow-sm">
       <div className="flex items-center justify-between mb-3">
-        <h4 className="text-sm font-semibold text-slate-800 dark:text-slate-100">{title}</h4>
+        <div className="flex items-center gap-2 text-sm font-semibold text-slate-800 dark:text-slate-100" title={tooltip}>
+          <span>{title}</span>
+          {tooltip && <span className="text-slate-400">ℹ️</span>}
+        </div>
         <span className="text-[11px] rounded-full bg-slate-100 dark:bg-slate-800 px-2 py-1 text-slate-500 dark:text-slate-300">
           {resolvedType?.toUpperCase() || "N/A"}
         </span>

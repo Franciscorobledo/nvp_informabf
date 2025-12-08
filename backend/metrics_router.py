@@ -67,6 +67,28 @@ def _column_types(df: pd.DataFrame) -> Dict[str, str]:
     return {col: str(dtype) for col, dtype in df.dtypes.items()}
 
 
+def _apply_filters(
+    df: pd.DataFrame,
+    *,
+    from_date: Optional[str] = None,
+    to_date: Optional[str] = None,
+    category: Optional[str] = None,
+) -> pd.DataFrame:
+    filtered = df.copy()
+
+    if "date" in filtered.columns:
+        filtered["date"] = pd.to_datetime(filtered["date"], errors="coerce")
+        if from_date:
+            filtered = filtered[filtered["date"] >= pd.to_datetime(from_date, errors="coerce")]
+        if to_date:
+            filtered = filtered[filtered["date"] <= pd.to_datetime(to_date, errors="coerce")]
+
+    if category and "category" in filtered.columns:
+        filtered = filtered[filtered["category"] == category]
+
+    return filtered
+
+
 def _serialize_records(df: pd.DataFrame, columns: List[str]) -> List[Dict[str, Any]]:
     if df.empty:
         return []
@@ -88,13 +110,18 @@ def _serialize_records(df: pd.DataFrame, columns: List[str]) -> List[Dict[str, A
 @router.get("/sales")
 def get_sales_metrics(
     credential_id: Optional[int] = Query(None, description="Credencial de MercadoLibre"),
+    from_date: Optional[str] = Query(None, description="Filtrar desde esta fecha (YYYY-MM-DD)"),
+    to_date: Optional[str] = Query(None, description="Filtrar hasta esta fecha (YYYY-MM-DD)"),
+    category: Optional[str] = Query(None, description="Filtrar por categoría"),
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
     """KPIs oficiales del panel de ventas."""
 
     ctx = _resolve_active_data(credential_id, db, current_user)
-    sales_df: pd.DataFrame = ctx["sales"]
+    sales_df: pd.DataFrame = _apply_filters(
+        ctx["sales"], from_date=from_date, to_date=to_date, category=category
+    )
 
     total_sales = float(sales_df.get("revenue", 0).sum()) if not sales_df.empty else 0.0
     units_sold = float(sales_df.get("quantity_sold", 0).sum()) if not sales_df.empty else 0.0
@@ -182,6 +209,7 @@ def get_sales_metrics(
             table_df,
             ["product_name", "category", "revenue", "quantity_sold", "margin"],
         ),
+        "alerts": [],
         "column_types": _column_types(sales_df),
     }
 
@@ -189,13 +217,20 @@ def get_sales_metrics(
 @router.get("/stock")
 def get_stock_metrics(
     credential_id: Optional[int] = Query(None, description="Credencial de MercadoLibre"),
+    from_date: Optional[str] = Query(None, description="Filtrar desde esta fecha (YYYY-MM-DD)"),
+    to_date: Optional[str] = Query(None, description="Filtrar hasta esta fecha (YYYY-MM-DD)"),
+    category: Optional[str] = Query(None, description="Filtrar por categoría"),
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
     """KPIs oficiales del panel de stock."""
 
     ctx = _resolve_active_data(credential_id, db, current_user)
-    summary = build_product_summary(ctx["sales"], ctx["stock"])
+    filtered_sales = _apply_filters(
+        ctx["sales"], from_date=from_date, to_date=to_date, category=category
+    )
+    filtered_stock = _apply_filters(ctx["stock"], category=category)
+    summary = build_product_summary(filtered_sales, filtered_stock)
 
     stock_total = float(summary.get("current_stock", 0).sum()) if not summary.empty else 0.0
     critical = summary[summary["current_stock"] <= 10]
@@ -276,6 +311,7 @@ def get_stock_metrics(
             "semaphore": semaphore_chart,
         },
         "table": _serialize_records(summary, table_columns),
+        "alerts": [],
         "column_types": _column_types(summary),
     }
 
