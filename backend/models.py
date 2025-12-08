@@ -1,7 +1,16 @@
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import Boolean, Column, DateTime, Float, ForeignKey, Integer, String, Text
+from sqlalchemy import (
+    Boolean,
+    Column,
+    DateTime,
+    Float,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+)
 from sqlalchemy.dialects.sqlite import JSON as SQLiteJSON
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship
@@ -18,6 +27,10 @@ class User(Base):
     hashed_password = Column(String, nullable=False)
     role = Column(String, default="user", nullable=False)
     is_active = Column(Boolean, default=True, nullable=False)
+    subscription_status = Column(String, default="none", nullable=False)
+    current_plan_id = Column(
+        Integer, ForeignKey("subscription_plans.id", ondelete="SET NULL"), nullable=True
+    )
     expires_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
@@ -31,6 +44,17 @@ class User(Base):
         "MLUserConnection",
         back_populates="user",
         cascade="all, delete-orphan",
+    )
+    subscriptions = relationship(
+        "Subscription",
+        back_populates="user",
+        cascade="all, delete-orphan",
+        order_by="Subscription.created_at.desc()",
+    )
+    current_plan = relationship(
+        "SubscriptionPlan",
+        foreign_keys=[current_plan_id],
+        back_populates="users",
     )
 
 
@@ -146,3 +170,42 @@ class AppLog(Base):
     details = Column(Text, nullable=True)
     user = Column(String, nullable=True)
     path = Column(String, nullable=True)
+
+
+class SubscriptionPlan(Base):
+    __tablename__ = "subscription_plans"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False)
+    alias = Column(String, unique=True, nullable=False, index=True)
+    price_monthly = Column(Float, nullable=False)
+    currency = Column(String, default="CLP", nullable=False)
+    description = Column(Text, nullable=True)
+    features = Column(
+        JSONB().with_variant(SQLiteJSON, "sqlite"),
+        nullable=True,
+    )
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    subscriptions = relationship("Subscription", back_populates="plan")
+    users = relationship("User", back_populates="current_plan")
+
+
+class Subscription(Base):
+    __tablename__ = "subscriptions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    plan_id = Column(Integer, ForeignKey("subscription_plans.id", ondelete="SET NULL"), nullable=True)
+    status = Column(String, default="pending", nullable=False)
+    provider = Column(String, default="mercadopago", nullable=False)
+    mp_preapproval_id = Column(String, nullable=True)
+    mp_init_point = Column(String, nullable=True)
+    started_at = Column(DateTime, nullable=True)
+    current_period_end = Column(DateTime, nullable=True)
+    cancelled_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    user = relationship("User", back_populates="subscriptions")
+    plan = relationship("SubscriptionPlan", back_populates="subscriptions")
