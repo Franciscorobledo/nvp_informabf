@@ -21,8 +21,9 @@ import threading
 import jwt
 import os
 import numpy as np
+import platform
 import uvicorn
-from datetime import datetime
+from datetime import datetime, timedelta
 import zipfile
 import base64
 import textwrap
@@ -33,6 +34,11 @@ from pydantic import BaseModel, EmailStr
 import smtplib
 from email.message import EmailMessage
 from fastapi.exceptions import RequestValidationError
+
+try:
+    import psutil
+except ImportError:  # pragma: no cover - dependencia opcional
+    psutil = None
 
 from utils.file_utils import validate_file
 from analysis import (
@@ -92,12 +98,14 @@ FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
 ALLOW_ONRENDER_WILDCARD = os.getenv("ALLOW_ONRENDER_WILDCARD", "true").lower() in {"1", "true", "yes"}
 HOST = os.getenv("HOST", "0.0.0.0")
 PORT = int(os.getenv("PORT", "1000"))
+LOG_RETENTION_DAYS = int(os.getenv("LOG_RETENTION_DAYS", "30"))
 SMTP_HOST = os.getenv("SMTP_HOST")
 SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
 SMTP_USERNAME = os.getenv("SMTP_USERNAME")
 SMTP_PASSWORD = os.getenv("SMTP_PASSWORD")
 SMTP_FROM = os.getenv("SMTP_FROM", SMTP_USERNAME)
 SMTP_USE_TLS = os.getenv("SMTP_USE_TLS", "true").lower() in {"1", "true", "yes"}
+SERVER_START_TIME = datetime.utcnow()
 
 logging.basicConfig(
     level=logging.INFO,
@@ -175,6 +183,12 @@ def startup_event():
     Base.metadata.create_all(bind=engine)
     with SessionLocal() as db:
         ensure_default_admin(db)
+    _start_log_cleanup_scheduler()
+
+
+@app.on_event("shutdown")
+def shutdown_event():
+    _stop_log_cleanup_scheduler()
 
 # ==============================
 # FUNCIONES AUXILIARES
@@ -196,6 +210,76 @@ def _extract_username_from_request(request: Request) -> str | None:
         payload = decode_access_token(token)
         return payload.get("sub") or payload.get("username")
     except Exception:
+        return None
+
+
+def _cleanup_old_logs():
+    """Elimina registros de app_logs más antiguos que LOG_RETENTION_DAYS."""
+    threshold = datetime.utcnow() - timedelta(days=LOG_RETENTION_DAYS)
+    deleted = 0
+
+    try:
+        with SessionLocal() as db:
+            deleted = (
+                db.query(AppLog)
+                .filter(AppLog.created_at < threshold)
+                .delete()
+            )
+            db.commit()
+    except Exception:  # noqa: BLE001
+        logging.exception("❌ Error eliminando logs antiguos")
+        return
+
+    logging.info(
+        "🧹 Limpieza diaria de logs: %s registros anteriores a %s eliminados",
+        deleted,
+        threshold.isoformat(),
+    )
+
+
+_log_cleanup_stop_event = threading.Event()
+_log_cleanup_thread: threading.Thread | None = None
+
+
+def _log_cleanup_worker():
+    while not _log_cleanup_stop_event.is_set():
+        _cleanup_old_logs()
+        _log_cleanup_stop_event.wait(60 * 60 * 24)
+
+
+def _start_log_cleanup_scheduler():
+    global _log_cleanup_thread
+    if _log_cleanup_thread and _log_cleanup_thread.is_alive():
+        return
+
+    _log_cleanup_stop_event.clear()
+    _log_cleanup_thread = threading.Thread(
+        target=_log_cleanup_worker,
+        name="app_log_cleanup",
+        daemon=True,
+    )
+    _log_cleanup_thread.start()
+    logging.info("⏰ Tarea programada de limpieza de logs inicializada (cada 24h).")
+
+
+def _stop_log_cleanup_scheduler():
+    _log_cleanup_stop_event.set()
+
+
+def _get_resource_snapshot() -> dict | None:
+    if not psutil:
+        return None
+
+    try:
+        virtual_mem = psutil.virtual_memory()
+        return {
+            "cpu_percent": psutil.cpu_percent(interval=0.1),
+            "memory_percent": virtual_mem.percent,
+            "memory_used_mb": round(virtual_mem.used / (1024 * 1024), 2),
+            "memory_total_mb": round(virtual_mem.total / (1024 * 1024), 2),
+        }
+    except Exception:  # noqa: BLE001
+        logging.exception("No se pudo obtener el uso de recursos del sistema")
         return None
 
 
@@ -1270,6 +1354,30 @@ def root():
         "frontend_allowed": FRONTEND_URL,
         "origins": allowed_origins
     }
+
+
+@app.get("/admin/system/status", dependencies=[Depends(admin_required)])
+def system_status():
+    now = datetime.utcnow()
+    uptime_seconds = (now - SERVER_START_TIME).total_seconds()
+
+    status = {
+        "status": "ok",
+        "timestamp": now.isoformat(),
+        "environment": ENV,
+        "host": HOST,
+        "python_version": platform.python_version(),
+        "server_started_at": SERVER_START_TIME.isoformat(),
+        "uptime_seconds": uptime_seconds,
+        "uptime_human": str(timedelta(seconds=int(uptime_seconds))),
+        "log_retention_days": LOG_RETENTION_DAYS,
+    }
+
+    resources = _get_resource_snapshot()
+    if resources:
+        status["resources"] = resources
+
+    return status
 
 
 @app.get("/admin/openai/status", dependencies=[Depends(admin_required)])
