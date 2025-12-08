@@ -14,7 +14,11 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
 from auth import get_current_user
-from ai_module import classify_tabular_dataset, generate_ai_insights
+from ai_module import (
+    classify_tabular_dataset,
+    generate_ai_insights,
+    generate_dataset_chat_reply,
+)
 from database import get_db
 from mercadolibre import fetch_inventory_dataframe, fetch_orders_dataframe
 from utils.data_engine import (
@@ -170,6 +174,10 @@ class IngestedDataset(BaseModel):
 class IngestResponse(BaseModel):
     status: str
     datasets: list[IngestedDataset]
+
+
+class DataChatPayload(BaseModel):
+    message: str
 
 
 class AutoMetricsResponse(BaseModel):
@@ -887,3 +895,67 @@ def get_analysis_summary(current_user=Depends(get_current_user)):
     )
 
     return {"status": "ok", "summary": summary_text}
+
+
+@router.post("/chat")
+def chat_with_loaded_data(payload: DataChatPayload, current_user=Depends(get_current_user)):
+    """Chat sencillo sobre el dataset cargado en memoria."""
+
+    ctx = _get_or_seed_data(str(current_user.id))
+    sales_df: pd.DataFrame = ctx.get("sales", pd.DataFrame())
+    stock_df: pd.DataFrame = ctx.get("stock", pd.DataFrame())
+
+    if sales_df.empty and stock_df.empty:
+        raise HTTPException(status_code=400, detail="No hay datos cargados para chatear.")
+
+    metrics = get_analysis_metrics(current_user)
+    if metrics.get("status") != "ok":
+        raise HTTPException(status_code=400, detail=metrics.get("message") or "No hay datos para chatear")
+
+    column_types: dict[str, str] = {}
+    type_counts: dict[str, int] = {}
+    for frame in [sales_df, stock_df]:
+        if frame is None or frame.empty:
+            continue
+        for col, dtype in frame.dtypes.items():
+            dtype_str = str(dtype)
+            column_types[col] = dtype_str
+            type_counts[dtype_str] = type_counts.get(dtype_str, 0) + 1
+
+    dataset_profile = {
+        "row_count": len(sales_df) + len(stock_df),
+        "column_count": len(set(list(sales_df.columns) + list(stock_df.columns))),
+        "type_counts": type_counts,
+        "file_types": [ctx.get("source", "files")],
+    }
+
+    sample_rows: list[dict] = []
+    if not sales_df.empty:
+        sample_rows.extend(sales_df.head(3).fillna("").to_dict(orient="records"))
+    if not stock_df.empty:
+        sample_rows.extend(stock_df.head(3).fillna("").to_dict(orient="records"))
+
+    ai_summary = generate_ai_insights(
+        summary={"kpis": metrics.get("kpis", {}), "warnings": metrics.get("warnings", [])},
+        column_types=column_types,
+        heuristics="Contexto rápido para chat de dataset",
+        dataset_profile=dataset_profile,
+        usage_context={"user": str(current_user.id), "source": "data_chat"},
+    )
+
+    dataset_context = {
+        "dataset_name": ctx.get("source", "Dataset cargado"),
+        "ai_summary": ai_summary,
+        "refined_insights": metrics.get("table_data") or [],
+        "data_health": {},
+        "sample": _json_safe(sample_rows),
+        "column_types": column_types,
+        "dataset_profile": dataset_profile,
+        "metadata": {
+            "source": ctx.get("source"),
+            "updated_at": _json_safe(ctx.get("updated_at")),
+        },
+    }
+
+    reply = generate_dataset_chat_reply(dataset_context, payload.message)
+    return {"reply": reply, "dataset_profile": dataset_profile}
