@@ -29,6 +29,7 @@ from utils.data_engine import (
     compute_auto_metrics,
 )
 from utils.dataframe_loader import read_dataframes
+from utils.metrics_cache import invalidate_user_cache
 
 router = APIRouter(prefix="/data", tags=["Motor de datos"])
 ingest_router = APIRouter(prefix="/ingest", tags=["Ingesta inteligente"])
@@ -578,6 +579,7 @@ async def ingest_upload(
             raw_stock_df=raw_stock_df,
             column_mappings=column_mappings,
         )
+        invalidate_user_cache(str(current_user.id))
         payload = _DATA_CONTEXT.get(str(current_user.id))
 
         return {
@@ -831,6 +833,7 @@ async def select_source(
     else:
         raise HTTPException(status_code=400, detail="Fuente no soportada")
 
+    invalidate_user_cache(user_id)
     payload_ctx = _DATA_CONTEXT.get(user_id)
     return UploadResponse(
         source=payload_ctx["source"],
