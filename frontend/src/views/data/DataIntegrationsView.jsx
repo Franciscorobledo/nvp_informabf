@@ -1,43 +1,19 @@
 import React, { useEffect, useState } from "react";
-import API_URL from "../../api";
+import API_URL from "../../api.js";
 import SectionHeader from "../../components/cards/SectionHeader";
 import SkeletonBlock from "../../components/cards/SkeletonBlock";
+import { handleUploadSubmission } from "./uploadHelpers";
 
-export const handleUploadSubmission = async (
-  event,
-  {
-    authorizedFetch,
-    setLoading,
-    setError,
-    setUploadStatus,
-    setDatasets,
-    formDataFactory = (target) => new FormData(target),
-    apiUrl = API_URL,
-  },
-) => {
-  event.preventDefault();
-  setLoading(true);
-  setError("");
-  const formData = formDataFactory(event.currentTarget);
-
-  try {
-    const data = await authorizedFetch(`${apiUrl}/ingest/upload`, {
-      method: "POST",
-      body: formData,
-    });
-    setUploadStatus?.({ ...data, updated_at: new Date().toISOString() });
-    setDatasets?.(data?.datasets || []);
-  } catch (err) {
-    setError(err.message || "No se pudo subir los archivos");
-  } finally {
-    setLoading(false);
-  }
-};
+const SALES_STANDARD_FIELDS = ["date", "sku", "product_name", "quantity", "unit_price", "total", "channel"];
+const STOCK_STANDARD_FIELDS = ["sku", "product_name", "category", "current_stock", "unit_cost", "location", "channel"];
 
 const DataIntegrationsView = ({ onUnauthorized, onOpenMercadoLibre }) => {
   const [token, setToken] = useState(() => localStorage.getItem("token"));
   const [uploadStatus, setUploadStatus] = useState(null);
   const [datasets, setDatasets] = useState([]);
+  const [unmappedColumns, setUnmappedColumns] = useState([]);
+  const [remapSelections, setRemapSelections] = useState({});
+  const [showRemapDialog, setShowRemapDialog] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [selectingSource, setSelectingSource] = useState(false);
@@ -130,8 +106,9 @@ const DataIntegrationsView = ({ onUnauthorized, onOpenMercadoLibre }) => {
       setError,
       setUploadStatus,
       setDatasets,
+      setUnmappedColumns,
     });
-
+  
   const handleUseMercadoLibreSource = async () => {
     setError("");
     setSelectingSource(true);
@@ -151,6 +128,60 @@ const DataIntegrationsView = ({ onUnauthorized, onOpenMercadoLibre }) => {
       }
     } finally {
       setSelectingSource(false);
+    }
+  };
+
+  const handleOpenRemap = () => {
+    const initialSelections = {};
+    unmappedColumns.forEach((item) => {
+      initialSelections[`${item.dataset}:${item.column}`] = "";
+    });
+    setRemapSelections(initialSelections);
+    setShowRemapDialog(true);
+  };
+
+  const handleSelectionChange = (dataset, column, value) => {
+    setRemapSelections((prev) => ({ ...prev, [`${dataset}:${column}`]: value }));
+  };
+
+  const handleSubmitRemap = async () => {
+    const groupedMappings = {};
+    Object.entries(remapSelections).forEach(([key, standard]) => {
+      if (!standard) return;
+      const [dataset, column] = key.split(":");
+      if (!groupedMappings[dataset]) groupedMappings[dataset] = {};
+      groupedMappings[dataset][standard] = column;
+    });
+
+    if (Object.keys(groupedMappings).length === 0) {
+      setError("Selecciona a qué campo estándar corresponde cada columna");
+      return;
+    }
+
+    setLoading(true);
+    setError("");
+
+    try {
+      const responses = await Promise.all(
+        Object.entries(groupedMappings).map(([dataset, mapping]) =>
+          authorizedFetch(`${API_URL}/data/remap`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ dataset, mapping }),
+          }),
+        ),
+      );
+
+      const remainingUnmapped = responses.flatMap((res) => res?.unmapped_columns || []);
+      setUnmappedColumns(remainingUnmapped);
+      setShowRemapDialog(false);
+      setUploadStatus((prev) => ({ ...(prev || {}), updated_at: new Date().toISOString() }));
+    } catch (err) {
+      if (err.message !== "unauthorized") {
+        setError(err.message || "No se pudo actualizar el mapeo");
+      }
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -298,8 +329,75 @@ const DataIntegrationsView = ({ onUnauthorized, onOpenMercadoLibre }) => {
           </div>
         </div>
       )}
+
+      {unmappedColumns.length > 0 && (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 dark:border-amber-400/60 dark:bg-amber-900/20 p-4 space-y-2">
+          <p className="text-sm font-semibold text-amber-700 dark:text-amber-200">
+            Columnas no reconocidas: {unmappedColumns.map((c) => c.column).join(", ")}
+          </p>
+          <p className="text-xs text-amber-700 dark:text-amber-100">
+            Configura manualmente a qué campo estándar corresponden para mejorar las métricas.
+          </p>
+          <button
+            onClick={handleOpenRemap}
+            className="rounded-lg bg-amber-600 text-white px-3 py-2 text-xs font-semibold hover:bg-amber-700"
+          >
+            Configurar mapeo manual
+          </button>
+        </div>
+      )}
+
+      {showRemapDialog && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center z-20 p-4">
+          <div className="w-full max-w-xl rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-4 space-y-4">
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">Configurar columnas manualmente</p>
+              <button onClick={() => setShowRemapDialog(false)} className="text-slate-500 text-xs">Cerrar</button>
+            </div>
+            <div className="space-y-3 max-h-80 overflow-y-auto pr-1">
+              {unmappedColumns.map((item) => {
+                const options = item.dataset === "stock" ? STOCK_STANDARD_FIELDS : SALES_STANDARD_FIELDS;
+                return (
+                  <div key={`${item.dataset}:${item.column}`} className="space-y-1 border-b border-slate-100 dark:border-slate-800 pb-2">
+                    <p className="text-xs font-semibold text-slate-700 dark:text-slate-200">
+                      {item.column} <span className="text-slate-400">({item.dataset})</span>
+                    </p>
+                    <select
+                      className="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm px-2 py-1"
+                      value={remapSelections[`${item.dataset}:${item.column}`] || ""}
+                      onChange={(e) => handleSelectionChange(item.dataset, item.column, e.target.value)}
+                    >
+                      <option value="">Selecciona campo estándar</option>
+                      {options.map((opt) => (
+                        <option key={opt} value={opt}>
+                          {opt}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => setShowRemapDialog(false)}
+                className="rounded-lg border border-slate-300 dark:border-slate-700 px-3 py-2 text-xs text-slate-700 dark:text-slate-200"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleSubmitRemap}
+                className="rounded-lg bg-blue-600 text-white px-4 py-2 text-xs font-semibold hover:bg-blue-700"
+              >
+                Guardar mapeo
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </section>
   );
 };
 
 export default DataIntegrationsView;
+export { handleUploadSubmission } from "./uploadHelpers";

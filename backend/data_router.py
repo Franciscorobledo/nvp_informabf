@@ -71,6 +71,10 @@ class _DataContext:
         sales_df: Optional[pd.DataFrame],
         stock_df: Optional[pd.DataFrame],
         source: str,
+        *,
+        raw_sales_df: Optional[pd.DataFrame] = None,
+        raw_stock_df: Optional[pd.DataFrame] = None,
+        column_mappings: Optional[Dict[str, Dict[str, str]]] = None,
     ) -> None:
         if sales_df is None and stock_df is None:
             raise ValueError("Debe proveer ventas o stock")
@@ -80,6 +84,9 @@ class _DataContext:
                 "stock": stock_df if stock_df is not None else pd.DataFrame(),
                 "source": source,
                 "updated_at": datetime.utcnow(),
+                "raw_sales": raw_sales_df if raw_sales_df is not None else pd.DataFrame(),
+                "raw_stock": raw_stock_df if raw_stock_df is not None else pd.DataFrame(),
+                "column_mappings": column_mappings or {},
             }
 
     def get(self, user_id: str) -> Optional[Dict[str, Any]]:
@@ -174,6 +181,11 @@ class IngestedDataset(BaseModel):
 class IngestResponse(BaseModel):
     status: str
     datasets: list[IngestedDataset]
+
+
+class RemapRequest(BaseModel):
+    dataset: Literal["sales", "stock"]
+    mapping: Dict[str, str]
 
 
 class DataChatPayload(BaseModel):
@@ -488,10 +500,21 @@ async def ingest_upload(
         sales_frames: list[pd.DataFrame] = []
         stock_frames: list[pd.DataFrame] = []
         datasets: list[IngestedDataset] = []
+        raw_sales_frames: list[pd.DataFrame] = []
+        raw_stock_frames: list[pd.DataFrame] = []
+        column_mappings: Dict[str, Dict[str, str]] = {}
+        unmapped_columns: list[dict] = []
 
         for upload in [*ventas_uploads, *stock_uploads]:
             df = _read_upload_to_dataframe(upload)
             internal_df, normalized_df, dataset_meta = _ingest_dataframe(df, "files", strict_required=False)
+
+            unmapped_columns.extend(
+                _find_unmapped_columns(df, dataset_meta.get("column_mapping") or {}, dataset_meta.get("type", "unknown"))
+            )
+
+            if dataset_meta.get("type") in {"sales", "stock"}:
+                column_mappings.setdefault(dataset_meta["type"], {}).update(dataset_meta.get("column_mapping") or {})
 
             if dataset_meta.get("missing_optional"):
                 dataset_meta["warnings"].append(
@@ -503,17 +526,23 @@ async def ingest_upload(
             if dataset_meta.get("type") == "sales" and normalized_df is not None:
                 sales_rows += len(normalized_df)
                 sales_frames.append(normalized_df)
+                raw_sales_frames.append(df)
             elif dataset_meta.get("type") == "stock" and normalized_df is not None:
                 stock_rows += len(normalized_df)
                 stock_frames.append(normalized_df)
+                raw_stock_frames.append(df)
 
         sales_df: Optional[pd.DataFrame] = None
         stock_df: Optional[pd.DataFrame] = None
+        raw_sales_df: Optional[pd.DataFrame] = None
+        raw_stock_df: Optional[pd.DataFrame] = None
 
         if sales_frames:
             sales_df = pd.concat(sales_frames, ignore_index=True)
+            raw_sales_df = pd.concat(raw_sales_frames, ignore_index=True)
         if stock_frames:
             stock_df = pd.concat(stock_frames, ignore_index=True)
+            raw_stock_df = pd.concat(raw_stock_frames, ignore_index=True)
 
         if sales_df is None and stock_df is None:
             raise HTTPException(status_code=400, detail="No se detectaron columnas válidas de ventas o stock")
@@ -540,7 +569,15 @@ async def ingest_upload(
         if stock_df is not None:
             stock_harmonized, _ = harmonize_stock_data(stock_df, "files")
 
-        _DATA_CONTEXT.set_payload(str(current_user.id), sales_harmonized, stock_harmonized, "files")
+        _DATA_CONTEXT.set_payload(
+            str(current_user.id),
+            sales_harmonized,
+            stock_harmonized,
+            "files",
+            raw_sales_df=raw_sales_df,
+            raw_stock_df=raw_stock_df,
+            column_mappings=column_mappings,
+        )
         payload = _DATA_CONTEXT.get(str(current_user.id))
 
         return {
@@ -549,6 +586,7 @@ async def ingest_upload(
             "stock_rows": int(stock_rows),
             "updated_at": payload.get("updated_at", datetime.utcnow()),
             "datasets": [ds.model_dump() for ds in datasets],
+            "unmapped_columns": unmapped_columns,
         }
     except HTTPException as exc:  # noqa: BLE001
         logging.warning("⚠️ Error en /ingest/upload: %s", exc.detail)
@@ -559,6 +597,69 @@ async def ingest_upload(
             status_code=500,
             content={"status": "error", "message": "Error al procesar los archivos. Verifica el formato e intenta nuevamente."},
         )
+
+
+@router.post("/remap")
+async def remap_columns(payload: RemapRequest, current_user=Depends(get_current_user)):
+    user_id = str(current_user.id)
+    ctx = _DATA_CONTEXT.get(user_id)
+
+    if not ctx:
+        raise HTTPException(status_code=400, detail="Primero sube archivos de ventas o stock para remapear.")
+
+    source = ctx.get("source", "files")
+    column_mappings = ctx.get("column_mappings", {}) or {}
+    existing_mapping = column_mappings.get(payload.dataset, {})
+    merged_mapping = {**existing_mapping, **payload.mapping}
+
+    raw_sales_df = ctx.get("raw_sales") if isinstance(ctx.get("raw_sales"), pd.DataFrame) else pd.DataFrame()
+    raw_stock_df = ctx.get("raw_stock") if isinstance(ctx.get("raw_stock"), pd.DataFrame) else pd.DataFrame()
+
+    if payload.dataset == "sales":
+        if raw_sales_df.empty:
+            raise HTTPException(status_code=400, detail="No hay datos originales de ventas para remapear.")
+        normalized_sales = _normalize_sales(raw_sales_df, merged_mapping, source)
+        normalized_stock = _normalize_stock(raw_stock_df, column_mappings.get("stock", {}), source) if not raw_stock_df.empty else None
+    else:
+        if raw_stock_df.empty:
+            raise HTTPException(status_code=400, detail="No hay datos originales de stock para remapear.")
+        normalized_stock = _normalize_stock(raw_stock_df, merged_mapping, source)
+        normalized_sales = _normalize_sales(raw_sales_df, column_mappings.get("sales", {}), source) if not raw_sales_df.empty else None
+
+    sales_harmonized = None
+    stock_harmonized = None
+
+    if normalized_sales is not None:
+        sales_harmonized, _ = harmonize_sales_data(normalized_sales, source)
+    if normalized_stock is not None:
+        stock_harmonized, _ = harmonize_stock_data(normalized_stock, source)
+
+    updated_mappings = {**column_mappings, payload.dataset: merged_mapping}
+
+    _DATA_CONTEXT.set_payload(
+        user_id,
+        sales_harmonized if sales_harmonized is not None else ctx.get("sales"),
+        stock_harmonized if stock_harmonized is not None else ctx.get("stock"),
+        source,
+        raw_sales_df=raw_sales_df if not raw_sales_df.empty else None,
+        raw_stock_df=raw_stock_df if not raw_stock_df.empty else None,
+        column_mappings=updated_mappings,
+    )
+
+    _set_simple_data(user_id, normalized_sales, normalized_stock)
+
+    unmapped_columns = []
+    if payload.dataset == "sales":
+        unmapped_columns = _find_unmapped_columns(raw_sales_df, merged_mapping, "sales")
+    else:
+        unmapped_columns = _find_unmapped_columns(raw_stock_df, merged_mapping, "stock")
+
+    return {
+        "status": "ok",
+        "dataset": payload.dataset,
+        "column_mapping": merged_mapping,
+        "unmapped_columns": unmapped_columns,
+    }
 
 
 def _validate_required(type_name: str, mapping: Dict[str, str]) -> Tuple[list, list]:
@@ -574,6 +675,15 @@ def _validate_required(type_name: str, mapping: Dict[str, str]) -> Tuple[list, l
         missing = [col for col in required if col not in mapping]
     missing_optional = [col for col in optional if col not in mapping]
     return missing, missing_optional
+
+
+def _find_unmapped_columns(df: pd.DataFrame, mapping: Dict[str, str], dataset_type: str) -> list[dict]:
+    original_columns = [str(col) for col in df.columns]
+    mapped_columns = [str(col) for col in (mapping or {}).values() if col]
+    return [
+        {"dataset": dataset_type, "column": col}
+        for col in sorted(set(original_columns) - set(mapped_columns))
+    ]
 
 
 def _ingest_dataframe(
