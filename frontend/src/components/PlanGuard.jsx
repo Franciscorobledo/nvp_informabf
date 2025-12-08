@@ -6,13 +6,20 @@ const PLAN_PRIORITY = {
   premium: 3,
 };
 
-const PlanGuard = ({ subscription, minPlan = "starter", onUpgrade, children }) => {
+const PlanGuard = ({
+  user,
+  subscription,
+  minPlan = "starter",
+  onUpgrade,
+  children,
+}) => {
+  const isAdmin = user?.role === "admin";
   const currentAlias = subscription?.current_plan?.alias?.toLowerCase();
   const status = subscription?.subscription_status;
   const hasPlan =
     status === "active" && PLAN_PRIORITY[currentAlias] >= PLAN_PRIORITY[minPlan];
 
-  if (hasPlan) return children;
+  if (isAdmin || hasPlan) return children;
 
   return (
     <div className="border border-dashed border-amber-300 bg-amber-50 text-amber-900 dark:bg-amber-900/20 dark:border-amber-500 dark:text-amber-100 rounded-2xl p-6 text-center space-y-3">

@@ -486,6 +486,7 @@ const App = () => {
       case "reports":
         return (
           <PlanGuard
+            user={user}
             subscription={subscription}
             minPlan="pro"
             onUpgrade={() => navigateTo("planes")}
@@ -496,6 +497,7 @@ const App = () => {
       case "data":
         return (
           <PlanGuard
+            user={user}
             subscription={subscription}
             minPlan="pro"
             onUpgrade={() => navigateTo("planes")}
