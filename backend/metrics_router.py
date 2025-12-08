@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 import pandas as pd
@@ -23,6 +24,7 @@ from utils.data_engine import (
     summarize_business,
 )
 from utils.dataframe_loader import read_dataframes
+from utils.metrics_cache import get_cached_metrics, set_cached_metrics
 
 
 router = APIRouter(prefix="/metrics", tags=["KPIs"], responses={404: {"description": "No encontrado"}})
@@ -54,13 +56,20 @@ def _resolve_active_data(
         sales_df, _ = harmonize_sales_data(sales_raw, "mercadolibre")
         stock_df, _ = harmonize_stock_data(stock_raw, "mercadolibre")
         source = "mercadolibre"
+        updated_at = datetime.utcnow()
     else:
         ctx = _get_or_seed_data(str(current_user.id))
         sales_df = ctx.get("sales", pd.DataFrame())
         stock_df = ctx.get("stock", pd.DataFrame())
         source = ctx.get("source", "demo")
+        updated_at = ctx.get("updated_at")
 
-    return {"sales": sales_df, "stock": stock_df, "source": source}
+    return {
+        "sales": sales_df,
+        "stock": stock_df,
+        "source": source,
+        "updated_at": updated_at,
+    }
 
 
 def _column_types(df: pd.DataFrame) -> Dict[str, str]:
@@ -107,6 +116,48 @@ def _serialize_records(df: pd.DataFrame, columns: List[str]) -> List[Dict[str, A
     return safe_df.to_dict(orient="records")
 
 
+def _prepare_sales_dataframe(df: pd.DataFrame) -> pd.DataFrame:
+    """Adapta el esquema armonizado al esperado por compute_sales_metrics."""
+
+    if df.empty:
+        return df
+
+    prepared = pd.DataFrame()
+    prepared["date"] = df.get("date")
+    prepared["product"] = df.get("product_name")
+    prepared["category"] = df.get("category")
+    prepared["quantity"] = df.get("quantity_sold")
+
+    revenue = pd.to_numeric(df.get("revenue"), errors="coerce")
+    quantity = pd.to_numeric(prepared.get("quantity"), errors="coerce")
+    with pd.option_context("mode.use_inf_as_na", True):
+        prepared["price"] = revenue / quantity.replace({0: pd.NA})
+    prepared["price"] = prepared["price"].fillna(0)
+    prepared["cost"] = pd.to_numeric(df.get("cost"), errors="coerce").fillna(0)
+
+    return prepared
+
+
+def _prepare_stock_dataframe(summary: pd.DataFrame) -> pd.DataFrame:
+    """Adapta el resumen de producto al formato de compute_stock_metrics."""
+
+    if summary.empty:
+        return summary
+
+    prepared = pd.DataFrame()
+    prepared["product"] = summary.get("product_name")
+    prepared["category"] = summary.get("category")
+    prepared["stock"] = pd.to_numeric(summary.get("current_stock"), errors="coerce").fillna(0)
+    prepared["quantity"] = pd.to_numeric(summary.get("quantity_sold_last30"), errors="coerce").fillna(0)
+    prepared["date"] = (
+        summary.get("last_sale_date")
+        if "last_sale_date" in summary
+        else summary.get("date")
+    )
+
+    return prepared
+
+
 @router.get("/sales")
 def get_sales_metrics(
     credential_id: Optional[int] = Query(None, description="Credencial de MercadoLibre"),
@@ -122,96 +173,48 @@ def get_sales_metrics(
     sales_df: pd.DataFrame = _apply_filters(
         ctx["sales"], from_date=from_date, to_date=to_date, category=category
     )
-
-    total_sales = float(sales_df.get("revenue", 0).sum()) if not sales_df.empty else 0.0
-    units_sold = float(sales_df.get("quantity_sold", 0).sum()) if not sales_df.empty else 0.0
-    avg_ticket = total_sales / len(sales_df) if len(sales_df) else 0.0
-    total_margin = float(sales_df.get("margin", 0).sum()) if not sales_df.empty else 0.0
-
-    trend_chart = None
-    if not sales_df.empty and "date" in sales_df:
-        daily = (
-            sales_df.copy()
-            .assign(date=sales_df["date"].dt.date)
-            .groupby("date")[["revenue", "quantity_sold"]]
-            .sum()
-            .reset_index()
-        )
-        trend_chart = {
-            "type": "line",
-            "title": "Ventas por día",
-            "x": daily["date"].astype(str).tolist(),
-            "series": [
-                {"name": "Ventas", "data": daily["revenue"].round(2).tolist()},
-                {"name": "Unidades", "data": daily["quantity_sold"].round(2).tolist()},
-            ],
-        }
-
-    top_products = None
-    if not sales_df.empty:
-        top_products_df = (
-            sales_df.groupby("product_name")[["revenue", "quantity_sold", "margin"]]
-            .sum()
-            .sort_values("revenue", ascending=False)
-            .head(10)
-            .reset_index()
-        )
-        top_products = {
-            "type": "bar",
-            "title": "Top productos",
-            "x": top_products_df["product_name"].astype(str).tolist(),
-            "series": [
-                {"name": "Ventas", "data": top_products_df["revenue"].round(2).tolist()},
-                {"name": "Unidades", "data": top_products_df["quantity_sold"].round(2).tolist()},
-            ],
-        }
-
-    categories_chart = None
-    if "category" in sales_df.columns:
-        categories_df = (
-            sales_df.groupby("category")["revenue"]
-            .sum()
-            .reset_index()
-            .sort_values("revenue", ascending=False)
-        )
-        categories_chart = {
-            "type": "pie",
-            "title": "Ventas por categoría",
-            "x": categories_df["category"].astype(str).tolist(),
-            "series": [
-                {"name": "Ventas", "data": categories_df["revenue"].round(2).tolist()}
-            ],
-        }
-
-    table_df = (
-        sales_df.groupby(["product_name", "category"], dropna=False)[
-            ["revenue", "quantity_sold", "margin"]
-        ]
-        .sum()
-        .reset_index()
-        .sort_values("revenue", ascending=False)
+    filters = {"from_date": from_date, "to_date": to_date, "category": category}
+    cached = get_cached_metrics(
+        str(current_user.id),
+        "sales",
+        context_updated_at=ctx.get("updated_at"),
+        filters=filters,
     )
+    if cached is not None:
+        return cached
 
-    return {
+    prepared_df = _prepare_sales_dataframe(sales_df)
+    metrics = compute_sales_metrics(prepared_df)
+    kpis = metrics.get("kpis", {})
+    charts = metrics.get("charts", [])
+
+    response = {
         "source": ctx["source"],
         "kpis": {
-            "total_sales": total_sales,
-            "units_sold": units_sold,
-            "avg_ticket": avg_ticket,
-            "margin": total_margin,
+            "total_sales": kpis.get("total_sales", {}).get("value", 0),
+            "units_sold": kpis.get("units_sold", {}).get("value", 0),
+            "avg_ticket": kpis.get("avg_ticket", {}).get("value", 0),
+            "margin": kpis.get("margin", {}).get("value", 0),
         },
         "charts": {
-            "trend": trend_chart,
-            "top_products": top_products,
-            "categories": categories_chart,
+            "trend": charts[0] if charts else None,
+            "top_products": charts[1] if len(charts) > 1 else None,
+            "categories": charts[2] if len(charts) > 2 else None,
         },
-        "table": _serialize_records(
-            table_df,
-            ["product_name", "category", "revenue", "quantity_sold", "margin"],
-        ),
-        "alerts": [],
+        "table": metrics.get("table", []),
+        "alerts": metrics.get("alerts", []),
         "column_types": _column_types(sales_df),
     }
+
+    set_cached_metrics(
+        str(current_user.id),
+        "sales",
+        context_updated_at=ctx.get("updated_at"),
+        filters=filters,
+        payload=response,
+    )
+
+    return response
 
 
 @router.get("/stock")
@@ -231,28 +234,26 @@ def get_stock_metrics(
     )
     filtered_stock = _apply_filters(ctx["stock"], category=category)
     summary = build_product_summary(filtered_sales, filtered_stock)
+    filters = {"from_date": from_date, "to_date": to_date, "category": category}
+    cached = get_cached_metrics(
+        str(current_user.id),
+        "stock",
+        context_updated_at=ctx.get("updated_at"),
+        filters=filters,
+    )
+    if cached is not None:
+        return cached
+
+    prepared_df = _prepare_stock_dataframe(summary)
+    metrics = compute_stock_metrics(prepared_df)
+    kpis = metrics.get("kpis", {})
 
     stock_total = float(summary.get("current_stock", 0).sum()) if not summary.empty else 0.0
     critical = summary[summary["current_stock"] <= 10]
     without_rotation = summary[(summary["quantity_sold_last30"] <= 0) & (summary["current_stock"] > 0)]
-    avg_days_inventory = (
-        float(summary["days_inventory"].dropna().mean())
-        if "days_inventory" in summary and not summary["days_inventory"].dropna().empty
-        else 0.0
-    )
+    avg_days_inventory = kpis.get("days_inventory", {}).get("value", 0)
 
-    rotation_chart = None
-    if not summary.empty:
-        rotation_df = summary.sort_values("rotation", ascending=False).head(10)
-        rotation_chart = {
-            "type": "bar",
-            "title": "Rotación (30d)",
-            "x": rotation_df["product_name"].astype(str).tolist(),
-            "series": [
-                {"name": "Rotación", "data": rotation_df["rotation"].round(2).tolist()},
-                {"name": "Stock", "data": rotation_df["current_stock"].round(2).tolist()},
-            ],
-        }
+    charts = metrics.get("charts", [])
 
     dead_stock_chart = None
     dead_stock_df = summary[(summary["current_stock"] > 0) & (summary["quantity_sold_last30"] <= 0)]
@@ -297,7 +298,7 @@ def get_stock_metrics(
     if "category" in summary.columns:
         table_columns.insert(1, "category")
 
-    return {
+    response = {
         "source": ctx["source"],
         "kpis": {
             "stock_total": stock_total,
@@ -306,14 +307,24 @@ def get_stock_metrics(
             "avg_days_inventory": avg_days_inventory,
         },
         "charts": {
-            "rotation": rotation_chart,
+            "rotation": charts[0] if charts else None,
             "dead_stock": dead_stock_chart,
             "semaphore": semaphore_chart,
         },
         "table": _serialize_records(summary, table_columns),
-        "alerts": [],
+        "alerts": metrics.get("alerts", []),
         "column_types": _column_types(summary),
     }
+
+    set_cached_metrics(
+        str(current_user.id),
+        "stock",
+        context_updated_at=ctx.get("updated_at"),
+        filters=filters,
+        payload=response,
+    )
+
+    return response
 
 
 @router.get("/comparative")
