@@ -11,12 +11,20 @@ const SalesView = ({ onUnauthorized, onGoToData }) => {
   const [analysisData, setAnalysisData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
+  const [category, setCategory] = useState("");
 
   const fetchAnalysis = async () => {
     setLoading(true);
     setError("");
     try {
-      const res = await fetch(`${API_URL}/metrics/sales`, {
+      const params = new URLSearchParams();
+      if (fromDate) params.append("from_date", fromDate);
+      if (toDate) params.append("to_date", toDate);
+      if (category) params.append("category", category);
+
+      const res = await fetch(`${API_URL}/metrics/sales?${params.toString()}`, {
         headers: {
           "Content-Type": "application/json",
           Authorization: token ? `Bearer ${token}` : undefined,
@@ -50,7 +58,7 @@ const SalesView = ({ onUnauthorized, onGoToData }) => {
 
   useEffect(() => {
     fetchAnalysis();
-  }, []);
+  }, [fromDate, toDate, category]);
 
   const kpis = analysisData?.kpis || {};
   const charts = analysisData?.charts || {};
@@ -118,7 +126,16 @@ const SalesView = ({ onUnauthorized, onGoToData }) => {
 
   const tableData = analysisData?.table || [];
   const columnTypes = analysisData?.column_types || {};
+  const alertMessages = analysisData?.alerts || [];
   const hasData = Boolean(tableData.length || Object.keys(kpis).length);
+
+  const categoryOptions = useMemo(() => {
+    const categoriesFromTable = tableData
+      .map((row) => row?.category)
+      .filter(Boolean);
+    const categoriesFromChart = (charts?.categories?.x || []).filter(Boolean);
+    return Array.from(new Set([...categoriesFromTable, ...categoriesFromChart])).sort();
+  }, [tableData, charts]);
 
   return (
     <section className="space-y-6">
@@ -129,6 +146,39 @@ const SalesView = ({ onUnauthorized, onGoToData }) => {
           badge="Dashboard"
         />
         <div className="flex flex-wrap items-center gap-2">
+          <label className="text-xs text-slate-600 dark:text-slate-300">
+            Desde
+            <input
+              type="date"
+              value={fromDate}
+              onChange={(e) => setFromDate(e.target.value)}
+              className="mt-1 w-36 rounded-lg border border-slate-300 bg-white px-2 py-1 text-sm dark:border-slate-700 dark:bg-slate-900"
+            />
+          </label>
+          <label className="text-xs text-slate-600 dark:text-slate-300">
+            Hasta
+            <input
+              type="date"
+              value={toDate}
+              onChange={(e) => setToDate(e.target.value)}
+              className="mt-1 w-36 rounded-lg border border-slate-300 bg-white px-2 py-1 text-sm dark:border-slate-700 dark:bg-slate-900"
+            />
+          </label>
+          <label className="text-xs text-slate-600 dark:text-slate-300">
+            Categoría
+            <select
+              value={category}
+              onChange={(e) => setCategory(e.target.value)}
+              className="mt-1 w-44 rounded-lg border border-slate-300 bg-white px-2 py-2 text-sm dark:border-slate-700 dark:bg-slate-900"
+            >
+              <option value="">Todas</option>
+              {categoryOptions.map((cat) => (
+                <option key={cat} value={cat}>
+                  {cat}
+                </option>
+              ))}
+            </select>
+          </label>
           <button
             onClick={onGoToData}
             className="rounded-xl bg-blue-600 text-white px-3 py-2 text-sm font-semibold shadow hover:bg-blue-700"
@@ -146,6 +196,17 @@ const SalesView = ({ onUnauthorized, onGoToData }) => {
 
       {error && <p className="text-sm text-rose-600">{error}</p>}
 
+      {!!alertMessages.length && (
+        <div className="flex items-start gap-3 rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-500/70 dark:bg-amber-950/50 dark:text-amber-100">
+          <span className="mt-0.5">⚠️</span>
+          <div className="space-y-1">
+            {alertMessages.map((msg, idx) => (
+              <p key={idx}>{msg}</p>
+            ))}
+          </div>
+        </div>
+      )}
+
       {loading ? (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           <SkeletonBlock />
@@ -155,10 +216,30 @@ const SalesView = ({ onUnauthorized, onGoToData }) => {
         </div>
       ) : hasData ? (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          <MetricCard label="Ventas totales" value={kpis?.total_sales} format="currency" />
-          <MetricCard label="Unidades totales" value={kpis?.units_sold} format="number" />
-          <MetricCard label="Ticket promedio" value={kpis?.avg_ticket} format="currency" />
-          <MetricCard label="Margen" value={kpis?.margin} format="currency" />
+          <MetricCard
+            label="Ventas totales"
+            value={kpis?.total_sales}
+            format="currency"
+            tooltip="Suma de ventas en el período seleccionado"
+          />
+          <MetricCard
+            label="Unidades totales"
+            value={kpis?.units_sold}
+            format="number"
+            tooltip="Cantidad de unidades vendidas"
+          />
+          <MetricCard
+            label="Ticket promedio"
+            value={kpis?.avg_ticket}
+            format="currency"
+            tooltip="Ventas totales / número de transacciones"
+          />
+          <MetricCard
+            label="Margen"
+            value={kpis?.margin}
+            format="currency"
+            tooltip="Ganancia neta = Ventas - Costo de mercancía"
+          />
         </div>
       ) : (
         <p className="text-sm text-amber-600">
@@ -174,6 +255,7 @@ const SalesView = ({ onUnauthorized, onGoToData }) => {
             data={trendChart?.data || []}
             xKey={trendChart?.xKey || "label"}
             series={trendChart?.series || []}
+            tooltip="Evolución diaria de ventas y unidades"
           />
           <ChartCard
             title={charts?.top_products?.title || "Top productos"}
@@ -181,6 +263,7 @@ const SalesView = ({ onUnauthorized, onGoToData }) => {
             data={topProductsChart?.data || []}
             xKey={topProductsChart?.xKey || "label"}
             series={topProductsChart?.series || []}
+            tooltip="Productos con mayor contribución en el período"
           />
           <ChartCard
             title={charts?.categories?.title || "Categorías"}
@@ -188,6 +271,7 @@ const SalesView = ({ onUnauthorized, onGoToData }) => {
             data={categoriesChart?.data || []}
             xKey={categoriesChart?.xKey || "label"}
             series={categoriesChart?.series || []}
+            tooltip="Participación de ventas por categoría"
           />
         </div>
       )}
