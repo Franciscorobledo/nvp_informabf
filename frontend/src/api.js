@@ -6,10 +6,30 @@ const isDev = metaEnv.MODE === "development";
 const LOCAL_API = "http://localhost:1000";
 
 // Backend producción (Render)
-const PROD_API = "https://nvp-informabf.onrender.com";
+const RENDER_BACKEND = "https://nvp-informabf-backend-wxbb.onrender.com";
+const LEGACY_RENDER_BACKEND = "https://nvp-informabf.onrender.com";
 
-// Usa VITE_API_URL si existe; si no, detecta entorno automáticamente
-const API_URL = metaEnv.VITE_API_URL || (isDev ? LOCAL_API : PROD_API);
+const deriveBackendFromHostname = () => {
+  if (typeof window === "undefined") return "";
+
+  const { hostname } = window.location;
+  if (hostname.includes("front")) {
+    return `https://${hostname.replace("front", "backend")}`;
+  }
+
+  return "";
+};
+
+// Usa VITE_API_URL si existe; si no, detecta entorno automáticamente.
+// En producción preferimos el backend desplegado en Render; si no está
+// disponible, caemos al dominio heredado.
+const PROD_API =
+  metaEnv.VITE_API_URL ||
+  deriveBackendFromHostname() ||
+  RENDER_BACKEND ||
+  LEGACY_RENDER_BACKEND;
+
+const API_URL = isDev ? LOCAL_API : PROD_API;
 
 let globalHandlersRegistered = false;
 
