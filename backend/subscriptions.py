@@ -8,13 +8,13 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from auth import get_current_user
+from auth import admin_required, get_current_user
 from database import get_db
 from models import Subscription, SubscriptionPlan, User
+from utils.mercadopago_keys import get_mp_access_token, persist_mp_access_token
 
 router = APIRouter(prefix="/subscriptions", tags=["Suscripciones"])
 
-MP_ACCESS_TOKEN = os.getenv("MP_ACCESS_TOKEN", "")
 MP_WEBHOOK_SECRET = os.getenv("MP_WEBHOOK_SECRET")
 FRONTEND_BASE_URL = os.getenv("FRONTEND_BASE_URL", "http://localhost:5173")
 BACKEND_BASE_URL = os.getenv("BACKEND_BASE_URL", "http://localhost:1000")
@@ -62,6 +62,15 @@ DEFAULT_PLANS = [
 
 class SubscriptionCreate(BaseModel):
     plan_id: int
+
+
+class PlanUpdate(BaseModel):
+    price_monthly: Optional[float] = None
+    currency: Optional[str] = None
+
+
+class MercadoPagoTokenPayload(BaseModel):
+    access_token: str
 
 
 class SubscriptionSummary(BaseModel):
@@ -123,13 +132,85 @@ def list_plans(db: Session = Depends(get_db)):
     ]
 
 
+@router.get("/admin/plans", dependencies=[Depends(admin_required)])
+def admin_list_plans(db: Session = Depends(get_db)):
+    plans = db.query(SubscriptionPlan).order_by(SubscriptionPlan.price_monthly.asc()).all()
+    return [
+        {
+            "id": plan.id,
+            "name": plan.name,
+            "alias": plan.alias,
+            "price_monthly": plan.price_monthly,
+            "currency": plan.currency,
+            "description": plan.description,
+            "features": plan.features or [],
+            "created_at": plan.created_at,
+        }
+        for plan in plans
+    ]
+
+
+@router.put("/admin/plans/{plan_id}", dependencies=[Depends(admin_required)])
+def update_plan(plan_id: int, payload: PlanUpdate, db: Session = Depends(get_db)):
+    plan = db.query(SubscriptionPlan).filter(SubscriptionPlan.id == plan_id).first()
+    if not plan:
+        raise HTTPException(status_code=404, detail="Plan no encontrado")
+
+    if payload.price_monthly is None and payload.currency is None:
+        raise HTTPException(status_code=400, detail="No se enviaron cambios para actualizar")
+
+    updated = False
+    if payload.price_monthly is not None:
+        plan.price_monthly = payload.price_monthly
+        updated = True
+    if payload.currency is not None:
+        plan.currency = payload.currency
+        updated = True
+
+    if updated:
+        db.add(plan)
+        db.commit()
+        db.refresh(plan)
+
+    return {
+        "status": "ok",
+        "message": "Plan actualizado correctamente",
+        "plan": {
+            "id": plan.id,
+            "name": plan.name,
+            "alias": plan.alias,
+            "price_monthly": plan.price_monthly,
+            "currency": plan.currency,
+            "description": plan.description,
+            "features": plan.features or [],
+        },
+    }
+
+
+@router.get("/admin/mercadopago/status", dependencies=[Depends(admin_required)])
+def mercadopago_status():
+    token = get_mp_access_token()
+    return {"access_token_present": bool(token)}
+
+
+@router.post("/admin/mercadopago/token", dependencies=[Depends(admin_required)])
+def update_mp_token(payload: MercadoPagoTokenPayload):
+    try:
+        persist_mp_access_token(payload.access_token)
+    except ValueError as exc:  # pragma: no cover - simple validation
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    return {"status": "ok", "message": "Token de Mercado Pago actualizado."}
+
+
 @router.post("/create")
 def create_subscription(payload: SubscriptionCreate, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     plan = db.query(SubscriptionPlan).filter(SubscriptionPlan.id == payload.plan_id).first()
     if not plan:
         raise HTTPException(status_code=404, detail="Plan no encontrado")
 
-    if not MP_ACCESS_TOKEN:
+    mp_access_token = get_mp_access_token()
+    if not mp_access_token:
         raise HTTPException(status_code=500, detail="Mercado Pago no está configurado")
 
     back_url = f"{FRONTEND_BASE_URL.rstrip('/')}/suscripcion/estado"
@@ -149,7 +230,7 @@ def create_subscription(payload: SubscriptionCreate, db: Session = Depends(get_d
     }
 
     headers = {
-        "Authorization": f"Bearer {MP_ACCESS_TOKEN}",
+        "Authorization": f"Bearer {mp_access_token}",
         "Content-Type": "application/json",
     }
 
@@ -203,7 +284,8 @@ async def mercadopago_webhook(request: Request, db: Session = Depends(get_db)):
         logging.warning("Suscripción no encontrada para preapproval %s", preapproval_id)
         return {"status": "not_found"}
 
-    headers = {"Authorization": f"Bearer {MP_ACCESS_TOKEN}"}
+    mp_access_token = get_mp_access_token()
+    headers = {"Authorization": f"Bearer {mp_access_token}"}
     mp_response = requests.get(
         f"https://api.mercadopago.com/preapproval/{preapproval_id}", headers=headers, timeout=30
     )

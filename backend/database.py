@@ -18,7 +18,7 @@ if DATABASE_URL:
     if parsed.scheme.startswith("postgresql") and "sslmode=" not in (parsed.query or ""):
         connect_args["sslmode"] = "require"
 
-    engine = create_engine(DATABASE_URL, connect_args=connect_args or None)
+    engine = create_engine(DATABASE_URL, connect_args=connect_args or {})
 else:
     engine = create_engine(
         "sqlite:///./informebf_local.db",
