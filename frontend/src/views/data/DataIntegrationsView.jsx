@@ -3,6 +3,7 @@ import API_URL from "../../api.js";
 import SectionHeader from "../../components/cards/SectionHeader";
 import SkeletonBlock from "../../components/cards/SkeletonBlock";
 import { handleUploadSubmission } from "./uploadHelpers";
+import { MERCADO_LIBRE_APP_ALIAS } from "../../constants/mercadoLibre";
 
 const SALES_STANDARD_FIELDS = ["date", "sku", "product_name", "quantity", "unit_price", "total", "channel"];
 const STOCK_STANDARD_FIELDS = ["sku", "product_name", "category", "current_stock", "unit_cost", "location", "channel"];
@@ -17,6 +18,10 @@ const DataIntegrationsView = ({ onUnauthorized, onOpenMercadoLibre }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [selectingSource, setSelectingSource] = useState(false);
+  const [connectionStatus, setConnectionStatus] = useState(null);
+  const [statusLoading, setStatusLoading] = useState(false);
+  const [credentials, setCredentials] = useState([]);
+  const [selectedCredentialId, setSelectedCredentialId] = useState("");
 
   useEffect(() => {
     const handleStorage = () => setToken(localStorage.getItem("token"));
@@ -63,6 +68,43 @@ const DataIntegrationsView = ({ onUnauthorized, onOpenMercadoLibre }) => {
 
     return resClone.text();
   };
+
+  useEffect(() => {
+    if (!token) return;
+
+    const fetchStatus = async () => {
+      setStatusLoading(true);
+      try {
+        const data = await authorizedFetch(
+          `${API_URL}/meli/status?app_alias=${encodeURIComponent(MERCADO_LIBRE_APP_ALIAS)}`,
+        );
+        setConnectionStatus(data);
+      } catch (err) {
+        if (err.message !== "unauthorized") {
+          console.error(err);
+        }
+      } finally {
+        setStatusLoading(false);
+      }
+    };
+
+    const fetchCredentials = async () => {
+      try {
+        const data = await authorizedFetch(`${API_URL}/admin/ml/credentials`);
+        setCredentials(data);
+        if (data.length > 0) {
+          setSelectedCredentialId((prev) => prev || String(data[0].id));
+        }
+      } catch (err) {
+        if (err.message !== "unauthorized") {
+          setError(err.message || "No se pudieron cargar las credenciales");
+        }
+      }
+    };
+
+    fetchStatus();
+    fetchCredentials();
+  }, [token]);
 
   const downloadSample = async (type) => {
     setError("");
@@ -111,13 +153,17 @@ const DataIntegrationsView = ({ onUnauthorized, onOpenMercadoLibre }) => {
   
   const handleUseMercadoLibreSource = async () => {
     setError("");
+    if (!selectedCredentialId) {
+      setError("Selecciona una credencial de Mercado Libre");
+      return;
+    }
     setSelectingSource(true);
 
     try {
       const data = await authorizedFetch(`${API_URL}/data/source`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ source: "mercadolibre", credential_id: 0 }),
+        body: JSON.stringify({ source: "mercadolibre", credential_id: Number(selectedCredentialId) }),
       });
 
       setUploadStatus({ ...data, updated_at: data.updated_at || new Date().toISOString() });
@@ -196,11 +242,43 @@ const DataIntegrationsView = ({ onUnauthorized, onOpenMercadoLibre }) => {
               <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">Mercado Libre</p>
               <p className="text-xs text-slate-500">Conecta y usa los tokens existentes</p>
             </div>
-            <span className="rounded-full bg-emerald-100 text-emerald-700 px-3 py-1 text-xs font-semibold">OAuth activo</span>
+            <span
+              className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                connectionStatus
+                  ? "bg-emerald-100 text-emerald-700"
+                  : "bg-slate-200 text-slate-600 dark:bg-slate-800 dark:text-slate-200"
+              }`}
+            >
+              {statusLoading
+                ? "Verificando..."
+                : connectionStatus
+                  ? `Conectado a ${connectionStatus.nickname || "Mercado Libre"}`
+                  : "No conectado"}
+            </span>
           </div>
           <p className="text-sm text-slate-600 dark:text-slate-300">
             Usa el flujo ya implementado para sincronizar órdenes y stock. Se guarda como fuente activa en el motor.
           </p>
+          <div className="space-y-2 text-xs text-slate-500">
+            <p>La importación completa puede tardar unos minutos.</p>
+          </div>
+          <div className="grid gap-2 text-sm md:grid-cols-2">
+            <label className="space-y-1">
+              <span className="text-xs font-semibold text-slate-700 dark:text-slate-200">Credencial de Mercado Libre</span>
+              <select
+                value={selectedCredentialId}
+                onChange={(e) => setSelectedCredentialId(e.target.value)}
+                className="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-sm"
+              >
+                {credentials.length === 0 && <option value="">Sin credenciales disponibles</option>}
+                {credentials.map((cred) => (
+                  <option key={cred.id} value={cred.id}>
+                    {cred.account_name} {cred.nickname ? `(${cred.nickname})` : ""}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
           <div className="flex flex-wrap gap-2">
             <button
               onClick={onOpenMercadoLibre}

@@ -819,9 +819,15 @@ async def select_source(
     user_id = str(current_user.id)
 
     if source == "mercadolibre":
-        credential_id = payload.credential_id or 0
-        sales_raw, _ = fetch_orders_dataframe(credential_id, db, current_user)
-        stock_raw, _ = fetch_inventory_dataframe(credential_id, db, current_user)
+        credential_id = 0 if payload.credential_id is None else payload.credential_id
+        try:
+            sales_raw, _ = fetch_orders_dataframe(credential_id, db, current_user)
+            stock_raw, _ = fetch_inventory_dataframe(credential_id, db, current_user)
+        except HTTPException:
+            # Propaga errores claros sobre credenciales inexistentes o sin acceso
+            raise
+        except Exception as exc:  # noqa: BLE001
+            raise HTTPException(status_code=400, detail=f"No se pudo obtener datos de MercadoLibre: {exc}") from exc
         sales_df, _ = harmonize_sales_data(sales_raw, "mercadolibre")
         stock_df, _ = harmonize_stock_data(stock_raw, "mercadolibre")
         _DATA_CONTEXT.set_payload(user_id, sales_df, stock_df, "mercadolibre")
