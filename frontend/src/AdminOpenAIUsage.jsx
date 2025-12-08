@@ -329,6 +329,25 @@ const AdminOpenAIUsage = ({ onUnauthorized }) => {
 
       {snapshot && (
         <div className="space-y-4">
+          {(() => {
+            const budgetLimit = snapshot.budget_usd ?? DEFAULT_BUDGET_USD;
+            const budgetUsage = usageSummary?.total_cost_usd ?? 0;
+            const progress = budgetLimit > 0 ? (budgetUsage / budgetLimit) * 100 : 0;
+            if (progress >= 75) {
+              return (
+                <div className="p-3 rounded-lg border border-amber-200 bg-amber-50 text-amber-800 text-sm flex gap-2 items-center">
+                  <span role="img" aria-hidden="true">
+                    ⚠️
+                  </span>
+                  <span>
+                    El consumo mensual está cerca del presupuesto definido (${budgetLimit}). Llevas {progress.toFixed(1)}% del límite
+                    actual.
+                  </span>
+                </div>
+              );
+            }
+            return null;
+          })()}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
             <div className="p-4 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-sm space-y-2">
               <div className="flex items-center justify-between">
@@ -340,7 +359,7 @@ const AdminOpenAIUsage = ({ onUnauthorized }) => {
                 ${numberFormatter.format(usageSummary?.total_cost_usd ?? 0)}
               </p>
               <p className="text-xs text-gray-500 dark:text-slate-400">
-                Tokens usados: {integerFormatter.format(usageSummary?.total_tokens ?? 0)}
+                Tokens usados (mes): {integerFormatter.format(usageSummary?.total_tokens ?? 0)}
               </p>
             </div>
 
@@ -348,19 +367,19 @@ const AdminOpenAIUsage = ({ onUnauthorized }) => {
               <div className="flex items-center justify-between">
                 <span className="text-sm font-semibold text-gray-800 dark:text-slate-100">Avance contra presupuesto</span>
                 <span className="text-xs px-2 py-1 rounded-md bg-slate-100 dark:bg-slate-800 text-gray-600 dark:text-slate-300">
-                  Ref: ${DEFAULT_BUDGET_USD}
+                  Ref: ${snapshot?.budget_usd ?? DEFAULT_BUDGET_USD}
                 </span>
               </div>
               <div className="w-full bg-gray-100 dark:bg-slate-800 rounded-full h-3 overflow-hidden">
                 <div
                   className={`h-3 rounded-full transition-all duration-300 ${
-                    (usageSummary?.total_cost_usd ?? 0) > DEFAULT_BUDGET_USD
+                    (usageSummary?.total_cost_usd ?? 0) > (snapshot?.budget_usd ?? DEFAULT_BUDGET_USD)
                       ? "bg-rose-500"
                       : "bg-green-500"
                   }`}
                   style={{
                     width: `${Math.min(
-                      ((usageSummary?.total_cost_usd ?? 0) / DEFAULT_BUDGET_USD) * 100,
+                      ((usageSummary?.total_cost_usd ?? 0) / (snapshot?.budget_usd ?? DEFAULT_BUDGET_USD)) * 100,
                       110
                     ).toFixed(2)}%`,
                   }}
@@ -370,7 +389,7 @@ const AdminOpenAIUsage = ({ onUnauthorized }) => {
                 <span>Gastado: ${numberFormatter.format(usageSummary?.total_cost_usd ?? 0)}</span>
                 <span>
                   {Math.min(
-                    ((usageSummary?.total_cost_usd ?? 0) / DEFAULT_BUDGET_USD) * 100,
+                    ((usageSummary?.total_cost_usd ?? 0) / (snapshot?.budget_usd ?? DEFAULT_BUDGET_USD)) * 100,
                     110
                   ).toFixed(1)}%
                 </span>

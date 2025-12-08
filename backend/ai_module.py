@@ -425,7 +425,12 @@ Responder la consulta usando solo la información disponible, sin inventar métr
         raise
 
 
-def classify_tabular_dataset(columns: list[str], sample_rows: list[dict], schema_definition: str) -> dict:
+def classify_tabular_dataset(
+    columns: list[str],
+    sample_rows: list[dict],
+    schema_definition: str,
+    model_name: str = "gpt-3.5-turbo",
+) -> dict:
     """Mapea un archivo tabular a un esquema estándar usando OpenAI."""
 
     system_prompt = (
@@ -452,8 +457,9 @@ Responde únicamente con JSON válido.
 
     try:
         client = _get_openai_client()
+        primary_model = model_name or "gpt-3.5-turbo"
         response = client.chat.completions.create(
-            model="gpt-4o-mini",
+            model=primary_model,
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt},
@@ -462,7 +468,26 @@ Responde únicamente con JSON válido.
             max_tokens=300,
         )
         content = response.choices[0].message.content.strip()
-        return json.loads(content)
+        parsed = json.loads(content)
+
+        if parsed.get("type") == "unknown" and primary_model != "gpt-4o":
+            logging.info("🔁 Reintentando clasificación con GPT-4 por baja confianza del modelo económico")
+            try:
+                fallback_response = client.chat.completions.create(
+                    model="gpt-4o",
+                    messages=[
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_prompt},
+                    ],
+                    temperature=0,
+                    max_tokens=300,
+                )
+                fallback_content = fallback_response.choices[0].message.content.strip()
+                parsed = json.loads(fallback_content)
+            except Exception as retry_exc:  # noqa: BLE001
+                logging.warning("⚠️ Reintento con GPT-4 fallido: %s", retry_exc)
+
+        return parsed
     except Exception as exc:  # pragma: no cover - llamada externa
         logging.error("⚠️ No se pudo clasificar dataset con IA: %s", exc)
         return {"type": "unknown", "reason": str(exc)}
