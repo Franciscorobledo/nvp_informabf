@@ -1,10 +1,11 @@
-import React, { useMemo, useState } from "react";
+import React, { useState } from "react";
 import API_URL from "../../api";
 import SectionHeader from "../../components/cards/SectionHeader";
 import ChartCard from "../../components/charts/ChartCard";
 import TableCard from "../../components/tables/TableCard";
 import SkeletonBlock from "../../components/cards/SkeletonBlock";
 import { toChartCardConfig } from "../../components/charts/chartMappers";
+import { fetchWithAuth } from "../../utils/apiHelpers";
 
 const metricsOptions = [
   { value: "sales", label: "Ventas" },
@@ -28,7 +29,6 @@ const chartTypes = [
 ];
 
 const ReportBuilderView = ({ onUnauthorized }) => {
-  const token = useMemo(() => localStorage.getItem("token"), []);
   const [config, setConfig] = useState({
     metric: "sales",
     dimension: "product",
@@ -38,29 +38,6 @@ const ReportBuilderView = ({ onUnauthorized }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const fetchWithAuth = async (url, options = {}) => {
-    const res = await fetch(url, {
-      ...options,
-      headers: {
-        "Content-Type": "application/json",
-        ...(options.headers || {}),
-        Authorization: token ? `Bearer ${token}` : undefined,
-      },
-    });
-
-    if (res.status === 401 || res.status === 403) {
-      onUnauthorized?.("Tu sesión expiró. Vuelve a iniciar sesión.");
-      throw new Error("unauthorized");
-    }
-
-    if (!res.ok) {
-      const text = await res.text();
-      throw new Error(text || "Error en la petición");
-    }
-
-    return res.json();
-  };
-
   const handleBuild = async (event) => {
     event.preventDefault();
     setLoading(true);
@@ -69,10 +46,13 @@ const ReportBuilderView = ({ onUnauthorized }) => {
       const response = await fetchWithAuth(`${API_URL}/metrics/custom`, {
         method: "POST",
         body: JSON.stringify(config),
+        onUnauthorized,
       });
       setResult(response);
     } catch (err) {
-      setError(err.message || "No se pudo generar el reporte personalizado");
+      if (err.message !== "unauthorized") {
+        setError(err.message || "No se pudo generar el reporte personalizado");
+      }
     } finally {
       setLoading(false);
     }

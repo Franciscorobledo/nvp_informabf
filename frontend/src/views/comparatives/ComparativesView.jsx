@@ -1,47 +1,26 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import API_URL from "../../api";
 import SectionHeader from "../../components/cards/SectionHeader";
 import ChartCard from "../../components/charts/ChartCard";
 import SkeletonBlock from "../../components/cards/SkeletonBlock";
 import { toChartCardConfig } from "../../components/charts/chartMappers";
+import { fetchWithAuth } from "../../utils/apiHelpers";
 
 const ComparativesView = ({ onUnauthorized }) => {
-  const token = useMemo(() => localStorage.getItem("token"), []);
   const [charts, setCharts] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-
-  const fetchWithAuth = async (url, options = {}) => {
-    const res = await fetch(url, {
-      ...options,
-      headers: {
-        "Content-Type": "application/json",
-        ...(options.headers || {}),
-        Authorization: token ? `Bearer ${token}` : undefined,
-      },
-    });
-
-    if (res.status === 401 || res.status === 403) {
-      onUnauthorized?.("Tu sesión expiró. Vuelve a iniciar sesión.");
-      throw new Error("unauthorized");
-    }
-
-    if (!res.ok) {
-      const text = await res.text();
-      throw new Error(text || "Error en la petición");
-    }
-
-    return res.json();
-  };
 
   const loadComparatives = async () => {
     setLoading(true);
     setError("");
     try {
-      const response = await fetchWithAuth(`${API_URL}/metrics/comparative`);
+      const response = await fetchWithAuth(`${API_URL}/metrics/comparative`, { onUnauthorized });
       setCharts(response.charts);
     } catch (err) {
-      setError(err.message || "No se pudo cargar el panel de comparativas");
+      if (err.message !== "unauthorized") {
+        setError(err.message || "No se pudo cargar el panel de comparativas");
+      }
     } finally {
       setLoading(false);
     }

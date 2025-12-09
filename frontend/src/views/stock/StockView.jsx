@@ -6,38 +6,15 @@ import ChartCard from "../../components/charts/ChartCard";
 import TableCard from "../../components/tables/TableCard";
 import SkeletonBlock from "../../components/cards/SkeletonBlock";
 import { toChartCardConfig } from "../../components/charts/chartMappers";
+import { fetchWithAuth } from "../../utils/apiHelpers";
 
 const StockView = ({ onUnauthorized }) => {
-  const token = useMemo(() => localStorage.getItem("token"), []);
   const [metrics, setMetrics] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
   const [category, setCategory] = useState("");
-
-  const fetchWithAuth = async (url, options = {}) => {
-    const res = await fetch(url, {
-      ...options,
-      headers: {
-        "Content-Type": "application/json",
-        ...(options.headers || {}),
-        Authorization: token ? `Bearer ${token}` : undefined,
-      },
-    });
-
-    if (res.status === 401 || res.status === 403) {
-      onUnauthorized?.("Tu sesión expiró. Vuelve a iniciar sesión.");
-      throw new Error("unauthorized");
-    }
-
-    if (!res.ok) {
-      const text = await res.text();
-      throw new Error(text || "Error en la petición");
-    }
-
-    return res.json();
-  };
 
   const loadMetrics = async () => {
     setLoading(true);
@@ -47,10 +24,14 @@ const StockView = ({ onUnauthorized }) => {
       if (fromDate) params.append("from_date", fromDate);
       if (toDate) params.append("to_date", toDate);
       if (category) params.append("category", category);
-      const stockResponse = await fetchWithAuth(`${API_URL}/metrics/stock?${params.toString()}`);
+      const stockResponse = await fetchWithAuth(`${API_URL}/metrics/stock?${params.toString()}`, {
+        onUnauthorized,
+      });
       setMetrics(stockResponse);
     } catch (err) {
-      setError(err.message || "No se pudo cargar el panel de stock");
+      if (err.message !== "unauthorized") {
+        setError(err.message || "No se pudo cargar el panel de stock");
+      }
     } finally {
       setLoading(false);
     }
