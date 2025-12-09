@@ -4,7 +4,6 @@ import SectionHeader from "../../components/cards/SectionHeader";
 import SkeletonBlock from "../../components/cards/SkeletonBlock";
 import { handleUploadSubmission } from "./uploadHelpers";
 import { MERCADO_LIBRE_APP_ALIAS } from "../../constants/mercadoLibre";
-import useSubscriptionPlan from "../../hooks/useSubscriptionPlan";
 
 const SALES_STANDARD_FIELDS = ["date", "sku", "product_name", "quantity", "unit_price", "total", "channel"];
 const STOCK_STANDARD_FIELDS = ["sku", "product_name", "category", "current_stock", "unit_cost", "location", "channel"];
@@ -16,8 +15,6 @@ const DataIntegrationsView = ({ onUnauthorized, onOpenMercadoLibre }) => {
   const [unmappedColumns, setUnmappedColumns] = useState([]);
   const [remapSelections, setRemapSelections] = useState({});
   const [showRemapDialog, setShowRemapDialog] = useState(false);
-  const [activeDataset, setActiveDataset] = useState(null);
-  const [draggingKey, setDraggingKey] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [selectingSource, setSelectingSource] = useState(false);
@@ -25,9 +22,6 @@ const DataIntegrationsView = ({ onUnauthorized, onOpenMercadoLibre }) => {
   const [statusLoading, setStatusLoading] = useState(false);
   const [credentials, setCredentials] = useState([]);
   const [selectedCredentialId, setSelectedCredentialId] = useState("");
-  const { isProOrPremium, loading: planLoading } = useSubscriptionPlan({ onUnauthorized });
-  const upgradeMessage =
-    "Función disponible en planes Pro y Premium. Actualiza tu plan en la sección Planes.";
 
   useEffect(() => {
     const handleStorage = () => setToken(localStorage.getItem("token"));
@@ -76,7 +70,7 @@ const DataIntegrationsView = ({ onUnauthorized, onOpenMercadoLibre }) => {
   };
 
   useEffect(() => {
-    if (!token || !isProOrPremium) return;
+    if (!token) return;
 
     const fetchStatus = async () => {
       setStatusLoading(true);
@@ -110,14 +104,10 @@ const DataIntegrationsView = ({ onUnauthorized, onOpenMercadoLibre }) => {
 
     fetchStatus();
     fetchCredentials();
-  }, [token, isProOrPremium]);
+  }, [token]);
 
   const downloadSample = async (type) => {
     setError("");
-    if (!isProOrPremium) {
-      setError(upgradeMessage);
-      return;
-    }
     try {
       const res = await fetch(`${API_URL}/data/sample/${type}`, {
         headers: {
@@ -163,10 +153,6 @@ const DataIntegrationsView = ({ onUnauthorized, onOpenMercadoLibre }) => {
   
   const handleUseMercadoLibreSource = async () => {
     setError("");
-    if (!isProOrPremium) {
-      setError(upgradeMessage);
-      return;
-    }
     if (!selectedCredentialId) {
       setError("Selecciona una credencial de Mercado Libre");
       return;
@@ -197,51 +183,11 @@ const DataIntegrationsView = ({ onUnauthorized, onOpenMercadoLibre }) => {
       initialSelections[`${item.dataset}:${item.column}`] = "";
     });
     setRemapSelections(initialSelections);
-    setActiveDataset(unmappedColumns[0]?.dataset || "sales");
     setShowRemapDialog(true);
   };
 
-  const handleDropOnStandard = (dataset, standard, column) => {
-    setRemapSelections((prev) => {
-      const updated = { ...prev };
-
-      Object.entries(updated).forEach(([key, std]) => {
-        const [ds] = key.split(":");
-        if (ds === dataset && std === standard) {
-          delete updated[key];
-        }
-      });
-
-      updated[`${dataset}:${column}`] = standard;
-      return updated;
-    });
-  };
-
-  const getStandardFields = (dataset) => (dataset === "stock" ? STOCK_STANDARD_FIELDS : SALES_STANDARD_FIELDS);
-
-  const getAssignedColumn = (dataset, standard) => {
-    const match = Object.entries(remapSelections).find(([key, std]) => {
-      const [ds] = key.split(":");
-      return ds === dataset && std === standard;
-    });
-
-    if (!match) return "";
-    return match[0].split(":")[1];
-  };
-
-  const isColumnAssigned = (dataset, column) => Boolean(remapSelections[`${dataset}:${column}`]);
-
-  const clearStandardMapping = (dataset, standard) => {
-    setRemapSelections((prev) => {
-      const updated = { ...prev };
-      Object.entries(updated).forEach(([key, std]) => {
-        const [ds] = key.split(":");
-        if (ds === dataset && std === standard) {
-          delete updated[key];
-        }
-      });
-      return updated;
-    });
+  const handleSelectionChange = (dataset, column, value) => {
+    setRemapSelections((prev) => ({ ...prev, [`${dataset}:${column}`]: value }));
   };
 
   const handleSubmitRemap = async () => {
@@ -288,12 +234,6 @@ const DataIntegrationsView = ({ onUnauthorized, onOpenMercadoLibre }) => {
   return (
     <section className="space-y-6">
       <SectionHeader title="Datos e integraciones" subtitle="Mercado Libre y archivos unificados" badge="Orígenes" />
-
-      {!planLoading && !isProOrPremium && (
-        <div className="rounded-2xl border border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-500/60 dark:bg-amber-900/20 dark:text-amber-50 px-4 py-3">
-          {upgradeMessage}
-        </div>
-      )}
 
       <div className="grid gap-4 lg:grid-cols-2">
         <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/90 dark:bg-slate-900/70 p-5 space-y-3">
@@ -342,15 +282,14 @@ const DataIntegrationsView = ({ onUnauthorized, onOpenMercadoLibre }) => {
           <div className="flex flex-wrap gap-2">
             <button
               onClick={onOpenMercadoLibre}
-              disabled={!isProOrPremium}
-              className="rounded-xl bg-emerald-600 text-white px-4 py-2 text-sm font-semibold shadow hover:bg-emerald-700 disabled:opacity-60 disabled:cursor-not-allowed"
+              className="rounded-xl bg-emerald-600 text-white px-4 py-2 text-sm font-semibold shadow hover:bg-emerald-700"
             >
               Conectar / revisar conexión
             </button>
             <button
               onClick={handleUseMercadoLibreSource}
-              disabled={selectingSource || !isProOrPremium}
-              className="rounded-xl border border-slate-300 dark:border-slate-700 px-4 py-2 text-sm font-semibold disabled:opacity-60 disabled:cursor-not-allowed"
+              disabled={selectingSource}
+              className="rounded-xl border border-slate-300 dark:border-slate-700 px-4 py-2 text-sm font-semibold disabled:opacity-60"
             >
               {selectingSource ? "Activando..." : "Usar como fuente"}
             </button>
@@ -488,133 +427,35 @@ const DataIntegrationsView = ({ onUnauthorized, onOpenMercadoLibre }) => {
 
       {showRemapDialog && (
         <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center z-20 p-4">
-          <div className="w-full max-w-5xl rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-4 space-y-4">
+          <div className="w-full max-w-xl rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-4 space-y-4">
             <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">Configurar columnas manualmente</p>
-                <p className="text-xs text-slate-500">Arrastra las columnas hacia el campo estándar correcto.</p>
-              </div>
+              <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">Configurar columnas manualmente</p>
               <button onClick={() => setShowRemapDialog(false)} className="text-slate-500 text-xs">Cerrar</button>
             </div>
-
-            <div className="flex flex-wrap gap-2 text-xs">
-              <button
-                onClick={() => setActiveDataset("sales")}
-                className={`rounded-full border px-3 py-1 font-semibold transition ${
-                  activeDataset === "sales"
-                    ? "border-blue-600 bg-blue-50 text-blue-700 dark:border-blue-400 dark:bg-blue-900/40 dark:text-blue-100"
-                    : "border-slate-300 text-slate-600 dark:border-slate-700 dark:text-slate-200"
-                }`}
-              >
-                Mapear ventas
-              </button>
-              <button
-                onClick={() => setActiveDataset("stock")}
-                className={`rounded-full border px-3 py-1 font-semibold transition ${
-                  activeDataset === "stock"
-                    ? "border-blue-600 bg-blue-50 text-blue-700 dark:border-blue-400 dark:bg-blue-900/40 dark:text-blue-100"
-                    : "border-slate-300 text-slate-600 dark:border-slate-700 dark:text-slate-200"
-                }`}
-              >
-                Mapear stock
-              </button>
-            </div>
-
-            {activeDataset ? (
-              <div className="grid gap-4 md:grid-cols-2">
-                <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900/60 p-3 space-y-2">
-                  <div className="flex items-center justify-between text-xs font-semibold text-slate-700 dark:text-slate-200">
-                    <span>Columnas sin mapear ({unmappedColumns.filter((c) => c.dataset === activeDataset).length})</span>
-                    <span className="text-slate-400">Arrastra para asignar</span>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {unmappedColumns
-                      .filter((item) => item.dataset === activeDataset)
-                      .map((item) => (
-                        <div
-                          key={`${item.dataset}:${item.column}`}
-                          draggable
-                          onDragStart={() => setDraggingKey(`${item.dataset}:${item.column}`)}
-                          onDragEnd={() => setDraggingKey("")}
-                          className={`cursor-grab rounded-lg border px-3 py-2 text-xs font-semibold shadow-sm transition ${
-                            isColumnAssigned(item.dataset, item.column)
-                              ? "border-emerald-300 bg-emerald-50 text-emerald-700 dark:border-emerald-700/60 dark:bg-emerald-900/40 dark:text-emerald-100"
-                              : "border-slate-200 bg-white text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
-                          } ${draggingKey === `${item.dataset}:${item.column}` ? "ring-2 ring-blue-300" : ""}`}
-                        >
-                          {item.column}
-                          <span className="ml-2 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold uppercase text-slate-500 dark:bg-slate-700 dark:text-slate-200">
-                            {item.dataset}
-                          </span>
-                        </div>
+            <div className="space-y-3 max-h-80 overflow-y-auto pr-1">
+              {unmappedColumns.map((item) => {
+                const options = item.dataset === "stock" ? STOCK_STANDARD_FIELDS : SALES_STANDARD_FIELDS;
+                return (
+                  <div key={`${item.dataset}:${item.column}`} className="space-y-1 border-b border-slate-100 dark:border-slate-800 pb-2">
+                    <p className="text-xs font-semibold text-slate-700 dark:text-slate-200">
+                      {item.column} <span className="text-slate-400">({item.dataset})</span>
+                    </p>
+                    <select
+                      className="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm px-2 py-1"
+                      value={remapSelections[`${item.dataset}:${item.column}`] || ""}
+                      onChange={(e) => handleSelectionChange(item.dataset, item.column, e.target.value)}
+                    >
+                      <option value="">Selecciona campo estándar</option>
+                      {options.map((opt) => (
+                        <option key={opt} value={opt}>
+                          {opt}
+                        </option>
                       ))}
-                    {unmappedColumns.filter((item) => item.dataset === activeDataset).length === 0 && (
-                      <p className="text-xs text-slate-500">No hay columnas pendientes para este tipo.</p>
-                    )}
+                    </select>
                   </div>
-                </div>
-
-                <div className="space-y-2">
-                  <p className="text-xs font-semibold text-slate-700 dark:text-slate-200">Campos estándar</p>
-                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                    {getStandardFields(activeDataset).map((standard) => {
-                      const assigned = getAssignedColumn(activeDataset, standard);
-                      const isActiveDrop = draggingKey.startsWith(`${activeDataset}:`);
-
-                      return (
-                        <div
-                          key={standard}
-                          onDragOver={(e) => {
-                            if (isActiveDrop) e.preventDefault();
-                          }}
-                          onDrop={(e) => {
-                            e.preventDefault();
-                            const [dataset, column] = draggingKey.split(":");
-                            if (dataset === activeDataset && column) {
-                              handleDropOnStandard(dataset, standard, column);
-                            }
-                            setDraggingKey("");
-                          }}
-                          className={`rounded-lg border px-3 py-3 text-sm transition ${
-                            assigned
-                              ? "border-emerald-300 bg-emerald-50/70 dark:border-emerald-700/60 dark:bg-emerald-900/30"
-                              : "border-dashed border-slate-300 bg-white/70 dark:border-slate-700 dark:bg-slate-800/70"
-                          } ${isActiveDrop ? "hover:border-blue-400" : ""}`}
-                        >
-                          <div className="flex items-start justify-between gap-2">
-                            <div>
-                              <p className="text-xs font-semibold uppercase text-slate-600 dark:text-slate-300">{standard}</p>
-                              <p className="text-[11px] text-slate-500">Suelta aquí la columna correspondiente.</p>
-                            </div>
-                            {assigned && (
-                              <button
-                                onClick={() => clearStandardMapping(activeDataset, standard)}
-                                className="text-[11px] text-amber-600 hover:text-amber-700"
-                              >
-                                Quitar
-                              </button>
-                            )}
-                          </div>
-                          {assigned ? (
-                            <div className="mt-2 inline-flex items-center gap-2 rounded-full bg-emerald-100 px-3 py-1 text-[11px] font-semibold text-emerald-800 dark:bg-emerald-800/50 dark:text-emerald-100">
-                              <span className="h-2 w-2 rounded-full bg-emerald-500" />
-                              {assigned}
-                            </div>
-                          ) : (
-                            <div className="mt-2 rounded-full border border-dashed border-slate-300 px-3 py-1 text-[11px] text-slate-400">
-                              Sin asignar
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <p className="text-xs text-slate-500">Sube archivos para comenzar a mapear.</p>
-            )}
-
+                );
+              })}
+            </div>
             <div className="flex justify-end gap-2">
               <button
                 onClick={() => setShowRemapDialog(false)}

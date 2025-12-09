@@ -242,30 +242,8 @@ def create_subscription(payload: SubscriptionCreate, db: Session = Depends(get_d
     )
 
     if response.status_code not in {200, 201}:
-        try:
-            error_data = response.json()
-            error_detail = (
-                error_data.get("message")
-                or error_data.get("error")
-                or next(
-                    (cause.get("description") for cause in error_data.get("cause", []) if cause.get("description")),
-                    None,
-                )
-            )
-        except Exception:  # pragma: no cover - fallback for unexpected Mercado Pago responses
-            error_data = None
-            error_detail = None
-
-        logging.error(
-            "Mercado Pago error %s: %s", response.status_code, error_data or response.text
-        )
-        raise HTTPException(
-            status_code=502,
-            detail=(
-                "No se pudo iniciar la suscripción en Mercado Pago"
-                + (f": {error_detail}" if error_detail else "")
-            ),
-        )
+        logging.error("Mercado Pago error: %s", response.text)
+        raise HTTPException(status_code=502, detail="No se pudo iniciar la suscripción en Mercado Pago")
 
     mp_data = response.json()
     init_point = mp_data.get("init_point") or mp_data.get("sandbox_init_point")

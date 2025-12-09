@@ -1,8 +1,6 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import API_URL from "./api";
 import { MERCADO_LIBRE_APP_ALIAS } from "./constants/mercadoLibre";
-import useSubscriptionPlan from "./hooks/useSubscriptionPlan";
-import { fetchWithAuth } from "./utils/apiHelpers";
 
 const MercadoLibreIntegration = ({ onUnauthorized }) => {
   const [appAlias] = useState(MERCADO_LIBRE_APP_ALIAS);
@@ -13,20 +11,35 @@ const MercadoLibreIntegration = ({ onUnauthorized }) => {
   const [loading, setLoading] = useState(false);
   const [lastSync, setLastSync] = useState(null);
   const [syncData, setSyncData] = useState(null);
-  const {
-    isProOrPremium,
-    loading: planLoading,
-  } = useSubscriptionPlan({ onUnauthorized });
-  const upgradeMessage =
-    "Función disponible en planes Pro y Premium. Actualiza tu plan en la sección Planes.";
+  const token = useMemo(() => localStorage.getItem("token"), []);
 
-  const hasAccess = isProOrPremium;
+  const authorizedFetch = async (url, options = {}) => {
+    const res = await fetch(url, {
+      ...options,
+      headers: {
+        ...(options.headers || {}),
+        Authorization: `Bearer ${token}`,
+        "Content-Type": options.body instanceof FormData ? undefined : "application/json",
+      },
+    });
+
+    if (res.status === 401 || res.status === 403) {
+      onUnauthorized?.("Tu sesión expiró. Vuelve a iniciar sesión.");
+      throw new Error("unauthorized");
+    }
+
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(text || "Error en la petición");
+    }
+
+    return res.json();
+  };
 
   const loadStatus = async () => {
     try {
-      const data = await fetchWithAuth(
-        `${API_URL}/meli/status?app_alias=${encodeURIComponent(appAlias.trim())}`,
-        { onUnauthorized }
+      const data = await authorizedFetch(
+        `${API_URL}/meli/status?app_alias=${encodeURIComponent(appAlias.trim())}`
       );
       if (data) {
         setConnection(data);
@@ -39,46 +52,32 @@ const MercadoLibreIntegration = ({ onUnauthorized }) => {
   };
 
   useEffect(() => {
-    if (hasAccess) {
-      loadStatus();
-    }
-  }, [hasAccess]);
+    loadStatus();
+  }, []);
 
   const handleConnect = async () => {
-    if (!hasAccess) {
-      setError(upgradeMessage);
-      return;
-    }
     setError("");
     setSyncMessage("");
     try {
-      const data = await fetchWithAuth(
-        `${API_URL}/meli/auth?app_alias=${encodeURIComponent(appAlias.trim())}`,
-        { onUnauthorized }
+      const data = await authorizedFetch(
+        `${API_URL}/meli/auth?app_alias=${encodeURIComponent(appAlias.trim())}`
       );
       if (data.authorization_url) {
         window.open(data.authorization_url, "_blank", "noopener,noreferrer");
         setSyncMessage("Abre la pestaña de Mercado Libre, acepta y vuelve para sincronizar.");
       }
     } catch (err) {
-      if (err.message !== "unauthorized") {
-        setError(err.message || "No se pudo iniciar el proceso de conexión");
-      }
+      setError(err.message || "No se pudo iniciar el proceso de conexión");
     }
   };
 
   const handleSync = async () => {
-    if (!hasAccess) {
-      setError(upgradeMessage);
-      return;
-    }
     setLoading(true);
     setError("");
     setSyncMessage("");
     try {
-      const data = await fetchWithAuth(
-        `${API_URL}/meli/sync?app_alias=${encodeURIComponent(appAlias.trim())}`,
-        { onUnauthorized }
+      const data = await authorizedFetch(
+        `${API_URL}/meli/sync?app_alias=${encodeURIComponent(appAlias.trim())}`
       );
       setSeller(data.seller);
       setSyncData(data);
@@ -90,25 +89,18 @@ const MercadoLibreIntegration = ({ onUnauthorized }) => {
       );
       setSyncMessage("Sincronización completada");
     } catch (err) {
-      if (err.message !== "unauthorized") {
-        setError(err.message || "No se pudo sincronizar");
-      }
+      setError(err.message || "No se pudo sincronizar");
     } finally {
       setLoading(false);
     }
   };
 
   const handleDisconnect = async () => {
-    if (!hasAccess) {
-      setError(upgradeMessage);
-      return;
-    }
     if (!appAlias.trim()) return;
     try {
-      await fetchWithAuth(`${API_URL}/meli/disconnect`, {
+      await authorizedFetch(`${API_URL}/meli/disconnect`, {
         method: "POST",
         body: JSON.stringify({ app_alias: appAlias.trim() }),
-        onUnauthorized,
       });
       setConnection(null);
       setSeller(null);
@@ -116,9 +108,7 @@ const MercadoLibreIntegration = ({ onUnauthorized }) => {
       setLastSync(null);
       setSyncMessage("Integración desconectada");
     } catch (err) {
-      if (err.message !== "unauthorized") {
-        setError(err.message || "No se pudo desconectar");
-      }
+      setError(err.message || "No se pudo desconectar");
     }
   };
 
@@ -131,12 +121,6 @@ const MercadoLibreIntegration = ({ onUnauthorized }) => {
           Conecta tu tienda con OAuth. Solo necesitas el alias que configuró el administrador.
         </p>
       </header>
-
-      {!planLoading && !hasAccess && (
-        <div className="rounded-2xl border border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-500/60 dark:bg-amber-900/20 dark:text-amber-50 px-4 py-3">
-          {upgradeMessage}
-        </div>
-      )}
 
       <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/70 shadow-sm p-5 space-y-4">
         <div className="grid gap-4 sm:grid-cols-[1.2fr_0.8fr]">
@@ -153,15 +137,13 @@ const MercadoLibreIntegration = ({ onUnauthorized }) => {
             <div className="flex flex-wrap items-center gap-3">
               <button
                 onClick={handleConnect}
-                disabled={!hasAccess}
-                className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 text-white px-5 py-2.5 text-sm font-semibold shadow hover:-translate-y-0.5 transition disabled:opacity-60 disabled:cursor-not-allowed"
+                className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 text-white px-5 py-2.5 text-sm font-semibold shadow hover:-translate-y-0.5 transition"
               >
                 Conectar Mercado Libre
               </button>
               <button
                 onClick={handleConnect}
-                disabled={!hasAccess}
-                className="inline-flex items-center justify-center gap-2 rounded-xl border border-dashed border-slate-300 dark:border-slate-700 px-4 py-2 text-sm font-semibold text-slate-700 dark:text-slate-200 disabled:opacity-60 disabled:cursor-not-allowed"
+                className="inline-flex items-center justify-center gap-2 rounded-xl border border-dashed border-slate-300 dark:border-slate-700 px-4 py-2 text-sm font-semibold text-slate-700 dark:text-slate-200"
               >
                 Conectar con QR
               </button>
@@ -189,29 +171,28 @@ const MercadoLibreIntegration = ({ onUnauthorized }) => {
         <div className="flex flex-wrap items-center gap-3">
           <button
             onClick={handleSync}
-            disabled={!hasAccess || loading}
-            className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 text-white px-4 py-2 text-sm font-semibold shadow hover:-translate-y-0.5 transition disabled:opacity-60 disabled:cursor-not-allowed"
+            disabled={loading}
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 text-white px-4 py-2 text-sm font-semibold shadow hover:-translate-y-0.5 transition disabled:opacity-60"
           >
             {loading ? "Sincronizando..." : "Sincronizar vendedor"}
           </button>
           <button
             onClick={handleSync}
-            disabled={!hasAccess || loading}
-            className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-300 dark:border-slate-700 px-4 py-2 text-sm font-semibold text-slate-800 dark:text-slate-200 disabled:opacity-60 disabled:cursor-not-allowed"
+            disabled={loading}
+            className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-300 dark:border-slate-700 px-4 py-2 text-sm font-semibold text-slate-800 dark:text-slate-200"
           >
             Ver ventas
           </button>
           <button
             onClick={handleSync}
-            disabled={!hasAccess || loading}
-            className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-300 dark:border-slate-700 px-4 py-2 text-sm font-semibold text-slate-800 dark:text-slate-200 disabled:opacity-60 disabled:cursor-not-allowed"
+            disabled={loading}
+            className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-300 dark:border-slate-700 px-4 py-2 text-sm font-semibold text-slate-800 dark:text-slate-200"
           >
             Ver stock
           </button>
           <button
             onClick={handleDisconnect}
-            disabled={!hasAccess}
-            className="inline-flex items-center justify-center gap-2 rounded-xl bg-red-500 text-white px-4 py-2 text-sm font-semibold shadow hover:-translate-y-0.5 transition disabled:opacity-60 disabled:cursor-not-allowed"
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-red-500 text-white px-4 py-2 text-sm font-semibold shadow hover:-translate-y-0.5 transition"
           >
             Desconectar
           </button>

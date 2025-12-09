@@ -6,15 +6,38 @@ import ChartCard from "../../components/charts/ChartCard";
 import TableCard from "../../components/tables/TableCard";
 import SkeletonBlock from "../../components/cards/SkeletonBlock";
 import { toChartCardConfig } from "../../components/charts/chartMappers";
-import { fetchWithAuth } from "../../utils/apiHelpers";
 
 const StockView = ({ onUnauthorized }) => {
+  const token = useMemo(() => localStorage.getItem("token"), []);
   const [metrics, setMetrics] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
   const [category, setCategory] = useState("");
+
+  const fetchWithAuth = async (url, options = {}) => {
+    const res = await fetch(url, {
+      ...options,
+      headers: {
+        "Content-Type": "application/json",
+        ...(options.headers || {}),
+        Authorization: token ? `Bearer ${token}` : undefined,
+      },
+    });
+
+    if (res.status === 401 || res.status === 403) {
+      onUnauthorized?.("Tu sesión expiró. Vuelve a iniciar sesión.");
+      throw new Error("unauthorized");
+    }
+
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(text || "Error en la petición");
+    }
+
+    return res.json();
+  };
 
   const loadMetrics = async () => {
     setLoading(true);
@@ -24,14 +47,10 @@ const StockView = ({ onUnauthorized }) => {
       if (fromDate) params.append("from_date", fromDate);
       if (toDate) params.append("to_date", toDate);
       if (category) params.append("category", category);
-      const stockResponse = await fetchWithAuth(`${API_URL}/metrics/stock?${params.toString()}`, {
-        onUnauthorized,
-      });
+      const stockResponse = await fetchWithAuth(`${API_URL}/metrics/stock?${params.toString()}`);
       setMetrics(stockResponse);
     } catch (err) {
-      if (err.message !== "unauthorized") {
-        setError(err.message || "No se pudo cargar el panel de stock");
-      }
+      setError(err.message || "No se pudo cargar el panel de stock");
     } finally {
       setLoading(false);
     }
@@ -41,16 +60,10 @@ const StockView = ({ onUnauthorized }) => {
     loadMetrics();
   }, [fromDate, toDate, category]);
 
-  const kpis = metrics?.kpis || {};
   const rotationChart = toChartCardConfig(metrics?.charts?.rotation);
   const deadStockChart = toChartCardConfig(metrics?.charts?.dead_stock);
   const semaphoreChart = toChartCardConfig(metrics?.charts?.semaphore);
   const alertMessages = metrics?.alerts || [];
-  const tableData = metrics?.table || [];
-  const hasData = Boolean(tableData.length || Object.keys(kpis).length);
-
-  const hasChartData = (chartConfig) => Boolean(chartConfig?.data?.length);
-  const chartsWithData = [rotationChart, deadStockChart, semaphoreChart].filter(hasChartData);
 
   const categoryOptions = useMemo(() => {
     const tableCategories = (metrics?.table || []).map((row) => row?.category).filter(Boolean);
@@ -138,10 +151,6 @@ const StockView = ({ onUnauthorized }) => {
           <SkeletonBlock />
           <SkeletonBlock />
         </div>
-      ) : !hasData ? (
-        <div className="rounded-xl border border-slate-200 bg-white p-6 text-slate-700 shadow-sm dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200">
-          <p className="text-sm font-medium">No hay datos de stock. Sube un archivo o conecta Mercado Libre.</p>
-        </div>
       ) : (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           <MetricCard
@@ -171,50 +180,40 @@ const StockView = ({ onUnauthorized }) => {
         </div>
       )}
 
-      {!!chartsWithData.length && (
-        <div className="grid gap-4 lg:grid-cols-2">
-          {hasChartData(rotationChart) && (
-            <ChartCard
-              title="Rotación (30 días)"
-              type={rotationChart?.type}
-              data={rotationChart?.data || []}
-              xKey={rotationChart?.xKey}
-              series={rotationChart?.series}
-              tooltip="Velocidad de venta vs stock disponible"
-            />
-          )}
-          {hasChartData(deadStockChart) && (
-            <ChartCard
-              title="Stock muerto"
-              type={deadStockChart?.type}
-              data={deadStockChart?.data || []}
-              xKey={deadStockChart?.xKey}
-              series={deadStockChart?.series}
-              tooltip="Productos con stock y sin rotación"
-            />
-          )}
-        </div>
-      )}
-
-      {hasChartData(semaphoreChart) && (
+      <div className="grid gap-4 lg:grid-cols-2">
         <ChartCard
-          title="Semáforo"
-          type={semaphoreChart?.type}
-          data={semaphoreChart?.data || []}
-          xKey={semaphoreChart?.xKey}
-          series={semaphoreChart?.series}
-          tooltip="Distribución de productos por nivel de riesgo"
+          title="Rotación (30 días)"
+          type={rotationChart?.type}
+          data={rotationChart?.data || []}
+          xKey={rotationChart?.xKey}
+          series={rotationChart?.series}
+          tooltip="Velocidad de venta vs stock disponible"
         />
-      )}
+        <ChartCard
+          title="Stock muerto"
+          type={deadStockChart?.type}
+          data={deadStockChart?.data || []}
+          xKey={deadStockChart?.xKey}
+          series={deadStockChart?.series}
+          tooltip="Productos con stock y sin rotación"
+        />
+      </div>
 
-      {tableData.length > 0 && (
-        <TableCard
-          title="Detalle de inventario"
-          data={tableData}
-          columns={columns}
-          columnTypes={metrics?.column_types || {}}
-        />
-      )}
+      <ChartCard
+        title="Semáforo"
+        type={semaphoreChart?.type}
+        data={semaphoreChart?.data || []}
+        xKey={semaphoreChart?.xKey}
+        series={semaphoreChart?.series}
+        tooltip="Distribución de productos por nivel de riesgo"
+      />
+
+      <TableCard
+        title="Detalle de inventario"
+        data={metrics?.table || []}
+        columns={columns}
+        columnTypes={metrics?.column_types || {}}
+      />
     </section>
   );
 };
