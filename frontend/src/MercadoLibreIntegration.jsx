@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from "react";
 import API_URL from "./api";
 import { MERCADO_LIBRE_APP_ALIAS } from "./constants/mercadoLibre";
-import useSubscriptionPlan from "./hooks/useSubscriptionPlan";
 import { fetchWithAuth } from "./utils/apiHelpers";
 
 const MercadoLibreIntegration = ({ onUnauthorized }) => {
@@ -13,14 +12,6 @@ const MercadoLibreIntegration = ({ onUnauthorized }) => {
   const [loading, setLoading] = useState(false);
   const [lastSync, setLastSync] = useState(null);
   const [syncData, setSyncData] = useState(null);
-  const {
-    isProOrPremium,
-    loading: planLoading,
-  } = useSubscriptionPlan({ onUnauthorized });
-  const upgradeMessage =
-    "Función disponible en planes Pro y Premium. Actualiza tu plan en la sección Planes.";
-
-  const hasAccess = isProOrPremium;
 
   const loadStatus = async () => {
     try {
@@ -39,16 +30,10 @@ const MercadoLibreIntegration = ({ onUnauthorized }) => {
   };
 
   useEffect(() => {
-    if (hasAccess) {
-      loadStatus();
-    }
-  }, [hasAccess]);
+    loadStatus();
+  }, []);
 
   const handleConnect = async () => {
-    if (!hasAccess) {
-      setError(upgradeMessage);
-      return;
-    }
     setError("");
     setSyncMessage("");
     try {
@@ -68,10 +53,6 @@ const MercadoLibreIntegration = ({ onUnauthorized }) => {
   };
 
   const handleSync = async () => {
-    if (!hasAccess) {
-      setError(upgradeMessage);
-      return;
-    }
     setLoading(true);
     setError("");
     setSyncMessage("");
@@ -99,10 +80,6 @@ const MercadoLibreIntegration = ({ onUnauthorized }) => {
   };
 
   const handleDisconnect = async () => {
-    if (!hasAccess) {
-      setError(upgradeMessage);
-      return;
-    }
     if (!appAlias.trim()) return;
     try {
       await fetchWithAuth(`${API_URL}/meli/disconnect`, {
@@ -132,12 +109,6 @@ const MercadoLibreIntegration = ({ onUnauthorized }) => {
         </p>
       </header>
 
-      {!planLoading && !hasAccess && (
-        <div className="rounded-2xl border border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-500/60 dark:bg-amber-900/20 dark:text-amber-50 px-4 py-3">
-          {upgradeMessage}
-        </div>
-      )}
-
       <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/70 shadow-sm p-5 space-y-4">
         <div className="grid gap-4 sm:grid-cols-[1.2fr_0.8fr]">
           <div className="space-y-3">
@@ -153,15 +124,13 @@ const MercadoLibreIntegration = ({ onUnauthorized }) => {
             <div className="flex flex-wrap items-center gap-3">
               <button
                 onClick={handleConnect}
-                disabled={!hasAccess}
-                className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 text-white px-5 py-2.5 text-sm font-semibold shadow hover:-translate-y-0.5 transition disabled:opacity-60 disabled:cursor-not-allowed"
+                className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 text-white px-5 py-2.5 text-sm font-semibold shadow hover:-translate-y-0.5 transition"
               >
                 Conectar Mercado Libre
               </button>
               <button
                 onClick={handleConnect}
-                disabled={!hasAccess}
-                className="inline-flex items-center justify-center gap-2 rounded-xl border border-dashed border-slate-300 dark:border-slate-700 px-4 py-2 text-sm font-semibold text-slate-700 dark:text-slate-200 disabled:opacity-60 disabled:cursor-not-allowed"
+                className="inline-flex items-center justify-center gap-2 rounded-xl border border-dashed border-slate-300 dark:border-slate-700 px-4 py-2 text-sm font-semibold text-slate-700 dark:text-slate-200"
               >
                 Conectar con QR
               </button>
@@ -189,29 +158,28 @@ const MercadoLibreIntegration = ({ onUnauthorized }) => {
         <div className="flex flex-wrap items-center gap-3">
           <button
             onClick={handleSync}
-            disabled={!hasAccess || loading}
-            className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 text-white px-4 py-2 text-sm font-semibold shadow hover:-translate-y-0.5 transition disabled:opacity-60 disabled:cursor-not-allowed"
+            disabled={loading}
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 text-white px-4 py-2 text-sm font-semibold shadow hover:-translate-y-0.5 transition disabled:opacity-60"
           >
             {loading ? "Sincronizando..." : "Sincronizar vendedor"}
           </button>
           <button
             onClick={handleSync}
-            disabled={!hasAccess || loading}
-            className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-300 dark:border-slate-700 px-4 py-2 text-sm font-semibold text-slate-800 dark:text-slate-200 disabled:opacity-60 disabled:cursor-not-allowed"
+            disabled={loading}
+            className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-300 dark:border-slate-700 px-4 py-2 text-sm font-semibold text-slate-800 dark:text-slate-200"
           >
             Ver ventas
           </button>
           <button
             onClick={handleSync}
-            disabled={!hasAccess || loading}
-            className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-300 dark:border-slate-700 px-4 py-2 text-sm font-semibold text-slate-800 dark:text-slate-200 disabled:opacity-60 disabled:cursor-not-allowed"
+            disabled={loading}
+            className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-300 dark:border-slate-700 px-4 py-2 text-sm font-semibold text-slate-800 dark:text-slate-200"
           >
             Ver stock
           </button>
           <button
             onClick={handleDisconnect}
-            disabled={!hasAccess}
-            className="inline-flex items-center justify-center gap-2 rounded-xl bg-red-500 text-white px-4 py-2 text-sm font-semibold shadow hover:-translate-y-0.5 transition disabled:opacity-60 disabled:cursor-not-allowed"
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-red-500 text-white px-4 py-2 text-sm font-semibold shadow hover:-translate-y-0.5 transition"
           >
             Desconectar
           </button>
