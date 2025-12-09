@@ -1,6 +1,7 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import API_URL from "./api";
 import { MERCADO_LIBRE_APP_ALIAS } from "./constants/mercadoLibre";
+import { fetchWithAuth } from "./utils/apiHelpers";
 
 const MercadoLibreIntegration = ({ onUnauthorized }) => {
   const [appAlias] = useState(MERCADO_LIBRE_APP_ALIAS);
@@ -11,35 +12,12 @@ const MercadoLibreIntegration = ({ onUnauthorized }) => {
   const [loading, setLoading] = useState(false);
   const [lastSync, setLastSync] = useState(null);
   const [syncData, setSyncData] = useState(null);
-  const token = useMemo(() => localStorage.getItem("token"), []);
-
-  const authorizedFetch = async (url, options = {}) => {
-    const res = await fetch(url, {
-      ...options,
-      headers: {
-        ...(options.headers || {}),
-        Authorization: `Bearer ${token}`,
-        "Content-Type": options.body instanceof FormData ? undefined : "application/json",
-      },
-    });
-
-    if (res.status === 401 || res.status === 403) {
-      onUnauthorized?.("Tu sesión expiró. Vuelve a iniciar sesión.");
-      throw new Error("unauthorized");
-    }
-
-    if (!res.ok) {
-      const text = await res.text();
-      throw new Error(text || "Error en la petición");
-    }
-
-    return res.json();
-  };
 
   const loadStatus = async () => {
     try {
-      const data = await authorizedFetch(
-        `${API_URL}/meli/status?app_alias=${encodeURIComponent(appAlias.trim())}`
+      const data = await fetchWithAuth(
+        `${API_URL}/meli/status?app_alias=${encodeURIComponent(appAlias.trim())}`,
+        { onUnauthorized }
       );
       if (data) {
         setConnection(data);
@@ -59,15 +37,18 @@ const MercadoLibreIntegration = ({ onUnauthorized }) => {
     setError("");
     setSyncMessage("");
     try {
-      const data = await authorizedFetch(
-        `${API_URL}/meli/auth?app_alias=${encodeURIComponent(appAlias.trim())}`
+      const data = await fetchWithAuth(
+        `${API_URL}/meli/auth?app_alias=${encodeURIComponent(appAlias.trim())}`,
+        { onUnauthorized }
       );
       if (data.authorization_url) {
         window.open(data.authorization_url, "_blank", "noopener,noreferrer");
         setSyncMessage("Abre la pestaña de Mercado Libre, acepta y vuelve para sincronizar.");
       }
     } catch (err) {
-      setError(err.message || "No se pudo iniciar el proceso de conexión");
+      if (err.message !== "unauthorized") {
+        setError(err.message || "No se pudo iniciar el proceso de conexión");
+      }
     }
   };
 
@@ -76,8 +57,9 @@ const MercadoLibreIntegration = ({ onUnauthorized }) => {
     setError("");
     setSyncMessage("");
     try {
-      const data = await authorizedFetch(
-        `${API_URL}/meli/sync?app_alias=${encodeURIComponent(appAlias.trim())}`
+      const data = await fetchWithAuth(
+        `${API_URL}/meli/sync?app_alias=${encodeURIComponent(appAlias.trim())}`,
+        { onUnauthorized }
       );
       setSeller(data.seller);
       setSyncData(data);
@@ -89,7 +71,9 @@ const MercadoLibreIntegration = ({ onUnauthorized }) => {
       );
       setSyncMessage("Sincronización completada");
     } catch (err) {
-      setError(err.message || "No se pudo sincronizar");
+      if (err.message !== "unauthorized") {
+        setError(err.message || "No se pudo sincronizar");
+      }
     } finally {
       setLoading(false);
     }
@@ -98,9 +82,10 @@ const MercadoLibreIntegration = ({ onUnauthorized }) => {
   const handleDisconnect = async () => {
     if (!appAlias.trim()) return;
     try {
-      await authorizedFetch(`${API_URL}/meli/disconnect`, {
+      await fetchWithAuth(`${API_URL}/meli/disconnect`, {
         method: "POST",
         body: JSON.stringify({ app_alias: appAlias.trim() }),
+        onUnauthorized,
       });
       setConnection(null);
       setSeller(null);
@@ -108,7 +93,9 @@ const MercadoLibreIntegration = ({ onUnauthorized }) => {
       setLastSync(null);
       setSyncMessage("Integración desconectada");
     } catch (err) {
-      setError(err.message || "No se pudo desconectar");
+      if (err.message !== "unauthorized") {
+        setError(err.message || "No se pudo desconectar");
+      }
     }
   };
 

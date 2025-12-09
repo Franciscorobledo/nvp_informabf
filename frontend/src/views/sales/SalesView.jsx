@@ -5,9 +5,9 @@ import MetricCard from "../../components/cards/MetricCard";
 import ChartCard from "../../components/charts/ChartCard";
 import TableCard from "../../components/tables/TableCard";
 import SkeletonBlock from "../../components/cards/SkeletonBlock";
+import { fetchWithAuth } from "../../utils/apiHelpers";
 
 const SalesView = ({ onUnauthorized, onGoToData }) => {
-  const token = useMemo(() => localStorage.getItem("token"), []);
   const [analysisData, setAnalysisData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -24,24 +24,9 @@ const SalesView = ({ onUnauthorized, onGoToData }) => {
       if (toDate) params.append("to_date", toDate);
       if (category) params.append("category", category);
 
-      const res = await fetch(`${API_URL}/metrics/sales?${params.toString()}`, {
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: token ? `Bearer ${token}` : undefined,
-        },
+      const data = await fetchWithAuth(`${API_URL}/metrics/sales?${params.toString()}`, {
+        onUnauthorized,
       });
-
-      if (res.status === 401 || res.status === 403) {
-        onUnauthorized?.("Tu sesión expiró. Vuelve a iniciar sesión.");
-        throw new Error("unauthorized");
-      }
-
-      if (!res.ok) {
-        const text = await res.text();
-        throw new Error(text || "Error en la petición");
-      }
-
-      const data = await res.json();
       setAnalysisData(data);
     } catch (err) {
       if (err.message !== "unauthorized") {
