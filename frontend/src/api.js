@@ -6,8 +6,8 @@ const isDev = metaEnv.MODE === "development";
 const LOCAL_API = "http://localhost:1000";
 
 // Backend producción (Render)
-const RENDER_BACKEND = "https://nvp-informabf-backend-wxbb.onrender.com";
-const LEGACY_RENDER_BACKEND = "https://nvp-informabf.onrender.com";
+const PRIMARY_RENDER_BACKEND = "https://nvp-informabf.onrender.com";
+const SECONDARY_RENDER_BACKEND = "https://nvp-informabf-backend-wxbb.onrender.com";
 
 const deriveBackendFromHostname = () => {
   if (typeof window === "undefined") return "";
@@ -26,8 +26,8 @@ const deriveBackendFromHostname = () => {
 const PROD_API =
   metaEnv.VITE_API_URL ||
   deriveBackendFromHostname() ||
-  RENDER_BACKEND ||
-  LEGACY_RENDER_BACKEND;
+  PRIMARY_RENDER_BACKEND ||
+  SECONDARY_RENDER_BACKEND;
 
 const API_URL = isDev ? LOCAL_API : PROD_API;
 
