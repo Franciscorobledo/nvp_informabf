@@ -4,6 +4,7 @@ import SectionHeader from "../../components/cards/SectionHeader";
 import SkeletonBlock from "../../components/cards/SkeletonBlock";
 import { handleUploadSubmission } from "./uploadHelpers";
 import { MERCADO_LIBRE_APP_ALIAS } from "../../constants/mercadoLibre";
+import useSubscriptionPlan from "../../hooks/useSubscriptionPlan";
 
 const SALES_STANDARD_FIELDS = ["date", "sku", "product_name", "quantity", "unit_price", "total", "channel"];
 const STOCK_STANDARD_FIELDS = ["sku", "product_name", "category", "current_stock", "unit_cost", "location", "channel"];
@@ -24,6 +25,9 @@ const DataIntegrationsView = ({ onUnauthorized, onOpenMercadoLibre }) => {
   const [statusLoading, setStatusLoading] = useState(false);
   const [credentials, setCredentials] = useState([]);
   const [selectedCredentialId, setSelectedCredentialId] = useState("");
+  const { isProOrPremium, loading: planLoading } = useSubscriptionPlan({ onUnauthorized });
+  const upgradeMessage =
+    "Función disponible en planes Pro y Premium. Actualiza tu plan en la sección Planes.";
 
   useEffect(() => {
     const handleStorage = () => setToken(localStorage.getItem("token"));
@@ -72,7 +76,7 @@ const DataIntegrationsView = ({ onUnauthorized, onOpenMercadoLibre }) => {
   };
 
   useEffect(() => {
-    if (!token) return;
+    if (!token || !isProOrPremium) return;
 
     const fetchStatus = async () => {
       setStatusLoading(true);
@@ -106,10 +110,14 @@ const DataIntegrationsView = ({ onUnauthorized, onOpenMercadoLibre }) => {
 
     fetchStatus();
     fetchCredentials();
-  }, [token]);
+  }, [token, isProOrPremium]);
 
   const downloadSample = async (type) => {
     setError("");
+    if (!isProOrPremium) {
+      setError(upgradeMessage);
+      return;
+    }
     try {
       const res = await fetch(`${API_URL}/data/sample/${type}`, {
         headers: {
@@ -155,6 +163,10 @@ const DataIntegrationsView = ({ onUnauthorized, onOpenMercadoLibre }) => {
   
   const handleUseMercadoLibreSource = async () => {
     setError("");
+    if (!isProOrPremium) {
+      setError(upgradeMessage);
+      return;
+    }
     if (!selectedCredentialId) {
       setError("Selecciona una credencial de Mercado Libre");
       return;
@@ -277,6 +289,12 @@ const DataIntegrationsView = ({ onUnauthorized, onOpenMercadoLibre }) => {
     <section className="space-y-6">
       <SectionHeader title="Datos e integraciones" subtitle="Mercado Libre y archivos unificados" badge="Orígenes" />
 
+      {!planLoading && !isProOrPremium && (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-500/60 dark:bg-amber-900/20 dark:text-amber-50 px-4 py-3">
+          {upgradeMessage}
+        </div>
+      )}
+
       <div className="grid gap-4 lg:grid-cols-2">
         <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/90 dark:bg-slate-900/70 p-5 space-y-3">
           <div className="flex items-center justify-between">
@@ -324,14 +342,15 @@ const DataIntegrationsView = ({ onUnauthorized, onOpenMercadoLibre }) => {
           <div className="flex flex-wrap gap-2">
             <button
               onClick={onOpenMercadoLibre}
-              className="rounded-xl bg-emerald-600 text-white px-4 py-2 text-sm font-semibold shadow hover:bg-emerald-700"
+              disabled={!isProOrPremium}
+              className="rounded-xl bg-emerald-600 text-white px-4 py-2 text-sm font-semibold shadow hover:bg-emerald-700 disabled:opacity-60 disabled:cursor-not-allowed"
             >
               Conectar / revisar conexión
             </button>
             <button
               onClick={handleUseMercadoLibreSource}
-              disabled={selectingSource}
-              className="rounded-xl border border-slate-300 dark:border-slate-700 px-4 py-2 text-sm font-semibold disabled:opacity-60"
+              disabled={selectingSource || !isProOrPremium}
+              className="rounded-xl border border-slate-300 dark:border-slate-700 px-4 py-2 text-sm font-semibold disabled:opacity-60 disabled:cursor-not-allowed"
             >
               {selectingSource ? "Activando..." : "Usar como fuente"}
             </button>
