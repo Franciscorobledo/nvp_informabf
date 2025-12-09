@@ -281,7 +281,8 @@ def _heuristic_classify(columns: list[str], sample_rows: list[dict]) -> dict:
 
 
 def _normalize_sales(df: pd.DataFrame, mapping: Dict[str, str], source: str) -> pd.DataFrame:
-    renamed = df.rename(columns=mapping)
+    rename_map = {original: standard for standard, original in (mapping or {}).items() if original}
+    renamed = df.rename(columns=rename_map)
     normalized = pd.DataFrame()
     normalized["date"] = pd.to_datetime(renamed.get("date"), errors="coerce")
     normalized["sku"] = renamed.get("sku")
@@ -305,7 +306,8 @@ def _normalize_sales(df: pd.DataFrame, mapping: Dict[str, str], source: str) -> 
 
 
 def _normalize_stock(df: pd.DataFrame, mapping: Dict[str, str], source: str) -> pd.DataFrame:
-    renamed = df.rename(columns=mapping)
+    rename_map = {original: standard for standard, original in (mapping or {}).items() if original}
+    renamed = df.rename(columns=rename_map)
     normalized = pd.DataFrame()
     normalized["sku"] = renamed.get("sku")
     product_series = renamed.get("product_name")
