@@ -13,8 +13,11 @@ const DataIntegrationsView = ({ onUnauthorized, onOpenMercadoLibre }) => {
   const [uploadStatus, setUploadStatus] = useState(null);
   const [datasets, setDatasets] = useState([]);
   const [unmappedColumns, setUnmappedColumns] = useState([]);
-  const [remapSelections, setRemapSelections] = useState({});
+  const [remapSelections, setRemapSelections] = useState({ sales: {}, stock: {} });
+  const [activeDataset, setActiveDataset] = useState("sales");
   const [showRemapDialog, setShowRemapDialog] = useState(false);
+  const [draggingColumn, setDraggingColumn] = useState("");
+  const [dragTarget, setDragTarget] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [selectingSource, setSelectingSource] = useState(false);
@@ -177,26 +180,44 @@ const DataIntegrationsView = ({ onUnauthorized, onOpenMercadoLibre }) => {
     }
   };
 
-  const handleOpenRemap = () => {
-    const initialSelections = {};
-    unmappedColumns.forEach((item) => {
-      initialSelections[`${item.dataset}:${item.column}`] = "";
-    });
+  const handleOpenRemap = (dataset = null) => {
+    const datasetKeys = Array.from(new Set(unmappedColumns.map((item) => item.dataset)));
+    const defaultDataset = dataset || datasetKeys[0] || "sales";
+
+    const initialSelections = datasetKeys.reduce(
+      (acc, key) => ({
+        ...acc,
+        [key]: {},
+      }),
+      { sales: {}, stock: {} },
+    );
+
     setRemapSelections(initialSelections);
+    setActiveDataset(defaultDataset);
     setShowRemapDialog(true);
   };
 
-  const handleSelectionChange = (dataset, column, value) => {
-    setRemapSelections((prev) => ({ ...prev, [`${dataset}:${column}`]: value }));
+  const handleSelectionChange = (dataset, standard, column) => {
+    setRemapSelections((prev) => {
+      const nextDataset = { ...(prev[dataset] || {}) };
+      if (column) {
+        nextDataset[standard] = column;
+      } else {
+        delete nextDataset[standard];
+      }
+      return { ...prev, [dataset]: nextDataset };
+    });
   };
 
   const handleSubmitRemap = async () => {
     const groupedMappings = {};
-    Object.entries(remapSelections).forEach(([key, standard]) => {
-      if (!standard) return;
-      const [dataset, column] = key.split(":");
-      if (!groupedMappings[dataset]) groupedMappings[dataset] = {};
-      groupedMappings[dataset][standard] = column;
+    Object.entries(remapSelections).forEach(([dataset, mapping]) => {
+      const cleanedMapping = Object.fromEntries(
+        Object.entries(mapping || {}).filter(([, column]) => Boolean(column)),
+      );
+      if (Object.keys(cleanedMapping).length > 0) {
+        groupedMappings[dataset] = cleanedMapping;
+      }
     });
 
     if (Object.keys(groupedMappings).length === 0) {
@@ -230,6 +251,17 @@ const DataIntegrationsView = ({ onUnauthorized, onOpenMercadoLibre }) => {
       setLoading(false);
     }
   };
+
+  const unmappedByDataset = unmappedColumns.reduce((acc, item) => {
+    acc[item.dataset] = (acc[item.dataset] || 0) + 1;
+    return acc;
+  }, {});
+
+  const activeFields = activeDataset === "stock" ? STOCK_STANDARD_FIELDS : SALES_STANDARD_FIELDS;
+  const usedColumns = new Set(Object.values(remapSelections[activeDataset] || {}));
+  const availableColumns = unmappedColumns.filter(
+    (item) => item.dataset === activeDataset && !usedColumns.has(item.column),
+  );
 
   return (
     <section className="space-y-6">
@@ -410,52 +442,164 @@ const DataIntegrationsView = ({ onUnauthorized, onOpenMercadoLibre }) => {
 
       {unmappedColumns.length > 0 && (
         <div className="rounded-2xl border border-amber-200 bg-amber-50 dark:border-amber-400/60 dark:bg-amber-900/20 p-4 space-y-2">
-          <p className="text-sm font-semibold text-amber-700 dark:text-amber-200">
-            Columnas no reconocidas: {unmappedColumns.map((c) => c.column).join(", ")}
-          </p>
-          <p className="text-xs text-amber-700 dark:text-amber-100">
-            Configura manualmente a qué campo estándar corresponden para mejorar las métricas.
-          </p>
-          <button
-            onClick={handleOpenRemap}
-            className="rounded-lg bg-amber-600 text-white px-3 py-2 text-xs font-semibold hover:bg-amber-700"
-          >
-            Configurar mapeo manual
-          </button>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="space-y-1">
+              <p className="text-sm font-semibold text-amber-700 dark:text-amber-200">Columnas no reconocidas</p>
+              <p className="text-xs text-amber-700 dark:text-amber-100">
+                Configura manualmente a qué campo estándar corresponden arrastrando cada caluga hacia su tarjeta.
+              </p>
+            </div>
+            <span className="rounded-full bg-white/70 px-3 py-1 text-[11px] font-semibold text-amber-700 border border-amber-200">
+              {unmappedColumns.length} pendientes
+            </span>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {Object.entries(unmappedByDataset).map(([dataset, count]) => (
+              <button
+                key={dataset}
+                onClick={() => handleOpenRemap(dataset)}
+                className="inline-flex items-center gap-2 rounded-full bg-amber-600 text-white px-4 py-2 text-xs font-semibold shadow hover:bg-amber-700"
+              >
+                Mapear {dataset === "stock" ? "stock" : "ventas"}
+                <span className="rounded-full bg-white/20 px-2 py-0.5 text-[11px] font-bold">{count}</span>
+              </button>
+            ))}
+          </div>
         </div>
       )}
 
       {showRemapDialog && (
         <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center z-20 p-4">
-          <div className="w-full max-w-xl rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-4 space-y-4">
-            <div className="flex items-center justify-between">
-              <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">Configurar columnas manualmente</p>
+          <div className="w-full max-w-4xl rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-5 space-y-4 shadow-xl">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">Configurar columnas manualmente</p>
+                <p className="text-xs text-slate-500">Arrastra las calugas de columnas hacia la tarjeta del campo estándar.</p>
+              </div>
               <button onClick={() => setShowRemapDialog(false)} className="text-slate-500 text-xs">Cerrar</button>
             </div>
-            <div className="space-y-3 max-h-80 overflow-y-auto pr-1">
-              {unmappedColumns.map((item) => {
-                const options = item.dataset === "stock" ? STOCK_STANDARD_FIELDS : SALES_STANDARD_FIELDS;
+
+            <div className="flex flex-wrap gap-2">
+              {["sales", "stock"].map((dataset) => {
+                const hasPending = Boolean(unmappedByDataset[dataset]);
+                const label = dataset === "stock" ? "Stock" : "Ventas";
                 return (
-                  <div key={`${item.dataset}:${item.column}`} className="space-y-1 border-b border-slate-100 dark:border-slate-800 pb-2">
-                    <p className="text-xs font-semibold text-slate-700 dark:text-slate-200">
-                      {item.column} <span className="text-slate-400">({item.dataset})</span>
-                    </p>
-                    <select
-                      className="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm px-2 py-1"
-                      value={remapSelections[`${item.dataset}:${item.column}`] || ""}
-                      onChange={(e) => handleSelectionChange(item.dataset, item.column, e.target.value)}
-                    >
-                      <option value="">Selecciona campo estándar</option>
-                      {options.map((opt) => (
-                        <option key={opt} value={opt}>
-                          {opt}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+                  <button
+                    key={dataset}
+                    onClick={() => setActiveDataset(dataset)}
+                    disabled={!hasPending && activeDataset !== dataset}
+                    className={`inline-flex items-center gap-2 rounded-full border px-4 py-2 text-xs font-semibold transition ${
+                      activeDataset === dataset
+                        ? "border-blue-500 bg-blue-50 text-blue-700 dark:border-blue-400 dark:bg-blue-900/40 dark:text-blue-100"
+                        : "border-slate-200 bg-white text-slate-700 hover:border-blue-300 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
+                    } ${!hasPending && activeDataset !== dataset ? "opacity-60" : ""}`}
+                  >
+                    Mapear {label}
+                    <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-bold text-slate-700 dark:bg-slate-800 dark:text-slate-100">
+                      {unmappedByDataset[dataset] || 0}
+                    </span>
+                  </button>
                 );
               })}
             </div>
+
+            <div className="grid gap-4 md:grid-cols-5">
+              <div className="md:col-span-2 space-y-2">
+                <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900/60 p-3 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-semibold text-slate-700 dark:text-slate-200">Columnas disponibles</p>
+                    <span className="text-[11px] text-slate-500">{availableColumns.length} sin asignar</span>
+                  </div>
+                  <p className="text-[11px] text-slate-500">Arrastra una caluga hacia el campo que corresponda.</p>
+                  <div className="flex flex-wrap gap-2">
+                    {availableColumns.length === 0 && (
+                      <span className="text-[11px] text-slate-400">Todas las columnas de {activeDataset === "stock" ? "stock" : "ventas"} están asignadas.</span>
+                    )}
+                    {availableColumns.map((item) => (
+                      <div
+                        key={`${item.dataset}:${item.column}`}
+                        draggable
+                        onDragStart={(e) => {
+                          e.dataTransfer.setData("text/plain", item.column);
+                          e.dataTransfer.setData("text/dataset", item.dataset);
+                          setDraggingColumn(`${item.dataset}:${item.column}`);
+                        }}
+                        onDragEnd={() => setDraggingColumn("")}
+                        className={`cursor-grab rounded-full border px-3 py-1 text-xs font-semibold shadow-sm transition dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 ${
+                          draggingColumn === `${item.dataset}:${item.column}`
+                            ? "border-blue-500 bg-blue-50 text-blue-700 dark:bg-blue-900/50 dark:text-blue-100"
+                            : "border-slate-200 bg-white text-slate-700 hover:border-blue-400"
+                        }`}
+                      >
+                        {item.column}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <div className="md:col-span-3 grid gap-3 sm:grid-cols-2">
+                {activeFields.map((field) => {
+                  const assignedColumn = remapSelections[activeDataset]?.[field];
+                  const label = field.replaceAll("_", " ");
+                  const isActiveTarget = dragTarget === field;
+                  return (
+                    <div
+                      key={field}
+                      onDragOver={(e) => {
+                        e.preventDefault();
+                        const datasetFromDrag = e.dataTransfer.getData("text/dataset") || activeDataset;
+                        if (datasetFromDrag === activeDataset) {
+                          setDragTarget(field);
+                        }
+                      }}
+                      onDragLeave={() => setDragTarget("")}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        const datasetFromDrag = e.dataTransfer.getData("text/dataset") || activeDataset;
+                        const column = e.dataTransfer.getData("text/plain");
+                        setDragTarget("");
+                        if (!column || datasetFromDrag !== activeDataset) return;
+                        handleSelectionChange(activeDataset, field, column);
+                        setDraggingColumn("");
+                      }}
+                      className={`rounded-xl border p-3 transition-colors duration-150 ${
+                        isActiveTarget
+                          ? "border-blue-500 bg-blue-50/70 dark:border-blue-400 dark:bg-blue-900/30"
+                          : "border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900"
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="space-y-1">
+                          <p className="text-sm font-semibold text-slate-800 dark:text-slate-100 capitalize">{label}</p>
+                          <p className="text-[11px] text-slate-500">Suelta aquí la columna que corresponda.</p>
+                        </div>
+                        {assignedColumn && (
+                          <button
+                            onClick={() => handleSelectionChange(activeDataset, field, "")}
+                            className="text-[11px] text-slate-500 hover:text-rose-500"
+                          >
+                            Quitar
+                          </button>
+                        )}
+                      </div>
+                      <div className="mt-2 min-h-[40px] flex items-center">
+                        {assignedColumn ? (
+                          <span className="inline-flex items-center gap-2 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-100 px-3 py-1 text-xs font-semibold">
+                            {assignedColumn}
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center rounded-full border border-dashed border-slate-300 dark:border-slate-700 px-3 py-1 text-[11px] text-slate-500">
+                            Arrastra una columna aquí
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
             <div className="flex justify-end gap-2">
               <button
                 onClick={() => setShowRemapDialog(false)}
