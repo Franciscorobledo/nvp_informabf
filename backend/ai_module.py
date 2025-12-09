@@ -435,15 +435,17 @@ def classify_tabular_dataset(
 
     system_prompt = (
         "Eres un asistente experto en datos de negocio."
-        " Recibes columnas y filas de ejemplo y debes responder SOLO con JSON."
+        " Usa nombres de columnas tal como llegan para mapear ventas o stock al esquema estándar."
+        " Prioriza devolver un mapeo exacto si reconoces el patrón; si no hay suficiente señal, responde 'unknown'."
+        " Evita inventar campos y responde SOLO con JSON."
     )
 
     user_prompt = f"""
 Eres un asistente experto en datos de negocio. Recibes un listado de columnas y algunas filas de ejemplo.
 Debes:
 1) determinar si el archivo representa datos de VENTAS ('sales'), de STOCK ('stock') o 'unknown';
-2) mapear las columnas originales a un esquema estándar;
-3) indicar si faltan columnas requeridas.
+2) mapear las columnas originales a un esquema estándar (usa el nombre original exacto);
+3) indicar si faltan columnas requeridas. Si las columnas encajan con ventas o stock conocidas, devuelve el mapeo directo sin pedir más contexto.
 
 Esquema estándar disponible:
 {schema_definition}

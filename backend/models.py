@@ -5,6 +5,7 @@ from sqlalchemy import (
     Boolean,
     Column,
     DateTime,
+    LargeBinary,
     Float,
     ForeignKey,
     Integer,
@@ -209,3 +210,29 @@ class Subscription(Base):
 
     user = relationship("User", back_populates="subscriptions")
     plan = relationship("SubscriptionPlan", back_populates="subscriptions")
+
+
+class UserSalesDataset(Base):
+    __tablename__ = "user_sales_datasets"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    dataframe_parquet = Column(LargeBinary, nullable=False)
+    column_mapping_json = Column(
+        JSONB().with_variant(SQLiteJSON, "sqlite"), nullable=True
+    )
+    source = Column(String, default="files", nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class UserStockDataset(Base):
+    __tablename__ = "user_stock_datasets"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    dataframe_parquet = Column(LargeBinary, nullable=False)
+    column_mapping_json = Column(
+        JSONB().with_variant(SQLiteJSON, "sqlite"), nullable=True
+    )
+    source = Column(String, default="files", nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, nullable=False)

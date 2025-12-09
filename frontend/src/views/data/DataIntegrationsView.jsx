@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import API_URL from "../../api.js";
 import SectionHeader from "../../components/cards/SectionHeader";
 import SkeletonBlock from "../../components/cards/SkeletonBlock";
@@ -7,11 +7,10 @@ import { MERCADO_LIBRE_APP_ALIAS } from "../../constants/mercadoLibre";
 
 const SALES_STANDARD_FIELDS = ["date", "sku", "product_name", "quantity", "unit_price", "total", "channel"];
 const STOCK_STANDARD_FIELDS = ["sku", "product_name", "category", "current_stock", "unit_cost", "location", "channel"];
-const FILE_CACHE_KEY = "dataIntegrationFiles";
-
 const DataIntegrationsView = ({ onUnauthorized, onOpenMercadoLibre }) => {
   const [token, setToken] = useState(() => localStorage.getItem("token"));
   const [uploadStatus, setUploadStatus] = useState(null);
+  const [dataStatus, setDataStatus] = useState(null);
   const [datasets, setDatasets] = useState([]);
   const [unmappedColumns, setUnmappedColumns] = useState([]);
   const [remapSelections, setRemapSelections] = useState({ sales: {}, stock: {} });
@@ -24,10 +23,9 @@ const DataIntegrationsView = ({ onUnauthorized, onOpenMercadoLibre }) => {
   const [selectingSource, setSelectingSource] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState(null);
   const [statusLoading, setStatusLoading] = useState(false);
+  const [dataStatusLoading, setDataStatusLoading] = useState(false);
   const [credentials, setCredentials] = useState([]);
   const [selectedCredentialId, setSelectedCredentialId] = useState("");
-  const [cachedSerializedFiles, setCachedSerializedFiles] = useState({ sales: [], stock: [] });
-  const [cachedFiles, setCachedFiles] = useState({ sales: [], stock: [] });
   const salesFileRef = useRef(null);
   const stockFileRef = useRef(null);
 
@@ -37,83 +35,11 @@ const DataIntegrationsView = ({ onUnauthorized, onOpenMercadoLibre }) => {
     return () => window.removeEventListener("storage", handleStorage);
   }, []);
 
-  useEffect(() => {
-    const restoreCachedFiles = async () => {
-      const cached = sessionStorage.getItem(FILE_CACHE_KEY);
-      if (!cached) return;
-
-      try {
-        const parsed = JSON.parse(cached);
-        const buildFiles = async (items = []) =>
-          Promise.all(
-            items.map(async (item) => {
-              const blob = await (await fetch(item.dataUrl)).blob();
-              return new File([blob], item.name, { type: item.type, lastModified: item.lastModified });
-            }),
-          );
-
-        const [salesFiles, stockFiles] = await Promise.all([
-          buildFiles(parsed?.sales || []),
-          buildFiles(parsed?.stock || []),
-        ]);
-
-        setCachedSerializedFiles({
-          sales: parsed?.sales || [],
-          stock: parsed?.stock || [],
-        });
-        setCachedFiles({ sales: salesFiles, stock: stockFiles });
-      } catch (err) {
-        console.error("No se pudieron restaurar los archivos en cache", err);
-      }
-    };
-
-    restoreCachedFiles();
-  }, []);
-
-  const readFileAsDataUrl = (file) =>
-    new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result);
-      reader.onerror = reject;
-      reader.readAsDataURL(file);
-    });
-
-  const syncInputFiles = (ref, files) => {
-    if (!ref.current) return;
-    const dataTransfer = new DataTransfer();
-    files.forEach((file) => dataTransfer.items.add(file));
-    ref.current.files = dataTransfer.files;
+  const handleFileSelection = () => {
+    setError("");
   };
 
-  useEffect(() => {
-    syncInputFiles(salesFileRef, cachedFiles.sales || []);
-  }, [cachedFiles.sales]);
-
-  useEffect(() => {
-    syncInputFiles(stockFileRef, cachedFiles.stock || []);
-  }, [cachedFiles.stock]);
-
-  const handleFileSelection = async (event, dataset) => {
-    const fileArray = Array.from(event.target.files || []);
-    setCachedFiles((prev) => ({ ...prev, [dataset]: fileArray }));
-
-    const serializedFiles = await Promise.all(
-      fileArray.map(async (file) => ({
-        name: file.name,
-        type: file.type,
-        lastModified: file.lastModified,
-        dataUrl: await readFileAsDataUrl(file),
-      })),
-    );
-
-    setCachedSerializedFiles((prev) => {
-      const next = { ...prev, [dataset]: serializedFiles };
-      sessionStorage.setItem(FILE_CACHE_KEY, JSON.stringify(next));
-      return next;
-    });
-  };
-
-  const authorizedFetch = async (url, options = {}) => {
+  const authorizedFetch = useCallback(async (url, options = {}) => {
     const res = await fetch(url, {
       ...options,
       headers: {
@@ -151,7 +77,23 @@ const DataIntegrationsView = ({ onUnauthorized, onOpenMercadoLibre }) => {
     }
 
     return resClone.text();
-  };
+  }, [token, onUnauthorized]);
+
+  const fetchDataStatus = useCallback(async () => {
+    if (!token) return;
+    setDataStatusLoading(true);
+    try {
+      const status = await authorizedFetch(`${API_URL}/data/status`);
+      setDataStatus(status);
+      setUploadStatus(status);
+    } catch (err) {
+      if (err.message !== "unauthorized") {
+        console.error(err);
+      }
+    } finally {
+      setDataStatusLoading(false);
+    }
+  }, [authorizedFetch, token]);
 
   useEffect(() => {
     if (!token) return;
@@ -188,7 +130,8 @@ const DataIntegrationsView = ({ onUnauthorized, onOpenMercadoLibre }) => {
 
     fetchStatus();
     fetchCredentials();
-  }, [token]);
+    fetchDataStatus();
+  }, [token, fetchDataStatus, authorizedFetch]);
 
   const downloadSample = async (type) => {
     setError("");
@@ -233,6 +176,7 @@ const DataIntegrationsView = ({ onUnauthorized, onOpenMercadoLibre }) => {
       setUploadStatus,
       setDatasets,
       setUnmappedColumns,
+      onComplete: fetchDataStatus,
     });
   
   const handleUseMercadoLibreSource = async () => {
@@ -252,6 +196,7 @@ const DataIntegrationsView = ({ onUnauthorized, onOpenMercadoLibre }) => {
 
       setUploadStatus({ ...data, updated_at: data.updated_at || new Date().toISOString() });
       setDatasets([]);
+      await fetchDataStatus();
     } catch (err) {
       if (err.message !== "unauthorized") {
         setError(err.message || "No se pudo activar MercadoLibre como fuente");
@@ -324,6 +269,7 @@ const DataIntegrationsView = ({ onUnauthorized, onOpenMercadoLibre }) => {
       setUnmappedColumns(remainingUnmapped);
       setShowRemapDialog(false);
       setUploadStatus((prev) => ({ ...(prev || {}), updated_at: new Date().toISOString() }));
+      await fetchDataStatus();
     } catch (err) {
       if (err.message !== "unauthorized") {
         setError(err.message || "No se pudo actualizar el mapeo");
@@ -347,6 +293,33 @@ const DataIntegrationsView = ({ onUnauthorized, onOpenMercadoLibre }) => {
   return (
     <section className="space-y-6">
       <SectionHeader title="Datos e integraciones" subtitle="Mercado Libre y archivos unificados" badge="Orígenes" />
+
+      <div className="grid gap-3 md:grid-cols-3">
+        <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/60 p-4">
+          <p className="text-xs text-slate-500">Fuente activa</p>
+          <p className="text-sm font-semibold text-slate-800 dark:text-slate-100 capitalize">
+            {dataStatus?.source || "demo"}
+          </p>
+        </div>
+        <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/60 p-4">
+          <p className="text-xs text-slate-500">Última carga</p>
+          <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">
+            {dataStatus?.updated_at
+              ? new Date(dataStatus.updated_at).toLocaleString()
+              : "Sin registros"}
+          </p>
+        </div>
+        <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/60 p-4">
+          <p className="text-xs text-slate-500">Datasets activos</p>
+          <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">
+            {dataStatusLoading
+              ? "Verificando..."
+              : `${dataStatus?.has_sales ? "Ventas" : ""}${
+                  dataStatus?.has_sales && dataStatus?.has_stock ? " / " : ""
+                }${dataStatus?.has_stock ? "Stock" : ""}` || "Demo"}
+          </p>
+        </div>
+      </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
         <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/90 dark:bg-slate-900/70 p-5 space-y-3">
@@ -418,6 +391,9 @@ const DataIntegrationsView = ({ onUnauthorized, onOpenMercadoLibre }) => {
             <div>
               <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">Archivos</p>
               <p className="text-xs text-slate-500">Sube ventas y stock actuales</p>
+              {dataStatus?.updated_at && (
+                <p className="text-[11px] text-slate-500">Reemplazarás la carga del {new Date(dataStatus.updated_at).toLocaleString()}.</p>
+              )}
             </div>
             {uploadStatus ? (
               <span className="rounded-full bg-blue-100 text-blue-700 px-3 py-1 text-xs font-semibold">

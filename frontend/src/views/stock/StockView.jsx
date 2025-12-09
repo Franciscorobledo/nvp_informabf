@@ -43,12 +43,25 @@ const StockView = ({ onUnauthorized }) => {
     setLoading(true);
     setError("");
     try {
-      const params = new URLSearchParams();
-      if (fromDate) params.append("from_date", fromDate);
-      if (toDate) params.append("to_date", toDate);
-      if (category) params.append("category", category);
-      const stockResponse = await fetchWithAuth(`${API_URL}/metrics/stock?${params.toString()}`);
-      setMetrics(stockResponse);
+      const autoMetrics = await fetchWithAuth(`${API_URL}/data/metrics/auto`);
+      const parsedKpis = {
+        stock_total: autoMetrics?.kpis?.total_stock_units?.value ?? 0,
+        critical_products: autoMetrics?.kpis?.products_with_low_stock?.value ?? 0,
+        dead_stock: autoMetrics?.kpis?.products_without_movement?.value ?? 0,
+        avg_days_inventory: autoMetrics?.kpis?.products_with_slow_rotation?.value ?? 0,
+      };
+
+      setMetrics({
+        kpis: parsedKpis,
+        charts: {
+          rotation: autoMetrics?.chart_data,
+          dead_stock: null,
+          semaphore: null,
+        },
+        table: autoMetrics?.table_data || [],
+        column_types: {},
+        alerts: [],
+      });
     } catch (err) {
       setError(err.message || "No se pudo cargar el panel de stock");
     } finally {
@@ -58,7 +71,7 @@ const StockView = ({ onUnauthorized }) => {
 
   useEffect(() => {
     loadMetrics();
-  }, [fromDate, toDate, category]);
+  }, []);
 
   const rotationChart = toChartCardConfig(metrics?.charts?.rotation);
   const deadStockChart = toChartCardConfig(metrics?.charts?.dead_stock);
