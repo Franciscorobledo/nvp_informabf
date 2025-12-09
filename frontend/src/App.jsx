@@ -15,9 +15,6 @@ import PlansPage from "./PlansPage";
 import SubscriptionStatus from "./SubscriptionStatus";
 import PlanGuard from "./components/PlanGuard";
 import useSubscriptionPlan from "./hooks/useSubscriptionPlan";
-import PrivacyPolicy from "./views/static/PrivacyPolicy";
-import Terms from "./views/static/Terms";
-import Support from "./views/static/Support";
 import {
   clearStoredSession,
   decodeTokenPayload,
@@ -222,9 +219,6 @@ const App = () => {
     if (path.startsWith("/planes")) return { page: "planes", module: "home" };
     if (path.startsWith("/suscripcion/estado"))
       return { page: "subscription-status", module: "home" };
-    if (path.startsWith("/terminos")) return { page: "terms", module: "home" };
-    if (path.startsWith("/privacidad")) return { page: "privacy", module: "home" };
-    if (path.startsWith("/soporte")) return { page: "support", module: "home" };
     return { page: "home", module: "data" };
   };
 
@@ -380,15 +374,6 @@ const App = () => {
       setCurrentModule("home");
     } else if (page === "subscription-status") {
       window.history.pushState({ page }, "", "/suscripcion/estado");
-      setCurrentModule("home");
-    } else if (page === "terms") {
-      window.history.pushState({ page }, "", "/terminos");
-      setCurrentModule("home");
-    } else if (page === "privacy") {
-      window.history.pushState({ page }, "", "/privacidad");
-      setCurrentModule("home");
-    } else if (page === "support") {
-      window.history.pushState({ page }, "", "/soporte");
       setCurrentModule("home");
     } else {
       window.history.pushState({ page }, "", "/");
@@ -947,12 +932,6 @@ const App = () => {
                 />
               ) : activePage === "subscription-status" ? (
                 <SubscriptionStatus token={token} />
-              ) : activePage === "terms" ? (
-                <Terms />
-              ) : activePage === "privacy" ? (
-                <PrivacyPolicy />
-              ) : activePage === "support" ? (
-                <Support />
               ) : activePage === "integrations" ? (
                 <div className="space-y-6">
                   <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/70 shadow-sm p-5 space-y-3">
@@ -1020,36 +999,15 @@ const App = () => {
                 </p>
 
                 <div className="flex items-center gap-4 mt-2 text-xs">
-                  <a
-                    className="hover:text-primary-500 transition-colors"
-                    href="/terminos"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      navigateTo("terms");
-                    }}
-                  >
+                  <a className="hover:text-primary-500 transition-colors" href="/terminos">
                     Términos & Condiciones
                   </a>
                   <span>•</span>
-                  <a
-                    className="hover:text-primary-500 transition-colors"
-                    href="/privacidad"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      navigateTo("privacy");
-                    }}
-                  >
+                  <a className="hover:text-primary-500 transition-colors" href="/privacidad">
                     Política de Privacidad
                   </a>
                   <span>•</span>
-                  <a
-                    className="hover:text-primary-500 transition-colors"
-                    href="/soporte"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      navigateTo("support");
-                    }}
-                  >
+                  <a className="hover:text-primary-500 transition-colors" href="/soporte">
                     Soporte
                   </a>
                 </div>
