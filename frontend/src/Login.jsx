@@ -7,8 +7,12 @@ const Login = ({ onLogin }) => {
     typeof window !== "undefined" &&
     ["localhost", "127.0.0.1"].includes(window.location.hostname);
 
+  const defaultAdminPassword = "Francisco8";
+
   const [username, setUsername] = useState(() => (isLocalEnv ? "admin" : ""));
-  const [password, setPassword] = useState(() => (isLocalEnv ? "1234" : ""));
+  const [password, setPassword] = useState(() =>
+    isLocalEnv ? defaultAdminPassword : ""
+  );
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -158,7 +162,7 @@ const Login = ({ onLogin }) => {
 
               {isLocalEnv && (
                 <p className="text-xs text-blue-100/80 text-center">
-                  Entorno local: usa <span className="font-semibold">admin</span> / <span className="font-semibold">1234</span> para entrar rápido.
+                  Entorno local: usa <span className="font-semibold">admin</span> / <span className="font-semibold">{defaultAdminPassword}</span> para entrar rápido.
                 </p>
               )}
             </form>
