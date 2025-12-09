@@ -14,7 +14,6 @@ import MainLayout from "./layouts/MainLayout";
 import PlansPage from "./PlansPage";
 import SubscriptionStatus from "./SubscriptionStatus";
 import PlanGuard from "./components/PlanGuard";
-import useSubscriptionPlan from "./hooks/useSubscriptionPlan";
 import {
   clearStoredSession,
   decodeTokenPayload,
@@ -336,11 +335,6 @@ const App = () => {
     handleLogout(message || "Tu sesión expiró. Vuelve a iniciar sesión.");
   };
 
-  const { isProOrPremium, loading: planLoading } = useSubscriptionPlan({
-    onUnauthorized: handleUnauthorized,
-  });
-  const showProFeatures = isProOrPremium || planLoading;
-
   const toggleTheme = () => {
     setTheme((prev) => (prev === "dark" ? "light" : "dark"));
     setMenuOpen(false);
@@ -502,10 +496,17 @@ const App = () => {
         );
       case "data":
         return (
-          <DataIntegrationsView
-            onUnauthorized={handleUnauthorized}
-            onOpenMercadoLibre={goToMeliUser}
-          />
+          <PlanGuard
+            user={user}
+            subscription={subscription}
+            minPlan="pro"
+            onUpgrade={() => navigateTo("planes")}
+          >
+            <DataIntegrationsView
+              onUnauthorized={handleUnauthorized}
+              onOpenMercadoLibre={goToMeliUser}
+            />
+          </PlanGuard>
         );
       default:
         return null;
@@ -631,53 +632,47 @@ const App = () => {
                               <span className="text-xs text-slate-500 dark:text-slate-300">Mes vs mes y períodos</span>
                             </div>
                           </button>
-                          {showProFeatures && (
-                            <button
-                              onClick={() => navigateToModule("reports")}
-                              className={`group flex w-full items-start gap-2 rounded-xl px-3 py-2 text-sm text-left transition-all duration-200 hover:-translate-y-0.5 ${
-                                currentModule === "reports"
-                                  ? "bg-blue-600 text-white shadow-lg shadow-blue-500/30"
-                                  : "text-slate-700 dark:text-slate-100 hover:bg-slate-100/80 dark:hover:bg-slate-800/70"
-                              }`}
-                            >
-                              <div className="flex flex-col gap-0.5">
-                                <span className="font-semibold">Report Builder</span>
-                                <span className="text-xs text-slate-500 dark:text-slate-300">Métrica + dimensión</span>
-                              </div>
-                            </button>
-                          )}
-                          {showProFeatures && (
-                            <button
-                              onClick={() => navigateToModule("data")}
-                              className={`group flex w-full items-start gap-2 rounded-xl px-3 py-2 text-sm text-left transition-all duration-200 hover:-translate-y-0.5 ${
-                                currentModule === "data"
-                                  ? "bg-blue-600 text-white shadow-lg shadow-blue-500/30"
-                                  : "text-slate-700 dark:text-slate-100 hover:bg-slate-100/80 dark:hover:bg-slate-800/70"
-                              }`}
-                            >
-                              <div className="flex flex-col gap-0.5">
-                                <span className="font-semibold">Datos / Integraciones</span>
-                                <span className="text-xs text-slate-500 dark:text-slate-300">Mercado Libre y archivos</span>
-                              </div>
-                            </button>
-                          )}
+                          <button
+                            onClick={() => navigateToModule("reports")}
+                            className={`group flex w-full items-start gap-2 rounded-xl px-3 py-2 text-sm text-left transition-all duration-200 hover:-translate-y-0.5 ${
+                              currentModule === "reports"
+                                ? "bg-blue-600 text-white shadow-lg shadow-blue-500/30"
+                                : "text-slate-700 dark:text-slate-100 hover:bg-slate-100/80 dark:hover:bg-slate-800/70"
+                            }`}
+                          >
+                            <div className="flex flex-col gap-0.5">
+                              <span className="font-semibold">Report Builder</span>
+                              <span className="text-xs text-slate-500 dark:text-slate-300">Métrica + dimensión</span>
+                            </div>
+                          </button>
+                          <button
+                            onClick={() => navigateToModule("data")}
+                            className={`group flex w-full items-start gap-2 rounded-xl px-3 py-2 text-sm text-left transition-all duration-200 hover:-translate-y-0.5 ${
+                              currentModule === "data"
+                                ? "bg-blue-600 text-white shadow-lg shadow-blue-500/30"
+                                : "text-slate-700 dark:text-slate-100 hover:bg-slate-100/80 dark:hover:bg-slate-800/70"
+                            }`}
+                          >
+                            <div className="flex flex-col gap-0.5">
+                              <span className="font-semibold">Datos / Integraciones</span>
+                              <span className="text-xs text-slate-500 dark:text-slate-300">Mercado Libre y archivos</span>
+                            </div>
+                          </button>
                         </div>
                       )}
                     </div>
 
-                    {showProFeatures && (
-                      <button
-                        onClick={() => navigateTo("integrations")}
-                        className={`group flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold transition-all duration-200 ${
-                          activePage === "integrations"
-                            ? "bg-emerald-600 text-white shadow-lg shadow-emerald-500/30"
-                            : "text-slate-700 dark:text-slate-100 hover:bg-slate-100/70 dark:hover:bg-slate-800/70"
-                        }`}
-                      >
-                        <SparklesIcon className="h-4 w-4 transition-transform duration-200 group-hover:-translate-y-0.5" />
-                        Integraciones
-                      </button>
-                    )}
+                    <button
+                      onClick={() => navigateTo("integrations")}
+                      className={`group flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold transition-all duration-200 ${
+                        activePage === "integrations"
+                          ? "bg-emerald-600 text-white shadow-lg shadow-emerald-500/30"
+                          : "text-slate-700 dark:text-slate-100 hover:bg-slate-100/70 dark:hover:bg-slate-800/70"
+                      }`}
+                    >
+                      <SparklesIcon className="h-4 w-4 transition-transform duration-200 group-hover:-translate-y-0.5" />
+                      Integraciones
+                    </button>
 
                     {user?.role === "admin" && (
                       <button
@@ -812,45 +807,39 @@ const App = () => {
                   >
                     <span className="flex-1 text-left">Comparativas</span>
                   </button>
-                  {showProFeatures && (
-                    <button
-                      onClick={() => navigateToModule("reports")}
-                      className={`flex items-center gap-2 w-full rounded-xl px-3 py-2 text-sm font-semibold transition-all duration-200 hover:-translate-y-0.5 ${
-                        currentModule === "reports"
-                          ? "bg-blue-600 text-white shadow-lg shadow-blue-500/30"
-                          : "text-slate-800 dark:text-slate-100 bg-slate-100/80 dark:bg-slate-800/70"
-                      }`}
-                    >
-                      <span className="flex-1 text-left">Report Builder</span>
-                    </button>
-                  )}
-                  {showProFeatures && (
-                    <button
-                      onClick={() => navigateToModule("data")}
-                      className={`flex items-center gap-2 w-full rounded-xl px-3 py-2 text-sm font-semibold transition-all duration-200 hover:-translate-y-0.5 ${
-                        currentModule === "data"
-                          ? "bg-blue-600 text-white shadow-lg shadow-blue-500/30"
-                          : "text-slate-800 dark:text-slate-100 bg-slate-100/80 dark:bg-slate-800/70"
-                      }`}
-                    >
-                      <span className="flex-1 text-left">Datos / Integraciones</span>
-                    </button>
-                  )}
-                </div>
-
-                {showProFeatures && (
                   <button
-                    onClick={() => navigateTo("integrations")}
+                    onClick={() => navigateToModule("reports")}
                     className={`flex items-center gap-2 w-full rounded-xl px-3 py-2 text-sm font-semibold transition-all duration-200 hover:-translate-y-0.5 ${
-                      activePage === "integrations"
-                        ? "bg-emerald-600 text-white shadow-lg shadow-emerald-500/30"
+                      currentModule === "reports"
+                        ? "bg-blue-600 text-white shadow-lg shadow-blue-500/30"
                         : "text-slate-800 dark:text-slate-100 bg-slate-100/80 dark:bg-slate-800/70"
                     }`}
                   >
-                    <SparklesIcon className="h-4 w-4" />
-                    Integraciones
+                    <span className="flex-1 text-left">Report Builder</span>
                   </button>
-                )}
+                  <button
+                    onClick={() => navigateToModule("data")}
+                    className={`flex items-center gap-2 w-full rounded-xl px-3 py-2 text-sm font-semibold transition-all duration-200 hover:-translate-y-0.5 ${
+                      currentModule === "data"
+                        ? "bg-blue-600 text-white shadow-lg shadow-blue-500/30"
+                        : "text-slate-800 dark:text-slate-100 bg-slate-100/80 dark:bg-slate-800/70"
+                    }`}
+                  >
+                    <span className="flex-1 text-left">Datos / Integraciones</span>
+                  </button>
+                </div>
+
+                <button
+                  onClick={() => navigateTo("integrations")}
+                  className={`flex items-center gap-2 w-full rounded-xl px-3 py-2 text-sm font-semibold transition-all duration-200 hover:-translate-y-0.5 ${
+                    activePage === "integrations"
+                      ? "bg-emerald-600 text-white shadow-lg shadow-emerald-500/30"
+                      : "text-slate-800 dark:text-slate-100 bg-slate-100/80 dark:bg-slate-800/70"
+                  }`}
+                >
+                  <SparklesIcon className="h-4 w-4" />
+                  Integraciones
+                </button>
 
                 {user?.role === "admin" && (
                   <button
@@ -966,22 +955,22 @@ const App = () => {
                 <AdminMercadoLibreApps onUnauthorized={handleUnauthorized} />
               ) : (
                 <>
-                  {currentModule !== "home" ? (
+                  {currentModule !== "home" && (
                     <div ref={moduleContentRef} className="space-y-8">
                       {renderModuleContent()}
                     </div>
-                  ) : (
-                    <HomeView
-                      onUnauthorized={handleUnauthorized}
-                      onNavigate={(module) => {
-                        if (module) {
-                          navigateToModule(module);
-                          return;
-                        }
-                        navigateTo("home");
-                      }}
-                    />
                   )}
+
+                  <HomeView
+                    onUnauthorized={handleUnauthorized}
+                    onNavigate={(module) => {
+                      if (module) {
+                        navigateToModule(module);
+                        return;
+                      }
+                      navigateTo("home");
+                    }}
+                  />
                 </>
               )}
             </main>
