@@ -33,6 +33,8 @@ const ComparativesView = ({ onUnauthorized }) => {
   const monthlyChart = toChartCardConfig(charts?.monthly);
   const categoryChart = toChartCardConfig(charts?.categories);
   const periodChart = toChartCardConfig(charts?.periods);
+  const hasChartData = (chartConfig) => Boolean(chartConfig?.data?.length);
+  const hasCharts = [monthlyChart, categoryChart, periodChart].some(hasChartData);
 
   return (
     <section className="space-y-6">
@@ -58,29 +60,39 @@ const ComparativesView = ({ onUnauthorized }) => {
           <SkeletonBlock />
           <SkeletonBlock />
         </div>
+      ) : !hasCharts ? (
+        <div className="rounded-xl border border-slate-200 bg-white p-6 text-slate-700 shadow-sm dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200">
+          <p className="text-sm font-medium">No hay datos comparativos disponibles en este momento.</p>
+        </div>
       ) : (
         <div className="grid gap-4 lg:grid-cols-3">
-          <ChartCard
-            title="Mes vs Mes"
-            type={monthlyChart?.type}
-            data={monthlyChart?.data || []}
-            xKey={monthlyChart?.xKey}
-            series={monthlyChart?.series}
-          />
-          <ChartCard
-            title="Categoría vs Categoría"
-            type={categoryChart?.type || "stacked"}
-            data={categoryChart?.data || []}
-            xKey={categoryChart?.xKey}
-            series={categoryChart?.series}
-          />
-          <ChartCard
-            title="Período vs Período"
-            type={periodChart?.type}
-            data={periodChart?.data || []}
-            xKey={periodChart?.xKey}
-            series={periodChart?.series}
-          />
+          {hasChartData(monthlyChart) && (
+            <ChartCard
+              title="Mes vs Mes"
+              type={monthlyChart?.type}
+              data={monthlyChart?.data || []}
+              xKey={monthlyChart?.xKey}
+              series={monthlyChart?.series}
+            />
+          )}
+          {hasChartData(categoryChart) && (
+            <ChartCard
+              title="Categoría vs Categoría"
+              type={categoryChart?.type || "stacked"}
+              data={categoryChart?.data || []}
+              xKey={categoryChart?.xKey}
+              series={categoryChart?.series}
+            />
+          )}
+          {hasChartData(periodChart) && (
+            <ChartCard
+              title="Período vs Período"
+              type={periodChart?.type}
+              data={periodChart?.data || []}
+              xKey={periodChart?.xKey}
+              series={periodChart?.series}
+            />
+          )}
         </div>
       )}
     </section>
