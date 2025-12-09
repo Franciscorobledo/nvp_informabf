@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import API_URL from "../../api.js";
 import SectionHeader from "../../components/cards/SectionHeader";
 import SkeletonBlock from "../../components/cards/SkeletonBlock";
@@ -7,6 +7,7 @@ import { MERCADO_LIBRE_APP_ALIAS } from "../../constants/mercadoLibre";
 
 const SALES_STANDARD_FIELDS = ["date", "sku", "product_name", "quantity", "unit_price", "total", "channel"];
 const STOCK_STANDARD_FIELDS = ["sku", "product_name", "category", "current_stock", "unit_cost", "location", "channel"];
+const FILE_CACHE_KEY = "dataIntegrationFiles";
 
 const DataIntegrationsView = ({ onUnauthorized, onOpenMercadoLibre }) => {
   const [token, setToken] = useState(() => localStorage.getItem("token"));
@@ -25,12 +26,92 @@ const DataIntegrationsView = ({ onUnauthorized, onOpenMercadoLibre }) => {
   const [statusLoading, setStatusLoading] = useState(false);
   const [credentials, setCredentials] = useState([]);
   const [selectedCredentialId, setSelectedCredentialId] = useState("");
+  const [cachedSerializedFiles, setCachedSerializedFiles] = useState({ sales: [], stock: [] });
+  const [cachedFiles, setCachedFiles] = useState({ sales: [], stock: [] });
+  const salesFileRef = useRef(null);
+  const stockFileRef = useRef(null);
 
   useEffect(() => {
     const handleStorage = () => setToken(localStorage.getItem("token"));
     window.addEventListener("storage", handleStorage);
     return () => window.removeEventListener("storage", handleStorage);
   }, []);
+
+  useEffect(() => {
+    const restoreCachedFiles = async () => {
+      const cached = sessionStorage.getItem(FILE_CACHE_KEY);
+      if (!cached) return;
+
+      try {
+        const parsed = JSON.parse(cached);
+        const buildFiles = async (items = []) =>
+          Promise.all(
+            items.map(async (item) => {
+              const blob = await (await fetch(item.dataUrl)).blob();
+              return new File([blob], item.name, { type: item.type, lastModified: item.lastModified });
+            }),
+          );
+
+        const [salesFiles, stockFiles] = await Promise.all([
+          buildFiles(parsed?.sales || []),
+          buildFiles(parsed?.stock || []),
+        ]);
+
+        setCachedSerializedFiles({
+          sales: parsed?.sales || [],
+          stock: parsed?.stock || [],
+        });
+        setCachedFiles({ sales: salesFiles, stock: stockFiles });
+      } catch (err) {
+        console.error("No se pudieron restaurar los archivos en cache", err);
+      }
+    };
+
+    restoreCachedFiles();
+  }, []);
+
+  const readFileAsDataUrl = (file) =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+
+  const syncInputFiles = (ref, files) => {
+    if (!ref.current) return;
+    const dataTransfer = new DataTransfer();
+    files.forEach((file) => dataTransfer.items.add(file));
+    ref.current.files = dataTransfer.files;
+  };
+
+  useEffect(() => {
+    syncInputFiles(salesFileRef, cachedFiles.sales || []);
+  }, [cachedFiles.sales]);
+
+  useEffect(() => {
+    syncInputFiles(stockFileRef, cachedFiles.stock || []);
+  }, [cachedFiles.stock]);
+
+  const handleFileSelection = async (event, dataset) => {
+    const fileArray = Array.from(event.target.files || []);
+    setCachedFiles((prev) => ({ ...prev, [dataset]: fileArray }));
+
+    const serializedFiles = await Promise.all(
+      fileArray.map(async (file) => ({
+        name: file.name,
+        type: file.type,
+        lastModified: file.lastModified,
+        dataUrl: await readFileAsDataUrl(file),
+      })),
+    );
+
+    setCachedSerializedFiles((prev) => {
+      const next = { ...prev, [dataset]: serializedFiles };
+      sessionStorage.setItem(FILE_CACHE_KEY, JSON.stringify(next));
+      return next;
+    });
+  };
 
   const authorizedFetch = async (url, options = {}) => {
     const res = await fetch(url, {
@@ -355,6 +436,8 @@ const DataIntegrationsView = ({ onUnauthorized, onOpenMercadoLibre }) => {
                 name="sales_file"
                 accept=".csv,.xlsx,.xls"
                 multiple
+                ref={salesFileRef}
+                onChange={(event) => handleFileSelection(event, "sales")}
                 className="w-full rounded-xl border border-dashed border-slate-300 dark:border-slate-700 px-3 py-2"
               />
               <button
@@ -372,6 +455,8 @@ const DataIntegrationsView = ({ onUnauthorized, onOpenMercadoLibre }) => {
                 name="stock_file"
                 accept=".csv,.xlsx,.xls"
                 multiple
+                ref={stockFileRef}
+                onChange={(event) => handleFileSelection(event, "stock")}
                 className="w-full rounded-xl border border-dashed border-slate-300 dark:border-slate-700 px-3 py-2"
               />
               <button
