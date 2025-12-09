@@ -11,6 +11,7 @@ export const handleUploadSubmission = async (
     setUnmappedColumns = () => {},
     formDataFactory = (target) => new FormData(target),
     apiUrl = API_URL,
+    onComplete,
   },
 ) => {
   event.preventDefault();
@@ -26,6 +27,9 @@ export const handleUploadSubmission = async (
     setUploadStatus?.({ ...data, updated_at: new Date().toISOString() });
     setDatasets?.(data?.datasets || []);
     setUnmappedColumns?.(data?.unmapped_columns || []);
+    if (onComplete) {
+      await onComplete(data);
+    }
   } catch (err) {
     setError(err.message || "No se pudo subir los archivos");
   } finally {

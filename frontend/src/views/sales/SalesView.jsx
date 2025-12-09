@@ -19,30 +19,54 @@ const SalesView = ({ onUnauthorized, onGoToData }) => {
     setLoading(true);
     setError("");
     try {
-      const params = new URLSearchParams();
-      if (fromDate) params.append("from_date", fromDate);
-      if (toDate) params.append("to_date", toDate);
-      if (category) params.append("category", category);
-
-      const res = await fetch(`${API_URL}/metrics/sales?${params.toString()}`, {
+      const autoRes = await fetch(`${API_URL}/data/metrics/auto`, {
         headers: {
           "Content-Type": "application/json",
           Authorization: token ? `Bearer ${token}` : undefined,
         },
       });
 
-      if (res.status === 401 || res.status === 403) {
+      if (autoRes.status === 401 || autoRes.status === 403) {
         onUnauthorized?.("Tu sesión expiró. Vuelve a iniciar sesión.");
         throw new Error("unauthorized");
       }
 
-      if (!res.ok) {
-        const text = await res.text();
+      if (!autoRes.ok) {
+        const text = await autoRes.text();
         throw new Error(text || "Error en la petición");
       }
 
-      const data = await res.json();
-      setAnalysisData(data);
+      const autoData = await autoRes.json();
+
+      const analysisRes = await fetch(`${API_URL}/analysis/metrics`, {
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: token ? `Bearer ${token}` : undefined,
+        },
+      });
+
+      const analysisData = analysisRes.ok ? await analysisRes.json() : {};
+
+      const kpis = {
+        total_sales: autoData?.kpis?.total_sales?.value ?? analysisData?.kpis?.ventas_totales ?? 0,
+        units_sold: autoData?.kpis?.total_units?.value ?? analysisData?.kpis?.unidades_totales ?? 0,
+        avg_ticket: autoData?.kpis?.avg_ticket?.value ?? 0,
+        margin: autoData?.kpis?.total_margin?.value ?? 0,
+      };
+
+      const charts = {
+        trend: autoData?.chart_data || analysisData?.chart_data,
+        top_products: autoData?.chart_data,
+        categories: null,
+      };
+
+      setAnalysisData({
+        kpis,
+        charts,
+        table: autoData?.table_data || analysisData?.table_data || [],
+        alerts: analysisData?.warnings || [],
+        column_types: analysisData?.column_types || {},
+      });
     } catch (err) {
       if (err.message !== "unauthorized") {
         const friendlyMessage =

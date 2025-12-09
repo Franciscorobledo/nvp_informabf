@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import threading
+import json
 from datetime import datetime
 import io
 from io import BytesIO
@@ -12,6 +13,7 @@ import pandas as pd
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
+from sqlalchemy.orm import Session
 
 from auth import get_current_user
 from ai_module import (
@@ -21,6 +23,7 @@ from ai_module import (
 )
 from database import get_db
 from mercadolibre import fetch_inventory_dataframe, fetch_orders_dataframe
+from models import UserSalesDataset, UserStockDataset
 from utils.data_engine import (
     aggregate_manual_metrics,
     build_product_summary,
@@ -104,15 +107,22 @@ _SIMPLE_DATA_LOCK = threading.Lock()
 _SIMPLE_DATA: Dict[str, Dict[str, Any]] = {}
 
 
-def _set_simple_data(user_id: str, sales_df: Optional[pd.DataFrame], stock_df: Optional[pd.DataFrame]):
+def _set_simple_data(
+    user_id: str,
+    sales_df: Optional[pd.DataFrame],
+    stock_df: Optional[pd.DataFrame],
+    *,
+    source: str = "files",
+    updated_at: Optional[datetime] = None,
+):
     """Guarda dataframes normalizados en memoria para el usuario actual."""
 
     with _SIMPLE_DATA_LOCK:
         _SIMPLE_DATA[user_id] = {
             "sales": sales_df if sales_df is not None else pd.DataFrame(),
             "stock": stock_df if stock_df is not None else pd.DataFrame(),
-            "updated_at": datetime.utcnow(),
-            "source": "files",
+            "updated_at": updated_at or datetime.utcnow(),
+            "source": source,
         }
 
 
@@ -125,6 +135,126 @@ def _get_simple_data(user_id: str) -> Dict[str, Any]:
             "updated_at": payload.get("updated_at"),
             "source": payload.get("source", "files"),
         }
+
+
+def _serialize_dataframe(df: pd.DataFrame) -> bytes:
+    """Serializa un dataframe a parquet o JSON si no hay motores instalados."""
+
+    buffer = BytesIO()
+    try:
+        df.to_parquet(buffer, index=False)
+        return buffer.getvalue()
+    except Exception:  # noqa: BLE001
+        buffer = BytesIO()
+        buffer.write(df.to_json(orient="records").encode("utf-8"))
+        return buffer.getvalue()
+
+
+def _deserialize_dataframe(blob: Optional[bytes]) -> Optional[pd.DataFrame]:
+    if not blob:
+        return None
+    try:
+        return pd.read_parquet(BytesIO(blob))
+    except Exception:  # noqa: BLE001
+        try:
+            return pd.read_json(BytesIO(blob))
+        except Exception:  # noqa: BLE001
+            return None
+
+
+def _persist_dataset(
+    db: Session,
+    user_id: str,
+    dataset_type: Literal["sales", "stock"],
+    df: Optional[pd.DataFrame],
+    column_mappings: Optional[Dict[str, Dict[str, str]]],
+    source: str,
+    updated_at: datetime,
+):
+    if df is None:
+        return
+
+    payload = _serialize_dataframe(df)
+    mapping = (column_mappings or {}).get(dataset_type)
+
+    if dataset_type == "sales":
+        existing = (
+            db.query(UserSalesDataset)
+            .filter(UserSalesDataset.user_id == int(user_id))
+            .order_by(UserSalesDataset.updated_at.desc())
+            .first()
+        )
+        record = existing or UserSalesDataset(user_id=int(user_id))
+        record.dataframe_parquet = payload
+        record.column_mapping_json = mapping
+        record.source = source
+        record.updated_at = updated_at
+        db.add(record)
+    else:
+        existing = (
+            db.query(UserStockDataset)
+            .filter(UserStockDataset.user_id == int(user_id))
+            .order_by(UserStockDataset.updated_at.desc())
+            .first()
+        )
+        record = existing or UserStockDataset(user_id=int(user_id))
+        record.dataframe_parquet = payload
+        record.column_mapping_json = mapping
+        record.source = source
+        record.updated_at = updated_at
+        db.add(record)
+
+    db.commit()
+
+
+def _load_latest_dataset(db: Session, user_id: str) -> tuple[Optional[dict], Optional[dict]]:
+    sales = (
+        db.query(UserSalesDataset)
+        .filter(UserSalesDataset.user_id == int(user_id))
+        .order_by(UserSalesDataset.updated_at.desc())
+        .first()
+    )
+    stock = (
+        db.query(UserStockDataset)
+        .filter(UserStockDataset.user_id == int(user_id))
+        .order_by(UserStockDataset.updated_at.desc())
+        .first()
+    )
+
+    return sales, stock
+
+
+def _ensure_user_context(db: Session, user_id: str) -> Optional[Dict[str, Any]]:
+    existing = _DATA_CONTEXT.get(user_id)
+    if existing:
+        return existing
+
+    sales_record, stock_record = _load_latest_dataset(db, user_id)
+
+    sales_df = _deserialize_dataframe(getattr(sales_record, "dataframe_parquet", None))
+    stock_df = _deserialize_dataframe(getattr(stock_record, "dataframe_parquet", None))
+
+    if sales_df is None and stock_df is None:
+        return None
+
+    column_mappings: Dict[str, Dict[str, str]] = {}
+    if getattr(sales_record, "column_mapping_json", None):
+        column_mappings["sales"] = sales_record.column_mapping_json or {}
+    if getattr(stock_record, "column_mapping_json", None):
+        column_mappings["stock"] = stock_record.column_mapping_json or {}
+
+    source = getattr(sales_record, "source", None) or getattr(stock_record, "source", "files")
+    updated_at = getattr(sales_record, "updated_at", None) or getattr(stock_record, "updated_at", datetime.utcnow())
+
+    _DATA_CONTEXT.set_payload(
+        user_id,
+        sales_df,
+        stock_df,
+        source,
+        column_mappings=column_mappings,
+    )
+    _set_simple_data(user_id, sales_df, stock_df, source=source, updated_at=updated_at)
+    return _DATA_CONTEXT.get(user_id)
 
 
 SAMPLE_SALES = pd.DataFrame(
@@ -170,6 +300,13 @@ class UploadResponse(BaseModel):
     updated_at: datetime
 
 
+class DataStatusResponse(BaseModel):
+    source: str
+    updated_at: datetime
+    has_sales: bool = False
+    has_stock: bool = False
+
+
 class IngestedDataset(BaseModel):
     type: str
     row_count: int
@@ -188,6 +325,11 @@ class IngestResponse(BaseModel):
 class RemapRequest(BaseModel):
     dataset: Literal["sales", "stock"]
     mapping: Dict[str, str]
+
+
+class MappingRequest(BaseModel):
+    columns: list[str]
+    dataset: Optional[Literal["sales", "stock"]] = None
 
 
 class DataChatPayload(BaseModel):
@@ -225,6 +367,39 @@ def _dataset_preview(df: pd.DataFrame) -> Tuple[list[str], list[dict]]:
     columns = list(df.columns)
     sample_rows = df.head(15).fillna("").to_dict(orient="records")
     return columns, sample_rows
+
+
+def _get_saved_mapping(
+    db: Session,
+    user_id: str,
+    columns: list[str],
+    dataset_hint: Optional[Literal["sales", "stock"]] = None,
+) -> Optional[dict]:
+    """Busca si existe un mapeo confirmado para un conjunto de columnas."""
+
+    target_tables: list[tuple[Literal["sales", "stock"], Any]] = []
+    if dataset_hint in {"sales", "stock"}:
+        if dataset_hint == "sales":
+            target_tables.append(("sales", UserSalesDataset))
+        else:
+            target_tables.append(("stock", UserStockDataset))
+    else:
+        target_tables.extend([("sales", UserSalesDataset), ("stock", UserStockDataset)])
+
+    normalized_columns = {str(col).strip().lower() for col in columns}
+
+    for dtype, model in target_tables:
+        record = (
+            db.query(model)
+            .filter(model.user_id == int(user_id))
+            .order_by(model.updated_at.desc())
+            .first()
+        )
+        mapping = getattr(record, "column_mapping_json", None) or {}
+        mapped_values = {str(v).strip().lower() for v in mapping.values() if v}
+        if mapping and mapped_values.issubset(normalized_columns):
+            return {"type": dtype, "columns": mapping}
+    return None
 
 
 def _heuristic_classify(columns: list[str], sample_rows: list[dict]) -> dict:
@@ -474,6 +649,7 @@ async def ingest_upload(
     stock_file: Optional[list[UploadFile]] = File(None, description="Archivo de stock"),
     archivo_ventas: Optional[list[UploadFile]] = File(None, description="Archivo de ventas", alias="archivo_ventas"),
     archivo_stock: Optional[list[UploadFile]] = File(None, description="Archivo de stock", alias="archivo_stock"),
+    db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
     """Sube archivos de ventas y/o stock y los almacena en memoria (MVP).
@@ -507,9 +683,19 @@ async def ingest_upload(
         column_mappings: Dict[str, Dict[str, str]] = {}
         unmapped_columns: list[dict] = []
 
+        user_id = str(current_user.id)
+
         for upload in [*ventas_uploads, *stock_uploads]:
             df = _read_upload_to_dataframe(upload)
-            internal_df, normalized_df, dataset_meta = _ingest_dataframe(df, "files", strict_required=False)
+            dataset_hint = _detect_dataset_type(df)
+            internal_df, normalized_df, dataset_meta = _ingest_dataframe(
+                df,
+                "files",
+                strict_required=False,
+                user_id=user_id,
+                db=db,
+                dataset_hint=dataset_hint if dataset_hint != "unknown" else None,
+            )
 
             unmapped_columns.extend(
                 _find_unmapped_columns(df, dataset_meta.get("column_mapping") or {}, dataset_meta.get("type", "unknown"))
@@ -572,7 +758,7 @@ async def ingest_upload(
             stock_harmonized, _ = harmonize_stock_data(stock_df, "files")
 
         _DATA_CONTEXT.set_payload(
-            str(current_user.id),
+            user_id,
             sales_harmonized,
             stock_harmonized,
             "files",
@@ -580,8 +766,15 @@ async def ingest_upload(
             raw_stock_df=raw_stock_df,
             column_mappings=column_mappings,
         )
-        invalidate_user_cache(str(current_user.id))
-        payload = _DATA_CONTEXT.get(str(current_user.id))
+        invalidate_user_cache(user_id)
+        payload = _DATA_CONTEXT.get(user_id)
+
+        if db is not None:
+            updated_at = payload.get("updated_at", datetime.utcnow())
+            if sales_harmonized is not None:
+                _persist_dataset(db, user_id, "sales", sales_harmonized, column_mappings, "files", updated_at)
+            if stock_harmonized is not None:
+                _persist_dataset(db, user_id, "stock", stock_harmonized, column_mappings, "files", updated_at)
 
         user_label = resolve_user_identifier(current_user) or "desconocido"
         persist_app_log(
@@ -614,7 +807,11 @@ async def ingest_upload(
 
 
 @router.post("/remap")
-async def remap_columns(payload: RemapRequest, current_user=Depends(get_current_user)):
+async def remap_columns(
+    payload: RemapRequest,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
     user_id = str(current_user.id)
     ctx = _DATA_CONTEXT.get(user_id)
 
@@ -660,7 +857,16 @@ async def remap_columns(payload: RemapRequest, current_user=Depends(get_current_
         column_mappings=updated_mappings,
     )
 
-    _set_simple_data(user_id, normalized_sales, normalized_stock)
+    _set_simple_data(user_id, normalized_sales, normalized_stock, source=source, updated_at=updated_at)
+
+    updated_at = datetime.utcnow()
+    if db is not None:
+        if payload.dataset == "sales":
+            persisted_df = sales_harmonized if sales_harmonized is not None else ctx.get("sales")
+            _persist_dataset(db, user_id, "sales", persisted_df, updated_mappings, source, updated_at)
+        else:
+            persisted_df = stock_harmonized if stock_harmonized is not None else ctx.get("stock")
+            _persist_dataset(db, user_id, "stock", persisted_df, updated_mappings, source, updated_at)
 
     unmapped_columns = []
     if payload.dataset == "sales":
@@ -674,6 +880,22 @@ async def remap_columns(payload: RemapRequest, current_user=Depends(get_current_
         "column_mapping": merged_mapping,
         "unmapped_columns": unmapped_columns,
     }
+
+
+@router.post("/mapping")
+def get_previous_mapping(
+    payload: MappingRequest,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    if not payload.columns:
+        raise HTTPException(status_code=400, detail="Debes enviar las columnas a consultar")
+
+    mapping = _get_saved_mapping(db, str(current_user.id), payload.columns, payload.dataset)
+    if not mapping:
+        return {"mapping": None}
+
+    return {"mapping": mapping.get("columns"), "dataset": mapping.get("type")}
 
 
 def _validate_required(type_name: str, mapping: Dict[str, str]) -> Tuple[list, list]:
@@ -701,19 +923,37 @@ def _find_unmapped_columns(df: pd.DataFrame, mapping: Dict[str, str], dataset_ty
 
 
 def _ingest_dataframe(
-    df: pd.DataFrame, source: str, *, strict_required: bool = True
+    df: pd.DataFrame,
+    source: str,
+    *,
+    strict_required: bool = True,
+    user_id: Optional[str] = None,
+    db: Optional[Session] = None,
+    dataset_hint: Optional[Literal["sales", "stock"]] = None,
 ) -> Tuple[pd.DataFrame, Optional[pd.DataFrame], dict]:
     columns, sample_rows = _dataset_preview(df)
-    ai_result = classify_tabular_dataset(columns, sample_rows, STANDARD_SCHEMA_DOC)
 
-    dtype = ai_result.get("type")
-    mapping = ai_result.get("columns") or {}
-    classification_source = "openai"
-    warnings: list[str] = []
+    cached_mapping = None
+    if db is not None and user_id:
+        cached_mapping = _get_saved_mapping(db, user_id, columns, dataset_hint)
 
-    ai_reason = ai_result.get("reason")
-    if ai_reason:
-        warnings.append(f"No se pudo usar OpenAI: {ai_reason}")
+    if cached_mapping:
+        dtype = cached_mapping.get("type")
+        mapping = cached_mapping.get("columns") or {}
+        classification_source = "cached"
+        warnings: list[str] = []
+        ai_reason = None
+    else:
+        ai_result = classify_tabular_dataset(columns, sample_rows, STANDARD_SCHEMA_DOC)
+
+        dtype = ai_result.get("type")
+        mapping = ai_result.get("columns") or {}
+        classification_source = "openai"
+        warnings: list[str] = []
+
+        ai_reason = ai_result.get("reason")
+        if ai_reason:
+            warnings.append(f"No se pudo usar OpenAI: {ai_reason}")
 
     if dtype not in {"sales", "stock", "unknown"}:
         dtype = "unknown"
@@ -724,6 +964,8 @@ def _ingest_dataframe(
             dtype = heuristic.get("type")
             mapping = heuristic.get("columns") or {}
             classification_source = "heuristic"
+            if cached_mapping:
+                classification_source = "cached"
             if ai_reason:
                 warnings.append("Se aplicó el mapeo heurístico porque OpenAI no estuvo disponible.")
         elif ai_reason:
@@ -801,6 +1043,30 @@ async def upload_data(
     )
 
 
+@router.get("/status", response_model=DataStatusResponse)
+def get_data_status(db: Session = Depends(get_db), current_user=Depends(get_current_user)):
+    user_id = str(current_user.id)
+    ctx = _DATA_CONTEXT.get(user_id) or _ensure_user_context(db, user_id)
+
+    if not ctx:
+        return DataStatusResponse(
+            source="demo",
+            updated_at=datetime.utcnow(),
+            has_sales=False,
+            has_stock=False,
+        )
+
+    sales_df = ctx.get("sales", pd.DataFrame())
+    stock_df = ctx.get("stock", pd.DataFrame())
+
+    return DataStatusResponse(
+        source=ctx.get("source", "files"),
+        updated_at=ctx.get("updated_at", datetime.utcnow()),
+        has_sales=not sales_df.empty,
+        has_stock=not stock_df.empty,
+    )
+
+
 @router.get("/sample/{dataset}")
 async def download_sample(
     dataset: Literal["sales", "stock"],
@@ -851,8 +1117,17 @@ async def select_source(
     else:
         raise HTTPException(status_code=400, detail="Fuente no soportada")
 
-    invalidate_user_cache(user_id)
     payload_ctx = _DATA_CONTEXT.get(user_id)
+    _set_simple_data(user_id, payload_ctx.get("sales"), payload_ctx.get("stock"), source=payload_ctx.get("source", source))
+
+    if db is not None:
+        updated_at = payload_ctx.get("updated_at", datetime.utcnow())
+        if payload_ctx.get("sales") is not None:
+            _persist_dataset(db, user_id, "sales", payload_ctx.get("sales"), payload_ctx.get("column_mappings"), payload_ctx.get("source", source), updated_at)
+        if payload_ctx.get("stock") is not None:
+            _persist_dataset(db, user_id, "stock", payload_ctx.get("stock"), payload_ctx.get("column_mappings"), payload_ctx.get("source", source), updated_at)
+
+    invalidate_user_cache(user_id)
     return UploadResponse(
         source=payload_ctx["source"],
         sales_rows=len(payload_ctx.get("sales", [])),
@@ -862,10 +1137,13 @@ async def select_source(
 
 
 @router.get("/metrics/auto", response_model=AutoMetricsResponse)
-async def auto_metrics(current_user=Depends(get_current_user)):
+async def auto_metrics(db: Session = Depends(get_db), current_user=Depends(get_current_user)):
     """Calcula KPIs automáticos usando la fuente activa (MercadoLibre o archivos)."""
 
-    ctx = _get_or_seed_data(str(current_user.id))
+    user_id = str(current_user.id)
+    ctx = _DATA_CONTEXT.get(user_id) or _ensure_user_context(db, user_id)
+    if not ctx:
+        ctx = _get_or_seed_data(user_id)
     metrics = compute_auto_metrics(ctx.get("sales", pd.DataFrame()), ctx.get("stock", pd.DataFrame()))
 
     return AutoMetricsResponse(
@@ -880,11 +1158,14 @@ async def auto_metrics(current_user=Depends(get_current_user)):
 @router.post("/metrics/manual", response_model=ManualMetricsResponse)
 async def manual_metrics(
     payload: ManualRequest,
+    db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
     """Agrega métricas según la configuración del usuario (modo manual)."""
 
-    ctx = _get_or_seed_data(str(current_user.id))
+    ctx = _DATA_CONTEXT.get(str(current_user.id)) or _ensure_user_context(db, str(current_user.id))
+    if not ctx:
+        ctx = _get_or_seed_data(str(current_user.id))
 
     try:
         results = aggregate_manual_metrics(
@@ -908,9 +1189,10 @@ async def manual_metrics(
 
 
 @analysis_router.get("/metrics")
-def get_analysis_metrics(current_user=Depends(get_current_user)):
+def get_analysis_metrics(db: Session = Depends(get_db), current_user=Depends(get_current_user)):
     """Calcula KPIs básicos a partir de los archivos subidos en memoria."""
 
+    _ensure_user_context(db, str(current_user.id))
     ctx = _get_simple_data(str(current_user.id))
     sales_df: pd.DataFrame = ctx.get("sales", pd.DataFrame())
     stock_df: pd.DataFrame = ctx.get("stock", pd.DataFrame())
@@ -997,7 +1279,8 @@ def get_analysis_metrics(current_user=Depends(get_current_user)):
 
 
 @analysis_router.get("/summary")
-def get_analysis_summary(current_user=Depends(get_current_user)):
+def get_analysis_summary(db: Session = Depends(get_db), current_user=Depends(get_current_user)):
+    _ensure_user_context(db, str(current_user.id))
     ctx = _get_or_seed_data(str(current_user.id))
     metrics = get_analysis_metrics(current_user)
     if metrics.get("status") != "ok":
@@ -1029,9 +1312,14 @@ def get_analysis_summary(current_user=Depends(get_current_user)):
 
 
 @router.post("/chat")
-def chat_with_loaded_data(payload: DataChatPayload, current_user=Depends(get_current_user)):
+def chat_with_loaded_data(
+    payload: DataChatPayload,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
     """Chat sencillo sobre el dataset cargado en memoria."""
 
+    _ensure_user_context(db, str(current_user.id))
     ctx = _get_or_seed_data(str(current_user.id))
     sales_df: pd.DataFrame = ctx.get("sales", pd.DataFrame())
     stock_df: pd.DataFrame = ctx.get("stock", pd.DataFrame())
