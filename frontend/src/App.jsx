@@ -955,22 +955,22 @@ const App = () => {
                 <AdminMercadoLibreApps onUnauthorized={handleUnauthorized} />
               ) : (
                 <>
-                  {currentModule !== "home" && (
+                  {currentModule !== "home" ? (
                     <div ref={moduleContentRef} className="space-y-8">
                       {renderModuleContent()}
                     </div>
+                  ) : (
+                    <HomeView
+                      onUnauthorized={handleUnauthorized}
+                      onNavigate={(module) => {
+                        if (module) {
+                          navigateToModule(module);
+                          return;
+                        }
+                        navigateTo("home");
+                      }}
+                    />
                   )}
-
-                  <HomeView
-                    onUnauthorized={handleUnauthorized}
-                    onNavigate={(module) => {
-                      if (module) {
-                        navigateToModule(module);
-                        return;
-                      }
-                      navigateTo("home");
-                    }}
-                  />
                 </>
               )}
             </main>
