@@ -847,6 +847,8 @@ async def remap_columns(
 
     updated_mappings = {**column_mappings, payload.dataset: merged_mapping}
 
+    updated_at = datetime.utcnow()
+
     _DATA_CONTEXT.set_payload(
         user_id,
         sales_harmonized if sales_harmonized is not None else ctx.get("sales"),
@@ -858,8 +860,6 @@ async def remap_columns(
     )
 
     _set_simple_data(user_id, normalized_sales, normalized_stock, source=source, updated_at=updated_at)
-
-    updated_at = datetime.utcnow()
     if db is not None:
         if payload.dataset == "sales":
             persisted_df = sales_harmonized if sales_harmonized is not None else ctx.get("sales")
