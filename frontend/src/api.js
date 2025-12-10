@@ -6,8 +6,10 @@ const isDev = metaEnv.MODE === "development";
 const LOCAL_API = "http://localhost:1000";
 
 // Backend producción (Render)
-const RENDER_BACKEND = "https://nvp-informabf-backend-wxbb.onrender.com";
-const LEGACY_RENDER_BACKEND = "https://nvp-informabf.onrender.com";
+// Usamos el dominio principal desplegado actualmente; el endpoint anterior se
+// mantiene como respaldo por si se reactiva en el futuro.
+const RENDER_BACKEND = "https://nvp-informabf.onrender.com";
+const LEGACY_RENDER_BACKEND = "https://nvp-informabf-backend-wxbb.onrender.com";
 
 const deriveBackendFromHostname = () => {
   if (typeof window === "undefined") return "";
