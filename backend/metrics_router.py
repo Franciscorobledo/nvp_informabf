@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 
 from auth import get_current_user
 from database import get_db
-from data_router import _get_or_seed_data
+from data_router import _ensure_user_context, _get_or_seed_data
 from mercadolibre import fetch_inventory_dataframe, fetch_orders_dataframe
 from utils.data_engine import (
     build_custom_chart,
@@ -48,8 +48,44 @@ def _standardize(df: pd.DataFrame) -> Dict[str, Any]:
 
 
 def _resolve_active_data(
-    credential_id: Optional[int], db: Session, current_user
+    credential_id: Optional[int],
+    db: Session,
+    current_user,
+    *,
+    source: Optional[str] = None,
 ) -> Dict[str, Any]:
+    if source == "both":
+        files_ctx = _ensure_user_context(db, str(current_user.id), source="files") or {}
+        ml_ctx: Dict[str, Any] = {}
+
+        if credential_id is not None:
+            sales_raw, _ = fetch_orders_dataframe(credential_id, db, current_user)
+            stock_raw, _ = fetch_inventory_dataframe(credential_id, db, current_user)
+            ml_ctx = {
+                "sales": harmonize_sales_data(sales_raw, "mercadolibre")[0],
+                "stock": harmonize_stock_data(stock_raw, "mercadolibre")[0],
+                "source": "mercadolibre",
+                "updated_at": datetime.utcnow(),
+            }
+        else:
+            ml_ctx = _ensure_user_context(db, str(current_user.id), source="mercadolibre") or {}
+
+        sales_df = pd.concat(
+            [ctx for ctx in [files_ctx.get("sales"), ml_ctx.get("sales")] if ctx is not None and not ctx.empty],
+            ignore_index=True,
+        ) if files_ctx or ml_ctx else pd.DataFrame()
+        stock_df = pd.concat(
+            [ctx for ctx in [files_ctx.get("stock"), ml_ctx.get("stock")] if ctx is not None and not ctx.empty],
+            ignore_index=True,
+        ) if files_ctx or ml_ctx else pd.DataFrame()
+
+        updated_at = max(
+            [ts for ts in [files_ctx.get("updated_at"), ml_ctx.get("updated_at")] if ts],
+            default=datetime.utcnow(),
+        )
+
+        return {"sales": sales_df, "stock": stock_df, "source": "both", "updated_at": updated_at}
+
     if credential_id is not None:
         sales_raw, _ = fetch_orders_dataframe(credential_id, db, current_user)
         stock_raw, _ = fetch_inventory_dataframe(credential_id, db, current_user)
@@ -59,9 +95,11 @@ def _resolve_active_data(
         updated_at = datetime.utcnow()
     else:
         ctx = _get_or_seed_data(str(current_user.id))
+        if source:
+            ctx = _ensure_user_context(db, str(current_user.id), source=source) or ctx
         sales_df = ctx.get("sales", pd.DataFrame())
         stock_df = ctx.get("stock", pd.DataFrame())
-        source = ctx.get("source", "demo")
+        source = ctx.get("source", source or "demo")
         updated_at = ctx.get("updated_at")
 
     return {
@@ -164,12 +202,13 @@ def get_sales_metrics(
     from_date: Optional[str] = Query(None, description="Filtrar desde esta fecha (YYYY-MM-DD)"),
     to_date: Optional[str] = Query(None, description="Filtrar hasta esta fecha (YYYY-MM-DD)"),
     category: Optional[str] = Query(None, description="Filtrar por categoría"),
+    source: Optional[str] = Query(None, description="Fuente de datos: files, mercadolibre o both"),
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
     """KPIs oficiales del panel de ventas."""
 
-    ctx = _resolve_active_data(credential_id, db, current_user)
+    ctx = _resolve_active_data(credential_id, db, current_user, source=source)
     sales_df: pd.DataFrame = _apply_filters(
         ctx["sales"], from_date=from_date, to_date=to_date, category=category
     )
@@ -223,12 +262,13 @@ def get_stock_metrics(
     from_date: Optional[str] = Query(None, description="Filtrar desde esta fecha (YYYY-MM-DD)"),
     to_date: Optional[str] = Query(None, description="Filtrar hasta esta fecha (YYYY-MM-DD)"),
     category: Optional[str] = Query(None, description="Filtrar por categoría"),
+    source: Optional[str] = Query(None, description="Fuente de datos: files, mercadolibre o both"),
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
     """KPIs oficiales del panel de stock."""
 
-    ctx = _resolve_active_data(credential_id, db, current_user)
+    ctx = _resolve_active_data(credential_id, db, current_user, source=source)
     filtered_sales = _apply_filters(
         ctx["sales"], from_date=from_date, to_date=to_date, category=category
     )
@@ -516,6 +556,7 @@ class CustomChartPayload(BaseModel):
     chart_type: str = "bar"
     data: Optional[List[Dict[str, Any]]] = None
     credential_id: Optional[int] = None
+    source: Optional[str] = None
 
 
 @router.post("/custom")
@@ -550,7 +591,9 @@ def custom_chart(
         normalized = _standardize(df)
         base_df = normalized["df"]
     else:
-        ctx = _resolve_active_data(payload.credential_id, db, current_user)
+        ctx = _resolve_active_data(
+            payload.credential_id, db, current_user, source=payload.source
+        )
         base_df = build_product_summary(ctx.get("sales", pd.DataFrame()), ctx.get("stock", pd.DataFrame()))
         normalized = {"column_types": _column_types(base_df), "mapping": {}}
 
