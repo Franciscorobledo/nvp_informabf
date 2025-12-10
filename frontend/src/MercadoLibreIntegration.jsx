@@ -11,6 +11,7 @@ const MercadoLibreIntegration = ({ onUnauthorized }) => {
   const [loading, setLoading] = useState(false);
   const [lastSync, setLastSync] = useState(null);
   const [syncData, setSyncData] = useState(null);
+  const [isDemo, setIsDemo] = useState(false);
   const token = useMemo(() => localStorage.getItem("token"), []);
 
   const authorizedFetch = async (url, options = {}) => {
@@ -43,8 +44,10 @@ const MercadoLibreIntegration = ({ onUnauthorized }) => {
       );
       if (data) {
         setConnection(data);
+        setIsDemo(false);
       } else {
         setConnection(null);
+        setIsDemo(false);
       }
     } catch (err) {
       console.error(err);
@@ -58,6 +61,7 @@ const MercadoLibreIntegration = ({ onUnauthorized }) => {
   const handleConnect = async () => {
     setError("");
     setSyncMessage("");
+    setIsDemo(false);
     try {
       const data = await authorizedFetch(
         `${API_URL}/meli/auth?app_alias=${encodeURIComponent(appAlias.trim())}`
@@ -76,9 +80,10 @@ const MercadoLibreIntegration = ({ onUnauthorized }) => {
     setError("");
     setSyncMessage("");
     try {
-      const data = await authorizedFetch(
-        `${API_URL}/meli/sync?app_alias=${encodeURIComponent(appAlias.trim())}`
-      );
+      const syncUrl = isDemo
+        ? `${API_URL}/mercadolibre/sync?credential_id=0`
+        : `${API_URL}/meli/sync?app_alias=${encodeURIComponent(appAlias.trim())}`;
+      const data = await authorizedFetch(syncUrl);
       setSeller(data.seller);
       setSyncData(data);
       setLastSync(data.last_sync || new Date().toISOString());
@@ -98,17 +103,43 @@ const MercadoLibreIntegration = ({ onUnauthorized }) => {
   const handleDisconnect = async () => {
     if (!appAlias.trim()) return;
     try {
-      await authorizedFetch(`${API_URL}/meli/disconnect`, {
-        method: "POST",
-        body: JSON.stringify({ app_alias: appAlias.trim() }),
-      });
+      if (isDemo) {
+        setSyncMessage("Cuenta demo desactivada");
+      } else {
+        await authorizedFetch(`${API_URL}/meli/disconnect`, {
+          method: "POST",
+          body: JSON.stringify({ app_alias: appAlias.trim() }),
+        });
+      }
       setConnection(null);
       setSeller(null);
       setSyncData(null);
       setLastSync(null);
+      setIsDemo(false);
       setSyncMessage("Integración desconectada");
     } catch (err) {
       setError(err.message || "No se pudo desconectar");
+    }
+  };
+
+  const handleUseDemoAccount = async () => {
+    setError("");
+    setSyncMessage("");
+    try {
+      const demoCredential = await authorizedFetch(`${API_URL}/mercadolibre/demo/credential`);
+      setConnection({
+        seller_id: demoCredential.seller_id,
+        nickname: demoCredential.nickname,
+        account_name: demoCredential.account_name,
+        is_demo: true,
+      });
+      setSeller({ id: demoCredential.seller_id, nickname: demoCredential.nickname });
+      setSyncData(null);
+      setLastSync(null);
+      setIsDemo(true);
+      setSyncMessage("Cuenta demo activada. Puedes sincronizar para ver datos de ejemplo.");
+    } catch (err) {
+      setError(err.message || "No se pudo activar la cuenta demo");
     }
   };
 
@@ -147,6 +178,12 @@ const MercadoLibreIntegration = ({ onUnauthorized }) => {
               >
                 Conectar con QR
               </button>
+              <button
+                onClick={handleUseDemoAccount}
+                className="inline-flex items-center justify-center gap-2 rounded-xl bg-amber-500 text-white px-4 py-2 text-sm font-semibold shadow hover:-translate-y-0.5 transition"
+              >
+                Usar cuenta demo
+              </button>
             </div>
           </div>
 
@@ -154,8 +191,19 @@ const MercadoLibreIntegration = ({ onUnauthorized }) => {
             {connection ? (
               <div className="space-y-1">
                 <p className="text-sm font-semibold text-slate-900 dark:text-white">Cuenta conectada</p>
-                <p className="text-xs text-slate-600 dark:text-slate-300">Seller: {connection.nickname || connection.seller_id || "por sincronizar"}</p>
-                <p className="text-xs text-slate-600 dark:text-slate-300">Última sincronización: {lastSync ? new Date(lastSync).toLocaleString() : "pendiente"}</p>
+                <div className="flex items-center gap-2">
+                  <p className="text-xs text-slate-600 dark:text-slate-300">
+                    Seller: {connection.nickname || connection.seller_id || "por sincronizar"}
+                  </p>
+                  {isDemo && (
+                    <span className="inline-flex items-center rounded-full bg-amber-100 text-amber-800 px-2 py-0.5 text-[10px] font-semibold">
+                      Demo
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs text-slate-600 dark:text-slate-300">
+                  Última sincronización: {lastSync ? new Date(lastSync).toLocaleString() : "pendiente"}
+                </p>
               </div>
             ) : (
               <div className="space-y-2">
