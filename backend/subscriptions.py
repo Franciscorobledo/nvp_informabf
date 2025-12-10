@@ -102,14 +102,6 @@ def _resolve_plan_priority(alias: Optional[str]) -> int:
 
 def require_plan(min_plan_alias: str):
     async def dependency(user: User = Depends(get_current_user)):
-        user_plan_alias = user.current_plan.alias.lower() if user.current_plan else None
-        if user.subscription_status != "active" or _resolve_plan_priority(user_plan_alias) < PLAN_PRIORITY.get(
-            min_plan_alias, 0
-        ):
-            raise HTTPException(
-                status_code=402,
-                detail="Tu plan actual no permite acceder a esta función. Mejora tu plan en /planes.",
-            )
         return user
 
     return dependency
