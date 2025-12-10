@@ -43,24 +43,29 @@ const StockView = ({ onUnauthorized }) => {
     setLoading(true);
     setError("");
     try {
-      const autoMetrics = await fetchWithAuth(`${API_URL}/data/metrics/auto`);
-      const parsedKpis = {
-        stock_total: autoMetrics?.kpis?.total_stock_units?.value ?? 0,
-        critical_products: autoMetrics?.kpis?.products_with_low_stock?.value ?? 0,
-        dead_stock: autoMetrics?.kpis?.products_without_movement?.value ?? 0,
-        avg_days_inventory: autoMetrics?.kpis?.products_with_slow_rotation?.value ?? 0,
-      };
+      const params = new URLSearchParams();
+      if (fromDate) params.append("from_date", fromDate);
+      if (toDate) params.append("to_date", toDate);
+      if (category) params.append("category", category);
+
+      const query = params.toString();
+      const stockMetrics = await fetchWithAuth(`${API_URL}/metrics/stock${query ? `?${query}` : ""}`);
 
       setMetrics({
-        kpis: parsedKpis,
-        charts: {
-          rotation: autoMetrics?.chart_data,
-          dead_stock: null,
-          semaphore: null,
+        kpis: {
+          stock_total: stockMetrics?.kpis?.stock_total ?? 0,
+          critical_products: stockMetrics?.kpis?.critical_products ?? 0,
+          dead_stock: stockMetrics?.kpis?.dead_stock ?? 0,
+          avg_days_inventory: stockMetrics?.kpis?.avg_days_inventory ?? 0,
         },
-        table: autoMetrics?.table_data || [],
-        column_types: {},
-        alerts: [],
+        charts: {
+          rotation: stockMetrics?.charts?.rotation,
+          dead_stock: stockMetrics?.charts?.dead_stock,
+          semaphore: stockMetrics?.charts?.semaphore,
+        },
+        table: stockMetrics?.table || [],
+        column_types: stockMetrics?.column_types || {},
+        alerts: stockMetrics?.alerts || [],
       });
     } catch (err) {
       setError(err.message || "No se pudo cargar el panel de stock");
@@ -71,7 +76,7 @@ const StockView = ({ onUnauthorized }) => {
 
   useEffect(() => {
     loadMetrics();
-  }, []);
+  }, [fromDate, toDate, category]);
 
   const rotationChart = toChartCardConfig(metrics?.charts?.rotation);
   const deadStockChart = toChartCardConfig(metrics?.charts?.dead_stock);

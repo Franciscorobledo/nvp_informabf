@@ -207,29 +207,33 @@ def _persist_dataset(
     db.commit()
 
 
-def _load_latest_dataset(db: Session, user_id: str) -> tuple[Optional[dict], Optional[dict]]:
-    sales = (
-        db.query(UserSalesDataset)
-        .filter(UserSalesDataset.user_id == int(user_id))
-        .order_by(UserSalesDataset.updated_at.desc())
-        .first()
-    )
-    stock = (
-        db.query(UserStockDataset)
-        .filter(UserStockDataset.user_id == int(user_id))
-        .order_by(UserStockDataset.updated_at.desc())
-        .first()
-    )
+def _load_latest_dataset(
+    db: Session, user_id: str, *, source: Optional[str] = None
+) -> tuple[Optional[dict], Optional[dict]]:
+    sales_query = db.query(UserSalesDataset).filter(UserSalesDataset.user_id == int(user_id))
+    stock_query = db.query(UserStockDataset).filter(UserStockDataset.user_id == int(user_id))
+
+    if source:
+        sales_query = sales_query.filter(UserSalesDataset.source == source)
+        stock_query = stock_query.filter(UserStockDataset.source == source)
+
+    sales = sales_query.order_by(UserSalesDataset.updated_at.desc()).first()
+    stock = stock_query.order_by(UserStockDataset.updated_at.desc()).first()
 
     return sales, stock
 
 
-def _ensure_user_context(db: Session, user_id: str) -> Optional[Dict[str, Any]]:
+def _ensure_user_context(
+    db: Session, user_id: str, *, source: Optional[str] = None
+) -> Optional[Dict[str, Any]]:
     existing = _DATA_CONTEXT.get(user_id)
     if existing:
         return existing
 
-    sales_record, stock_record = _load_latest_dataset(db, user_id)
+    sales_record, stock_record = _load_latest_dataset(db, user_id, source=source)
+
+    if source and sales_record is None and stock_record is None:
+        sales_record, stock_record = _load_latest_dataset(db, user_id)
 
     sales_df = _deserialize_dataframe(getattr(sales_record, "dataframe_parquet", None))
     stock_df = _deserialize_dataframe(getattr(stock_record, "dataframe_parquet", None))

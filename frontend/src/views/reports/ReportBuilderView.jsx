@@ -14,6 +14,13 @@ const metricsOptions = [
   { value: "rotation", label: "Rotación" },
 ];
 
+const sourceOptions = [
+  { value: "", label: "Fuente activa" },
+  { value: "files", label: "Archivos" },
+  { value: "mercadolibre", label: "Mercado Libre" },
+  { value: "both", label: "Ambas fuentes" },
+];
+
 const dimensionOptions = [
   { value: "product", label: "Producto" },
   { value: "category", label: "Categoría" },
@@ -33,6 +40,7 @@ const ReportBuilderView = ({ onUnauthorized }) => {
     metric: "sales",
     dimension: "product",
     chart_type: "bar",
+    source: "",
   });
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -68,7 +76,10 @@ const ReportBuilderView = ({ onUnauthorized }) => {
     try {
       const response = await fetchWithAuth(`${API_URL}/metrics/custom`, {
         method: "POST",
-        body: JSON.stringify(config),
+        body: JSON.stringify({
+          ...config,
+          source: config.source || undefined,
+        }),
       });
       setResult(response);
     } catch (err) {
@@ -134,6 +145,21 @@ const ReportBuilderView = ({ onUnauthorized }) => {
             className="mt-1 w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm"
           >
             {chartTypes.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label className="text-sm font-semibold text-slate-700 dark:text-slate-200">
+          Fuente de datos
+          <select
+            value={config.source}
+            onChange={(e) => setConfig({ ...config, source: e.target.value })}
+            className="mt-1 w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm"
+          >
+            {sourceOptions.map((option) => (
               <option key={option.value} value={option.value}>
                 {option.label}
               </option>

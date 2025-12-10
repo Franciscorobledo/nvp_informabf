@@ -19,53 +19,37 @@ const SalesView = ({ onUnauthorized, onGoToData }) => {
     setLoading(true);
     setError("");
     try {
-      const autoRes = await fetch(`${API_URL}/data/metrics/auto`, {
+      const params = new URLSearchParams();
+      if (fromDate) params.append("from_date", fromDate);
+      if (toDate) params.append("to_date", toDate);
+      if (category) params.append("category", category);
+
+      const query = params.toString();
+      const response = await fetch(`${API_URL}/metrics/sales${query ? `?${query}` : ""}`, {
         headers: {
           "Content-Type": "application/json",
           Authorization: token ? `Bearer ${token}` : undefined,
         },
       });
 
-      if (autoRes.status === 401 || autoRes.status === 403) {
+      if (response.status === 401 || response.status === 403) {
         onUnauthorized?.("Tu sesión expiró. Vuelve a iniciar sesión.");
         throw new Error("unauthorized");
       }
 
-      if (!autoRes.ok) {
-        const text = await autoRes.text();
+      if (!response.ok) {
+        const text = await response.text();
         throw new Error(text || "Error en la petición");
       }
 
-      const autoData = await autoRes.json();
-
-      const analysisRes = await fetch(`${API_URL}/analysis/metrics`, {
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: token ? `Bearer ${token}` : undefined,
-        },
-      });
-
-      const analysisData = analysisRes.ok ? await analysisRes.json() : {};
-
-      const kpis = {
-        total_sales: autoData?.kpis?.total_sales?.value ?? analysisData?.kpis?.ventas_totales ?? 0,
-        units_sold: autoData?.kpis?.total_units?.value ?? analysisData?.kpis?.unidades_totales ?? 0,
-        avg_ticket: autoData?.kpis?.avg_ticket?.value ?? 0,
-        margin: autoData?.kpis?.total_margin?.value ?? 0,
-      };
-
-      const charts = {
-        trend: autoData?.chart_data || analysisData?.chart_data,
-        top_products: autoData?.chart_data,
-        categories: null,
-      };
+      const payload = await response.json();
 
       setAnalysisData({
-        kpis,
-        charts,
-        table: autoData?.table_data || analysisData?.table_data || [],
-        alerts: analysisData?.warnings || [],
-        column_types: analysisData?.column_types || {},
+        kpis: payload?.kpis || {},
+        charts: payload?.charts || {},
+        table: payload?.table || [],
+        alerts: payload?.alerts || [],
+        column_types: payload?.column_types || {},
       });
     } catch (err) {
       if (err.message !== "unauthorized") {
