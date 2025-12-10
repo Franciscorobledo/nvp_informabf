@@ -185,8 +185,172 @@ DEMO_ORDERS = {
                 }
             ],
         },
+        {
+            "id": 90010004,
+            "status": "shipped",
+            "date_created": "2024-08-06T18:45:00.000-03:00",
+            "currency_id": "ARS",
+            "total_amount": 29998.0,
+            "paid_amount": 29998.0,
+            "buyer": {"id": 444004, "nickname": "viajero_demo"},
+            "shipping": {"mode": "me2"},
+            "site_id": "MLA",
+            "order_items": [
+                {
+                    "quantity": 2,
+                    "unit_price": 14999.0,
+                    "full_unit_price": 14999.0,
+                    "item": {"id": "MLA_DEMO_003", "title": "Mouse inalámbrico recargable"},
+                }
+            ],
+        },
+        {
+            "id": 90010005,
+            "status": "delivered",
+            "date_created": "2024-08-07T11:05:00.000-03:00",
+            "currency_id": "ARS",
+            "total_amount": 19999.0,
+            "paid_amount": 19999.0,
+            "buyer": {"id": 444005, "nickname": "creativo_demo"},
+            "shipping": {"mode": "me2"},
+            "site_id": "MLA",
+            "order_items": [
+                {
+                    "quantity": 1,
+                    "unit_price": 19999.0,
+                    "full_unit_price": 19999.0,
+                    "item": {"id": "MLA_DEMO_001", "title": "Auriculares Bluetooth"},
+                }
+            ],
+        },
+        {
+            "id": 90010006,
+            "status": "paid",
+            "date_created": "2024-08-09T10:35:00.000-03:00",
+            "currency_id": "ARS",
+            "total_amount": 171998.0,
+            "paid_amount": 171998.0,
+            "buyer": {"id": 444006, "nickname": "oficina_demo"},
+            "shipping": {"mode": "me1"},
+            "site_id": "MLA",
+            "order_items": [
+                {
+                    "quantity": 2,
+                    "unit_price": 85999.0,
+                    "full_unit_price": 85999.0,
+                    "item": {"id": "MLA_DEMO_002", "title": "Silla ergonómica de oficina"},
+                }
+            ],
+        },
+        {
+            "id": 90010007,
+            "status": "shipped",
+            "date_created": "2024-08-10T13:10:00.000-03:00",
+            "currency_id": "ARS",
+            "total_amount": 39999.0,
+            "paid_amount": 39999.0,
+            "buyer": {"id": 444007, "nickname": "logistica_demo"},
+            "shipping": {"mode": "me2"},
+            "site_id": "MLA",
+            "order_items": [
+                {
+                    "quantity": 1,
+                    "unit_price": 39999.0,
+                    "full_unit_price": 39999.0,
+                    "item": {"id": "MLA_DEMO_004", "title": "Teclado mecánico RGB"},
+                }
+            ],
+        },
+        {
+            "id": 90010008,
+            "status": "paid",
+            "date_created": "2024-08-11T16:50:00.000-03:00",
+            "currency_id": "ARS",
+            "total_amount": 120997.0,
+            "paid_amount": 120997.0,
+            "buyer": {"id": 444008, "nickname": "pyme_demo"},
+            "shipping": {"mode": "me1"},
+            "site_id": "MLA",
+            "order_items": [
+                {
+                    "quantity": 1,
+                    "unit_price": 85999.0,
+                    "full_unit_price": 85999.0,
+                    "item": {"id": "MLA_DEMO_002", "title": "Silla ergonómica de oficina"},
+                },
+                {
+                    "quantity": 1,
+                    "unit_price": 14999.0,
+                    "full_unit_price": 14999.0,
+                    "item": {"id": "MLA_DEMO_003", "title": "Mouse inalámbrico recargable"},
+                },
+                {
+                    "quantity": 1,
+                    "unit_price": 19999.0,
+                    "full_unit_price": 19999.0,
+                    "item": {"id": "MLA_DEMO_001", "title": "Auriculares Bluetooth"},
+                },
+            ],
+        },
+        {
+            "id": 90010009,
+            "status": "paid",
+            "date_created": "2024-08-12T09:25:00.000-03:00",
+            "currency_id": "ARS",
+            "total_amount": 59997.0,
+            "paid_amount": 59997.0,
+            "buyer": {"id": 444009, "nickname": "creador_demo"},
+            "shipping": {"mode": "me1"},
+            "site_id": "MLA",
+            "order_items": [
+                {
+                    "quantity": 3,
+                    "unit_price": 19999.0,
+                    "full_unit_price": 19999.0,
+                    "item": {"id": "MLA_DEMO_001", "title": "Auriculares Bluetooth"},
+                }
+            ],
+        },
+        {
+            "id": 90010010,
+            "status": "shipped",
+            "date_created": "2024-08-13T17:40:00.000-03:00",
+            "currency_id": "ARS",
+            "total_amount": 79998.0,
+            "paid_amount": 79998.0,
+            "buyer": {"id": 444010, "nickname": "gaming_demo"},
+            "shipping": {"mode": "me2"},
+            "site_id": "MLA",
+            "order_items": [
+                {
+                    "quantity": 2,
+                    "unit_price": 39999.0,
+                    "full_unit_price": 39999.0,
+                    "item": {"id": "MLA_DEMO_004", "title": "Teclado mecánico RGB"},
+                }
+            ],
+        },
+        {
+            "id": 90010011,
+            "status": "delivered",
+            "date_created": "2024-08-14T08:15:00.000-03:00",
+            "currency_id": "ARS",
+            "total_amount": 44997.0,
+            "paid_amount": 44997.0,
+            "buyer": {"id": 444011, "nickname": "studio_demo"},
+            "shipping": {"mode": "me2"},
+            "site_id": "MLA",
+            "order_items": [
+                {
+                    "quantity": 3,
+                    "unit_price": 14999.0,
+                    "full_unit_price": 14999.0,
+                    "item": {"id": "MLA_DEMO_003", "title": "Mouse inalámbrico recargable"},
+                }
+            ],
+        },
     ],
-    "paging": {"total": 3, "limit": 50, "offset": 0},
+    "paging": {"total": 11, "limit": 50, "offset": 0},
 }
 
 
