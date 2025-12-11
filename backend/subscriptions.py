@@ -185,6 +185,69 @@ def mercadopago_status():
     return {"access_token_present": bool(token)}
 
 
+def _update_subscription_from_mp(subscription: Subscription, mp_status: str, db: Session) -> None:
+    now = datetime.utcnow()
+
+    if mp_status == "authorized":
+        subscription.status = "active"
+        subscription.started_at = subscription.started_at or now
+        subscription.current_period_end = now + timedelta(days=30)
+        subscription.cancelled_at = None
+    elif mp_status in {"cancelled", "paused"}:
+        subscription.status = "cancelled"
+        subscription.cancelled_at = now
+    elif mp_status == "pending":
+        subscription.status = "pending"
+    else:
+        subscription.status = "expired"
+
+    subscription.updated_at = now
+    db.add(subscription)
+
+    user = subscription.user
+    if subscription.status == "active":
+        user.current_plan_id = subscription.plan_id
+        user.subscription_status = "active"
+    elif subscription.status == "pending":
+        user.subscription_status = "pending"
+    elif subscription.status == "cancelled":
+        user.subscription_status = "cancelled"
+    else:
+        user.subscription_status = "expired"
+
+    db.add(user)
+    db.commit()
+
+
+def _sync_mp_subscription(subscription: Subscription, db: Session) -> None:
+    """Consulta a Mercado Pago para actualizar el estado cuando falte el webhook."""
+
+    if not subscription.mp_preapproval_id:
+        return
+
+    mp_access_token = get_mp_access_token()
+    if not mp_access_token:
+        logging.warning("No hay access token de Mercado Pago configurado")
+        return
+
+    headers = {"Authorization": f"Bearer {mp_access_token}"}
+    response = requests.get(
+        f"https://api.mercadopago.com/preapproval/{subscription.mp_preapproval_id}", headers=headers, timeout=30
+    )
+
+    if response.status_code not in {200, 201}:
+        logging.error("No se pudo sincronizar preapproval %s: %s", subscription.mp_preapproval_id, response.text)
+        return
+
+    data = response.json()
+    mp_status = data.get("status")
+    if not mp_status:
+        logging.warning("Respuesta de Mercado Pago sin estado para %s", subscription.mp_preapproval_id)
+        return
+
+    _update_subscription_from_mp(subscription, mp_status, db)
+
+
 @router.post("/admin/mercadopago/token", dependencies=[Depends(admin_required)])
 def update_mp_token(payload: MercadoPagoTokenPayload):
     try:
@@ -287,43 +350,14 @@ async def mercadopago_webhook(request: Request, db: Session = Depends(get_db)):
 
     data = mp_response.json()
     mp_status = data.get("status")
-    now = datetime.utcnow()
 
-    if mp_status == "authorized":
-        subscription.status = "active"
-        subscription.started_at = subscription.started_at or now
-        subscription.current_period_end = now + timedelta(days=30)
-        subscription.cancelled_at = None
-    elif mp_status in {"cancelled", "paused"}:
-        subscription.status = "cancelled"
-        subscription.cancelled_at = now
-    elif mp_status == "pending":
-        subscription.status = "pending"
-    else:
-        subscription.status = "expired"
-
-    subscription.updated_at = now
-    db.add(subscription)
-
-    user = subscription.user
-    if subscription.status == "active":
-        user.current_plan_id = subscription.plan_id
-        user.subscription_status = "active"
-    elif subscription.status == "pending":
-        user.subscription_status = "pending"
-    elif subscription.status == "cancelled":
-        user.subscription_status = "cancelled"
-    else:
-        user.subscription_status = "expired"
-
-    db.add(user)
-    db.commit()
+    _update_subscription_from_mp(subscription, mp_status, db)
 
     return {"status": "ok"}
 
 
 @router.get("/me", response_model=SubscriptionSummary)
-def subscription_me(user: User = Depends(get_current_user)):
+def subscription_me(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     plan = user.current_plan
     current_plan = None
     if plan:
@@ -334,7 +368,26 @@ def subscription_me(user: User = Depends(get_current_user)):
             "currency": plan.currency,
         }
 
-    latest_subscription = user.subscriptions[0] if user.subscriptions else None
+    latest_subscription = (
+        db.query(Subscription)
+        .filter(Subscription.user_id == user.id)
+        .order_by(Subscription.created_at.desc())
+        .first()
+    )
+
+    if latest_subscription and latest_subscription.provider == "mercadopago" and latest_subscription.status != "active":
+        _sync_mp_subscription(latest_subscription, db)
+        db.refresh(latest_subscription)
+        db.refresh(user)
+        plan = latest_subscription.plan or plan
+        if plan:
+            current_plan = {
+                "name": plan.name,
+                "alias": plan.alias,
+                "price_monthly": plan.price_monthly,
+                "currency": plan.currency,
+            }
+
     return {
         "subscription_status": user.subscription_status,
         "current_plan": current_plan,
