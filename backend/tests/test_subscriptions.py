@@ -95,3 +95,22 @@ def test_subscription_flow_and_permissions(client: TestClient, monkeypatch):
 
     forbidden = client.get("/mercadolibre/apps", headers={"Authorization": f"Bearer {token}"})
     assert forbidden.status_code in {200, 404}  # router accessible after plan check
+
+
+def test_subscription_me_refreshes_pending_status(client: TestClient):
+    token = _login(client, "admin", "Francisco8")
+    plans = client.get("/subscriptions/plans").json()
+    plan_id = plans[0]["id"]
+
+    create = client.post(
+        "/subscriptions/create",
+        json={"plan_id": plan_id},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert create.status_code == 200, create.text
+
+    me = client.get("/subscriptions/me", headers={"Authorization": f"Bearer {token}"})
+    assert me.status_code == 200
+    body = me.json()
+    assert body["subscription_status"] == "active"
+    assert body["current_plan"]["alias"] == plans[0]["alias"]
