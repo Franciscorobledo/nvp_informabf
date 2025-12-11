@@ -23,13 +23,15 @@ const deriveBackendFromHostname = () => {
 };
 
 // Usa VITE_API_URL si existe; si no, detecta entorno automáticamente.
-// En producción preferimos el backend desplegado en Render; si no está
-// disponible, caemos al dominio heredado.
+// En producción preferimos el backend desplegado en Render; si se define
+// VITE_API_URL se respeta, y solo recurrimos al dominio heredado como último
+// recurso. Esto evita intentar derivar un host inexistente cuando el front
+// está publicado con un subdominio distinto.
 const PROD_API =
   metaEnv.VITE_API_URL ||
-  deriveBackendFromHostname() ||
   RENDER_BACKEND ||
-  LEGACY_RENDER_BACKEND;
+  LEGACY_RENDER_BACKEND ||
+  deriveBackendFromHostname();
 
 const API_URL = isDev ? LOCAL_API : PROD_API;
 
