@@ -17,6 +17,7 @@ import numpy as np
 import pandas as pd
 
 from ai_module import generate_ai_insights
+from utils.ai_column_mapper import infer_sales_column_mapping
 
 # Palabras clave por columna estándar
 COLUMN_SYNONYMS = {
@@ -73,6 +74,27 @@ def standardize_dataframe(df: pd.DataFrame) -> Tuple[pd.DataFrame, Dict[str, str
     """Renombra columnas a un esquema estándar y tipa los campos clave."""
 
     mapping = detect_key_columns(df)
+    ai_mapping = infer_sales_column_mapping(
+        headers=list(df.columns), sample_rows=df.head(20).to_dict(orient="records")
+    )
+
+    ai_to_standard = {
+        "date": "date",
+        "product_name": "product",
+        "category": "category",
+        "quantity_sold": "quantity",
+        "revenue": "price",
+        "cost": "cost",
+    }
+
+    for ai_key, standard_key in ai_to_standard.items():
+        if standard_key in mapping:
+            continue
+
+        suggested_column = ai_mapping.get(ai_key)
+        if suggested_column and suggested_column != "null" and suggested_column in df.columns:
+            mapping[standard_key] = suggested_column
+
     renamed = df.copy()
 
     column_aliases = {
