@@ -19,3 +19,5 @@ SQLAlchemy
 psycopg2-binary
 cryptography
 psutil
+google-api-python-client
+google-auth
