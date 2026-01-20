@@ -25,7 +25,7 @@ SECRET_KEY = os.getenv("SECRET_KEY", "DEV_SECRET_KEY")
 ALGORITHM = os.getenv("ALGORITHM", "HS256")
 # Por defecto los tokens durarán 7 días, ajustable vía env.
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", 60 * 24 * 7))
-DEFAULT_ADMIN_PASSWORD = os.getenv("DEFAULT_ADMIN_PASSWORD", "Francisco8")
+DEFAULT_ADMIN_PASSWORD = os.getenv("DEFAULT_ADMIN_PASSWORD", "admin123")
 
 security = HTTPBearer()
 
@@ -46,7 +46,8 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     return hash_password(plain_password) == hashed_password
 
 
-def ensure_default_admin(db: Session) -> None:
+def ensure_admin_user(db: Session) -> None:
+    # Creamos un admin si no existe ningún usuario, sin asumir datos previos.
     existing = db.query(User).count()
     if existing:
         return
@@ -62,6 +63,11 @@ def ensure_default_admin(db: Session) -> None:
     )
     db.add(admin)
     db.commit()
+
+
+def ensure_default_admin(db: Session) -> None:
+    # Compatibilidad con llamados existentes, usando la nueva función.
+    ensure_admin_user(db)
 
 
 def get_user_by_username(db: Session, username: str) -> Optional[User]:

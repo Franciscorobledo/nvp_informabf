@@ -16,6 +16,13 @@ ENABLE_SQLITE_FALLBACK = os.getenv("ENABLE_SQLITE_FALLBACK", "true").lower() in 
 }
 USING_SQLITE_FALLBACK = False
 
+
+def _create_sqlite_engine():
+    return create_engine(
+        LOCAL_DATABASE_URL,
+        connect_args={"check_same_thread": False},
+    )
+
 if DATABASE_URL:
     # Render entrega DATABASE_URL con el esquema legacy "postgres://" y, en algunos
     # casos, sin el parámetro sslmode. SQLAlchemy requiere el esquema moderno y el
@@ -39,16 +46,12 @@ if DATABASE_URL:
                 "Usando base local temporal (%s).",
                 LOCAL_DATABASE_URL,
             )
-            engine = create_engine(
-                LOCAL_DATABASE_URL,
-                connect_args={"check_same_thread": False},
-            )
+            engine = _create_sqlite_engine()
             USING_SQLITE_FALLBACK = True
 else:
-    engine = create_engine(
-        LOCAL_DATABASE_URL,
-        connect_args={"check_same_thread": False},
-    )
+    # Sin DATABASE_URL usamos SQLite local para permitir arranque sin base remota.
+    engine = _create_sqlite_engine()
+    USING_SQLITE_FALLBACK = True
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()

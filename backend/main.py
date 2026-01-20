@@ -50,7 +50,7 @@ from analysis import (
 from auth import (
     admin_required,
     decode_access_token,
-    ensure_default_admin,
+    ensure_admin_user,
     get_current_user,
     router as auth_router,
 )
@@ -191,9 +191,10 @@ app.include_router(saas_router)
 
 @app.on_event("startup")
 def startup_event():
+    # Crear tablas automáticamente para permitir arranque con SQLite local vacío.
     Base.metadata.create_all(bind=engine)
     with SessionLocal() as db:
-        ensure_default_admin(db)
+        ensure_admin_user(db)
         ensure_default_plans(db)
     _start_log_cleanup_scheduler()
 
