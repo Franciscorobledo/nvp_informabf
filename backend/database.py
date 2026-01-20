@@ -1,10 +1,20 @@
+import logging
 import os
 from urllib.parse import urlparse
 
 from sqlalchemy import create_engine
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import declarative_base, sessionmaker
 
 DATABASE_URL = os.getenv("DATABASE_URL")
+LOCAL_DATABASE_URL = os.getenv("LOCAL_DATABASE_URL", "sqlite:///./informebf_local.db")
+ENABLE_SQLITE_FALLBACK = os.getenv("ENABLE_SQLITE_FALLBACK", "true").lower() in {
+    "1",
+    "true",
+    "yes",
+    "on",
+}
+USING_SQLITE_FALLBACK = False
 
 if DATABASE_URL:
     # Render entrega DATABASE_URL con el esquema legacy "postgres://" y, en algunos
@@ -19,9 +29,24 @@ if DATABASE_URL:
         connect_args["sslmode"] = "require"
 
     engine = create_engine(DATABASE_URL, connect_args=connect_args or {})
+    if ENABLE_SQLITE_FALLBACK:
+        try:
+            with engine.connect():
+                pass
+        except OperationalError:
+            logging.warning(
+                "No se pudo conectar a la base de datos remota. "
+                "Usando base local temporal (%s).",
+                LOCAL_DATABASE_URL,
+            )
+            engine = create_engine(
+                LOCAL_DATABASE_URL,
+                connect_args={"check_same_thread": False},
+            )
+            USING_SQLITE_FALLBACK = True
 else:
     engine = create_engine(
-        "sqlite:///./informebf_local.db",
+        LOCAL_DATABASE_URL,
         connect_args={"check_same_thread": False},
     )
 
