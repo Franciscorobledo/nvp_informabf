@@ -212,6 +212,125 @@ class Subscription(Base):
     plan = relationship("SubscriptionPlan", back_populates="subscriptions")
 
 
+class Client(Base):
+    __tablename__ = "clients"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False, unique=True)
+    contact_email = Column(String, nullable=True)
+    timezone = Column(String, default="UTC", nullable=False)
+    is_active = Column(Boolean, default=True, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    bots = relationship("Bot", back_populates="client", cascade="all, delete-orphan")
+    reservations = relationship(
+        "Reservation",
+        back_populates="client",
+        cascade="all, delete-orphan",
+    )
+
+
+class Bot(Base):
+    __tablename__ = "bots"
+
+    id = Column(Integer, primary_key=True, index=True)
+    client_id = Column(Integer, ForeignKey("clients.id", ondelete="CASCADE"), nullable=False)
+    name = Column(String, nullable=False)
+    system_prompt = Column(Text, nullable=False)
+    slack_channel_id = Column(String, nullable=False, index=True)
+    slack_team_id = Column(String, nullable=True, index=True)
+    slack_bot_user_id = Column(String, nullable=True)
+    is_active = Column(Boolean, default=True, nullable=False)
+    openai_model = Column(String, default="gpt-4o-mini", nullable=False)
+    openai_temperature = Column(Float, default=0.2, nullable=False)
+    google_calendar_id = Column(String, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    client = relationship("Client", back_populates="bots")
+    services = relationship("Service", back_populates="bot", cascade="all, delete-orphan")
+    reservations = relationship("Reservation", back_populates="bot", cascade="all, delete-orphan")
+    conversation_states = relationship(
+        "ConversationState",
+        back_populates="bot",
+        cascade="all, delete-orphan",
+    )
+    slack_events = relationship(
+        "SlackEventLog",
+        back_populates="bot",
+        cascade="all, delete-orphan",
+    )
+
+
+class Service(Base):
+    __tablename__ = "services"
+
+    id = Column(Integer, primary_key=True, index=True)
+    bot_id = Column(Integer, ForeignKey("bots.id", ondelete="CASCADE"), nullable=False)
+    name = Column(String, nullable=False)
+    duration_minutes = Column(Integer, nullable=False)
+    is_active = Column(Boolean, default=True, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    bot = relationship("Bot", back_populates="services")
+    reservations = relationship("Reservation", back_populates="service")
+
+
+class Reservation(Base):
+    __tablename__ = "reservations"
+
+    id = Column(Integer, primary_key=True, index=True)
+    client_id = Column(Integer, ForeignKey("clients.id", ondelete="CASCADE"), nullable=False)
+    bot_id = Column(Integer, ForeignKey("bots.id", ondelete="CASCADE"), nullable=False)
+    service_id = Column(Integer, ForeignKey("services.id", ondelete="SET NULL"), nullable=True)
+    slack_user_id = Column(String, nullable=False)
+    slack_channel_id = Column(String, nullable=False)
+    customer_name = Column(String, nullable=True)
+    status = Column(String, default="confirmed", nullable=False)
+    start_time = Column(DateTime, nullable=False)
+    end_time = Column(DateTime, nullable=False)
+    google_event_id = Column(String, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    client = relationship("Client", back_populates="reservations")
+    bot = relationship("Bot", back_populates="reservations")
+    service = relationship("Service", back_populates="reservations")
+
+
+class ConversationState(Base):
+    __tablename__ = "conversation_states"
+
+    id = Column(Integer, primary_key=True, index=True)
+    bot_id = Column(Integer, ForeignKey("bots.id", ondelete="CASCADE"), nullable=False)
+    slack_user_id = Column(String, nullable=False, index=True)
+    state = Column(String, default="idle", nullable=False)
+    collected_data = Column(
+        JSONB().with_variant(SQLiteJSON, "sqlite"),
+        nullable=True,
+    )
+    last_message_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    bot = relationship("Bot", back_populates="conversation_states")
+
+
+class SlackEventLog(Base):
+    __tablename__ = "slack_event_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    bot_id = Column(Integer, ForeignKey("bots.id", ondelete="SET NULL"), nullable=True)
+    event_id = Column(String, nullable=True, index=True)
+    event_type = Column(String, nullable=True)
+    payload = Column(
+        JSONB().with_variant(SQLiteJSON, "sqlite"),
+        nullable=True,
+    )
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    bot = relationship("Bot", back_populates="slack_events")
+
+
 class UserSalesDataset(Base):
     __tablename__ = "user_sales_datasets"
 
