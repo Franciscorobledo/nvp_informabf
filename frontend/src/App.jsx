@@ -1,1016 +1,769 @@
-import React, { useEffect, useRef, useState } from "react";
-import Login from "./Login";
-import ConfigurationPage from "./ConfigurationPage";
-import MercadoLibreIntegration from "./MercadoLibreIntegration";
-import AdminMercadoLibreApps from "./AdminMercadoLibreApps";
-import MercadoLibreDashboard from "./views/mercadolibre/MercadoLibreDashboard";
-import HomeView from "./views/home/HomeView";
-import SalesView from "./views/sales/SalesView";
-import StockView from "./views/stock/StockView";
-import DataIntegrationsView from "./views/data/DataIntegrationsView";
-import ComparativesView from "./views/comparatives/ComparativesView";
-import ReportBuilderView from "./views/reports/ReportBuilderView";
-import MainLayout from "./layouts/MainLayout";
-import PlansPage from "./PlansPage";
-import SubscriptionStatus from "./SubscriptionStatus";
-import PlanGuard from "./components/PlanGuard";
-import {
-  clearStoredSession,
-  decodeTokenPayload,
-  isTokenExpired,
-} from "./session";
+import React, { useEffect, useMemo, useState } from "react";
+import API_URL from "./api";
+import "./index.css";
+
+const defaultBot = {
+  client_id: "",
+  name: "",
+  system_prompt: "Eres un bot de agenda profesional.",
+  slack_channel_id: "",
+  slack_team_id: "",
+  slack_bot_user_id: "",
+  is_active: true,
+  openai_model: "gpt-4o-mini",
+  openai_temperature: 0.2,
+  google_calendar_id: "",
+};
+
+const defaultClient = {
+  name: "",
+  contact_email: "",
+  timezone: "UTC",
+  is_active: true,
+};
+
+const defaultService = {
+  bot_id: "",
+  name: "",
+  duration_minutes: 30,
+  is_active: true,
+};
+
+const useApi = (token) => {
+  const headers = useMemo(() => {
+    const base = { "Content-Type": "application/json" };
+    if (token) {
+      base.Authorization = `Bearer ${token}`;
+    }
+    return base;
+  }, [token]);
+
+  const request = async (path, options = {}) => {
+    const response = await fetch(`${API_URL}${path}`, {
+      ...options,
+      headers: {
+        ...headers,
+        ...(options.headers || {}),
+      },
+    });
+    if (!response.ok) {
+      const detail = await response.json().catch(() => ({}));
+      throw new Error(detail.detail || "Error de API");
+    }
+    if (response.status === 204) {
+      return null;
+    }
+    return response.json();
+  };
+
+  return { request };
+};
+
+const Login = ({ onLogin }) => {
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+    setError("");
+    setLoading(true);
+    try {
+      const response = await fetch(`${API_URL}/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username, password }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.detail || "Credenciales inválidas");
+      }
+      onLogin(data.access_token, data.username);
+    } catch (err) {
+      setError(err.message || "No se pudo iniciar sesión");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="auth-container">
+      <div className="auth-card">
+        <h1>Panel SaaS de Bots de Agenda</h1>
+        <p>Accede con tu usuario administrador.</p>
+        <form onSubmit={handleSubmit}>
+          <label>
+            Usuario / Email
+            <input
+              value={username}
+              onChange={(event) => setUsername(event.target.value)}
+              type="text"
+              placeholder="admin@tuempresa.com"
+              required
+            />
+          </label>
+          <label>
+            Contraseña
+            <input
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              type="password"
+              placeholder="********"
+              required
+            />
+          </label>
+          {error && <div className="error">{error}</div>}
+          <button className="primary" type="submit" disabled={loading}>
+            {loading ? "Ingresando..." : "Ingresar"}
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+};
+
+const SectionHeader = ({ title, description }) => (
+  <div className="section-header">
+    <div>
+      <h2>{title}</h2>
+      <p>{description}</p>
+    </div>
+  </div>
+);
 
 const App = () => {
-  const [user, setUser] = useState(null);
-  const [token, setToken] = useState(null);
-  const [subscription, setSubscription] = useState(null);
-  const [sessionMessage, setSessionMessage] = useState("");
-  const [loading, setLoading] = useState(true);
-  const [theme, setTheme] = useState("light");
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [modulesOpen, setModulesOpen] = useState(false);
-  const moduleContentRef = useRef(null);
+  const [token, setToken] = useState(localStorage.getItem("token"));
+  const [username, setUsername] = useState(localStorage.getItem("username"));
+  const [activeTab, setActiveTab] = useState("clientes");
+  const [clients, setClients] = useState([]);
+  const [bots, setBots] = useState([]);
+  const [services, setServices] = useState([]);
+  const [reservations, setReservations] = useState([]);
+  const [health, setHealth] = useState(null);
 
-  const HomeIcon = ({ className = "" }) => (
-    <svg
-      className={className}
-      viewBox="0 0 24 24"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-    >
-      <path
-        d="M4 10.5 12 4l8 6.5V20a1 1 0 0 1-1 1h-4.5v-5.25h-5V21H5a1 1 0 0 1-1-1v-9.5Z"
-        stroke="currentColor"
-        strokeWidth="1.6"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
+  const [clientForm, setClientForm] = useState(defaultClient);
+  const [botForm, setBotForm] = useState(defaultBot);
+  const [serviceForm, setServiceForm] = useState(defaultService);
+  const [editingClientId, setEditingClientId] = useState(null);
+  const [editingBotId, setEditingBotId] = useState(null);
+  const [editingServiceId, setEditingServiceId] = useState(null);
 
-  const BoxIcon = ({ className = "" }) => (
-    <svg
-      className={className}
-      viewBox="0 0 24 24"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-    >
-      <path
-        d="m4.5 7 7.5 4.25L19.5 7m-15 0L12 2.75 19.5 7m-15 0v10.25L12 22l7.5-4.75V7"
-        stroke="currentColor"
-        strokeWidth="1.6"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
+  const api = useApi(token);
 
-  const GearIcon = ({ className = "" }) => (
-    <svg
-      className={className}
-      viewBox="0 0 24 24"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-    >
-      <path
-        d="M12 15.25a3.25 3.25 0 1 0 0-6.5 3.25 3.25 0 0 0 0 6.5Z"
-        stroke="currentColor"
-        strokeWidth="1.6"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M19.25 12a7.25 7.25 0 0 1-.074.995l1.662 1.211a.75.75 0 0 1 .173 1.048l-1.75 2.426a.75.75 0 0 1-.992.21l-1.88-.985a7.273 7.273 0 0 1-1.72.999l-.279 2.1a.75.75 0 0 1-.742.646h-3.5a.75.75 0 0 1-.742-.646l-.28-2.1a7.26 7.26 0 0 1-1.719-.998l-1.88.984a.75.75 0 0 1-.992-.21l-1.75-2.426a.75.75 0 0 1 .173-1.048l1.662-1.21A7.251 7.251 0 0 1 4.75 12c0-.336.025-.667.074-.995L3.162 9.794a.75.75 0 0 1-.173-1.048l1.75-2.426a.75.75 0 0 1 .992-.21l1.88.985c.54-.404 1.121-.742 1.72-.999l.28-2.1A.75.75 0 0 1 10.583 3h3.5a.75.75 0 0 1 .742.646l.28 2.1c.598.257 1.18.595 1.719.999l1.88-.985a.75.75 0 0 1 .992.21l1.75 2.426a.75.75 0 0 1-.173 1.048l-1.662 1.21c.05.328.075.659.075.995Z"
-        stroke="currentColor"
-        strokeWidth="1.6"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-
-  const SunIcon = ({ className = "" }) => (
-    <svg
-      className={className}
-      viewBox="0 0 24 24"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-    >
-      <circle cx="12" cy="12" r="4.5" stroke="currentColor" strokeWidth="1.6" />
-      <path
-        d="M12 2v2.5M12 19.5V22M4.5 12H2m20 0h-2.5M18.95 5.05 17.2 6.8M6.8 17.2 5.05 18.95M18.95 18.95 17.2 17.2M6.8 6.8 5.05 5.05"
-        stroke="currentColor"
-        strokeWidth="1.6"
-        strokeLinecap="round"
-      />
-    </svg>
-  );
-
-  const MoonIcon = ({ className = "" }) => (
-    <svg
-      className={className}
-      viewBox="0 0 24 24"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-    >
-      <path
-        d="M20.5 14.25A8.25 8.25 0 0 1 10.274 4.03 7.25 7.25 0 1 0 20.5 14.25Z"
-        stroke="currentColor"
-        strokeWidth="1.6"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-
-  const SparklesIcon = ({ className = "" }) => (
-    <svg
-      className={className}
-      viewBox="0 0 24 24"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-    >
-      <path
-        d="m12 3.5 1.1 2.4 2.4 1.1-2.4 1.1-1.1 2.4-1.1-2.4-2.4-1.1 2.4-1.1L12 3.5ZM6.25 11l.75 1.6 1.6.75-1.6.75-.75 1.6-.75-1.6-1.6-.75 1.6-.75.75-1.6Zm12.5 0 .75 1.6 1.6.75-1.6.75-.75 1.6-.75-1.6-1.6-.75 1.6-.75.75-1.6Z"
-        stroke="currentColor"
-        strokeWidth="1.4"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-
-  const ClockIcon = ({ className = "" }) => (
-    <svg
-      className={className}
-      viewBox="0 0 24 24"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-    >
-      <circle cx="12" cy="12" r="8.5" stroke="currentColor" strokeWidth="1.6" />
-      <path
-        d="M12 7.5V12l2.5 1.5"
-        stroke="currentColor"
-        strokeWidth="1.6"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-
-  const ShieldIcon = ({ className = "" }) => (
-    <svg
-      className={className}
-      viewBox="0 0 24 24"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-    >
-      <path
-        d="M12 21s7-3.5 7-10.5V6.25L12 3 5 6.25V10.5C5 17.5 12 21 12 21Z"
-        stroke="currentColor"
-        strokeWidth="1.6"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <path
-        d="m9.5 12.25 1.75 1.75 3.25-3.5"
-        stroke="currentColor"
-        strokeWidth="1.6"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-
-  const LogoutIcon = ({ className = "" }) => (
-    <svg
-      className={className}
-      viewBox="0 0 24 24"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-    >
-      <path
-        d="M15.5 7V6a2 2 0 0 0-2-2h-7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h7a2 2 0 0 0 2-2v-1m3-4-3-3m3 3-3 3m3-3H9"
-        stroke="currentColor"
-        strokeWidth="1.6"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-
-  const getNavigationFromPath = (path) => {
-    if (path.startsWith("/dashboard/sales") || path.startsWith("/modules/sales"))
-      return { page: "home", module: "sales" };
-    if (path.startsWith("/dashboard/stock") || path.startsWith("/modules/stock"))
-      return { page: "home", module: "stock" };
-    if (path.startsWith("/dashboard/comparatives")) return { page: "home", module: "comparatives" };
-    if (path.startsWith("/dashboard/reports")) return { page: "home", module: "reports" };
-    if (path.startsWith("/dashboard/data") || path.startsWith("/modules/data"))
-      return { page: "home", module: "data" };
-    if (path.startsWith("/integraciones/mercadolibre"))
-      return { page: "meli-user", module: "home" };
-    if (path.startsWith("/admin/integraciones/mercadolibre"))
-      return { page: "meli-admin", module: "home" };
-    if (path.startsWith("/integrations"))
-      return { page: "integrations", module: "home" };
-    if (path.startsWith("/config")) return { page: "config", module: "home" };
-    if (path.startsWith("/planes")) return { page: "planes", module: "home" };
-    if (path.startsWith("/suscripcion/estado"))
-      return { page: "subscription-status", module: "home" };
-    return { page: "home", module: "data" };
+  const refreshAll = async () => {
+    const [clientData, botData, serviceData, reservationData, healthData] =
+      await Promise.all([
+        api.request("/clientes"),
+        api.request("/bots"),
+        api.request("/servicios"),
+        api.request("/reservas"),
+        api.request("/health"),
+      ]);
+    setClients(clientData);
+    setBots(botData);
+    setServices(serviceData);
+    setReservations(reservationData);
+    setHealth(healthData);
   };
-
-  const initialNavigation = getNavigationFromPath(window.location.pathname);
-
-  const [activePage, setActivePage] = useState(initialNavigation.page);
-  const [currentModule, setCurrentModule] = useState(initialNavigation.module);
-
-  useEffect(() => {
-    const storedToken = localStorage.getItem("token");
-    const storedUser = localStorage.getItem("user");
-
-    if (storedToken && storedUser) {
-      if (isTokenExpired(storedToken)) {
-        clearStoredSession();
-        setSessionMessage("Tu sesión expiró. Vuelve a iniciar sesión.");
-      } else {
-        try {
-          const parsed = JSON.parse(storedUser);
-          const payload = decodeTokenPayload(storedToken);
-          const resolvedUser = {
-            username: parsed?.username || payload?.sub || storedUser,
-            role: parsed?.role || payload?.role || "user",
-          };
-          setUser(resolvedUser);
-          setToken(storedToken);
-        } catch {
-          setUser({ username: storedUser, role: "user" });
-          setToken(storedToken);
-        }
-      }
-    }
-
-    const savedTheme = localStorage.getItem("theme");
-    const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-
-    setTheme(savedTheme || (prefersDark ? "dark" : "light"));
-    setLoading(false);
-  }, []);
-
-  useEffect(() => {
-    const handlePopState = () => {
-      const navigation = getNavigationFromPath(window.location.pathname);
-      setActivePage(navigation.page);
-      setCurrentModule(navigation.module);
-      setMenuOpen(false);
-      setModulesOpen(false);
-    };
-
-    window.addEventListener("popstate", handlePopState);
-    return () => window.removeEventListener("popstate", handlePopState);
-  }, []);
-
-  useEffect(() => {
-    const root = document.documentElement;
-    if (theme === "dark") {
-      root.classList.add("dark");
-    } else {
-      root.classList.remove("dark");
-    }
-    localStorage.setItem("theme", theme);
-  }, [theme]);
-
-    useEffect(() => {
-      if (user && activePage === "config" && user.role !== "admin") {
-        setSessionMessage(
-          "Solo los administradores pueden acceder al panel de configuración."
-        );
-        setActivePage("home");
-        setCurrentModule("data");
-      }
-    }, [user, activePage]);
-
-  const handleLogin = (data) => {
-    const authToken = localStorage.getItem("token");
-    if (!authToken) {
-      return;
-    }
-
-    setSessionMessage("");
-    setUser({ username: data.username, role: data.role || "user" });
-    setToken(authToken);
-    refreshSubscription(authToken);
-    setCurrentModule("data");
-  };
-
-  const handleLogout = (eventOrMessage = "") => {
-    const isEvent =
-      eventOrMessage &&
-      typeof eventOrMessage === "object" &&
-      "preventDefault" in eventOrMessage;
-
-    if (isEvent) {
-      eventOrMessage.preventDefault();
-    }
-
-    clearStoredSession();
-
-    const message = typeof eventOrMessage === "string" ? eventOrMessage : "";
-    setSessionMessage(
-      message || "Sesión cerrada. Vuelve a iniciar sesión para continuar."
-    );
-    setUser(null);
-    setToken(null);
-    setSubscription(null);
-    setActivePage("home");
-    setCurrentModule("home");
-    setMenuOpen(false);
-    setModulesOpen(false);
-    window.history.replaceState({ page: "home" }, "", "/");
-    window.scrollTo(0, 0);
-  };
-
-  const handleUnauthorized = (message) => {
-    handleLogout(message || "Tu sesión expiró. Vuelve a iniciar sesión.");
-  };
-
-  const toggleTheme = () => {
-    setTheme((prev) => (prev === "dark" ? "light" : "dark"));
-    setMenuOpen(false);
-    setModulesOpen(false);
-  };
-
-  const navigateTo = (page) => {
-    if (page === "config" && user?.role !== "admin") {
-      setSessionMessage(
-        "Solo los administradores pueden acceder al panel de configuración."
-      );
-      setActivePage("home");
-      setCurrentModule("data");
-      setMenuOpen(false);
-      setModulesOpen(false);
-      return;
-    }
-
-    setActivePage(page);
-    setMenuOpen(false);
-    setModulesOpen(false);
-
-    if (page === "config") {
-      window.history.pushState({ page }, "", "/config");
-      setCurrentModule("home");
-    } else if (page === "integrations") {
-      window.history.pushState({ page }, "", "/integrations");
-      setCurrentModule("home");
-    } else if (page === "planes") {
-      window.history.pushState({ page }, "", "/planes");
-      setCurrentModule("home");
-    } else if (page === "subscription-status") {
-      window.history.pushState({ page }, "", "/suscripcion/estado");
-      setCurrentModule("home");
-    } else {
-      window.history.pushState({ page }, "", "/");
-      setCurrentModule("data");
-    }
-  };
-
-  const goToMeliUser = () => {
-    setActivePage("meli-user");
-    setMenuOpen(false);
-    window.history.pushState({ page: "meli-user" }, "", "/integraciones/mercadolibre");
-    window.scrollTo(0, 0);
-  };
-
-  const goToMeliAdmin = () => {
-    if (user?.role !== "admin") {
-      setSessionMessage("Solo el administrador puede gestionar apps de Mercado Libre.");
-      return;
-    }
-    setActivePage("meli-admin");
-    setMenuOpen(false);
-    window.history.pushState(
-      { page: "meli-admin" },
-      "",
-      "/admin/integraciones/mercadolibre"
-    );
-    window.scrollTo(0, 0);
-  };
-
-  const scrollToModuleContent = () => {
-    if (!moduleContentRef.current) return;
-
-    const offset = 100;
-    const targetPosition =
-      moduleContentRef.current.getBoundingClientRect().top + window.scrollY - offset;
-
-    window.scrollTo({ top: targetPosition, behavior: "smooth" });
-  };
-
-  const navigateToModule = (moduleId) => {
-    const moduleRoutes = {
-      sales: "/dashboard/sales",
-      stock: "/dashboard/stock",
-      comparatives: "/dashboard/comparatives",
-      reports: "/dashboard/reports",
-      data: "/dashboard/data",
-    };
-
-    setActivePage("home");
-    setCurrentModule(moduleId);
-    setMenuOpen(false);
-    setModulesOpen(false);
-    window.history.pushState({ module: moduleId }, "", moduleRoutes[moduleId] || "/");
-    scrollToModuleContent();
-  };
-
-  useEffect(() => {
-    if (!user) {
-      setActivePage("home");
-      setCurrentModule("home");
-      setMenuOpen(false);
-      window.history.replaceState({ page: "home" }, "", "/");
-    }
-  }, [user]);
-
-  const refreshSubscription = async (overrideToken) => {
-    const authToken = overrideToken || token;
-    if (!authToken) return;
-
-    try {
-      const res = await fetch(`${API_URL}/subscriptions/me`, {
-        headers: { Authorization: `Bearer ${authToken}` },
-      });
-      if (!res.ok) return;
-      const data = await res.json();
-      setSubscription(data);
-    } catch (err) {
-      console.error("No se pudo actualizar la suscripción", err);
-    }
-  };
-
-  useEffect(() => {
-    if (currentModule === "home") return;
-
-    const timeoutId = setTimeout(scrollToModuleContent, 50);
-    return () => clearTimeout(timeoutId);
-  }, [currentModule]);
 
   useEffect(() => {
     if (token) {
-      refreshSubscription(token);
+      refreshAll().catch(() => {});
     }
   }, [token]);
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen bg-gray-100 text-gray-700">
-        <p>Cargando aplicación...</p>
-      </div>
-    );
-  }
-
-  const renderModuleContent = () => {
-    switch (currentModule) {
-      case "sales":
-        return (
-          <SalesView
-            onUnauthorized={handleUnauthorized}
-            onGoToData={() => navigateToModule("data")}
-          />
-        );
-      case "stock":
-        return <StockView onUnauthorized={handleUnauthorized} />;
-      case "comparatives":
-        return <ComparativesView onUnauthorized={handleUnauthorized} />;
-      case "reports":
-        return (
-          <PlanGuard
-            user={user}
-            subscription={subscription}
-            minPlan="pro"
-            onUpgrade={() => navigateTo("planes")}
-          >
-            <ReportBuilderView onUnauthorized={handleUnauthorized} />
-          </PlanGuard>
-        );
-      case "data":
-        return (
-          <PlanGuard
-            user={user}
-            subscription={subscription}
-            minPlan="pro"
-            onUpgrade={() => navigateTo("planes")}
-          >
-            <DataIntegrationsView
-              onUnauthorized={handleUnauthorized}
-              onOpenMercadoLibre={goToMeliUser}
-            />
-          </PlanGuard>
-        );
-      default:
-        return null;
-    }
+  const handleLogin = (newToken, user) => {
+    localStorage.setItem("token", newToken);
+    localStorage.setItem("username", user);
+    setToken(newToken);
+    setUsername(user);
   };
 
-  const appShellClasses = !user
-    ? "min-h-screen bg-gradient-to-br from-slate-950 via-blue-950 to-slate-900 flex items-center justify-center font-sans px-4 py-10 text-white"
-    : "min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col font-sans text-gray-900 dark:text-slate-100 transition-colors duration-300";
+  const handleLogout = () => {
+    localStorage.removeItem("token");
+    localStorage.removeItem("username");
+    setToken(null);
+    setUsername(null);
+  };
+
+  if (!token) {
+    return <Login onLogin={handleLogin} />;
+  }
+
+  const submitClient = async (event) => {
+    event.preventDefault();
+    if (editingClientId) {
+      await api.request(`/clientes/${editingClientId}`, {
+        method: "PUT",
+        body: JSON.stringify(clientForm),
+      });
+    } else {
+      await api.request("/clientes", {
+        method: "POST",
+        body: JSON.stringify(clientForm),
+      });
+    }
+    setClientForm(defaultClient);
+    setEditingClientId(null);
+    refreshAll();
+  };
+
+  const submitBot = async (event) => {
+    event.preventDefault();
+    const payload = {
+      ...botForm,
+      client_id: Number(botForm.client_id),
+      openai_temperature: Number(botForm.openai_temperature),
+      is_active: Boolean(botForm.is_active),
+    };
+    if (editingBotId) {
+      await api.request(`/bots/${editingBotId}`, {
+        method: "PUT",
+        body: JSON.stringify(payload),
+      });
+    } else {
+      await api.request("/bots", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+    }
+    setBotForm(defaultBot);
+    setEditingBotId(null);
+    refreshAll();
+  };
+
+  const submitService = async (event) => {
+    event.preventDefault();
+    const payload = {
+      ...serviceForm,
+      bot_id: Number(serviceForm.bot_id),
+      duration_minutes: Number(serviceForm.duration_minutes),
+      is_active: Boolean(serviceForm.is_active),
+    };
+    if (editingServiceId) {
+      await api.request(`/servicios/${editingServiceId}`, {
+        method: "PUT",
+        body: JSON.stringify(payload),
+      });
+    } else {
+      await api.request("/servicios", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+    }
+    setServiceForm(defaultService);
+    setEditingServiceId(null);
+    refreshAll();
+  };
+
+  const startEditClient = (client) => {
+    setEditingClientId(client.id);
+    setClientForm({
+      name: client.name,
+      contact_email: client.contact_email || "",
+      timezone: client.timezone,
+      is_active: client.is_active,
+    });
+  };
+
+  const startEditBot = (bot) => {
+    setEditingBotId(bot.id);
+    setBotForm({
+      client_id: bot.client_id,
+      name: bot.name,
+      system_prompt: bot.system_prompt,
+      slack_channel_id: bot.slack_channel_id,
+      slack_team_id: bot.slack_team_id || "",
+      slack_bot_user_id: bot.slack_bot_user_id || "",
+      is_active: bot.is_active,
+      openai_model: bot.openai_model,
+      openai_temperature: bot.openai_temperature,
+      google_calendar_id: bot.google_calendar_id,
+    });
+  };
+
+  const startEditService = (service) => {
+    setEditingServiceId(service.id);
+    setServiceForm({
+      bot_id: service.bot_id,
+      name: service.name,
+      duration_minutes: service.duration_minutes,
+      is_active: service.is_active,
+    });
+  };
+
+  const deleteItem = async (path) => {
+    await api.request(path, { method: "DELETE" });
+    refreshAll();
+  };
 
   return (
-    <div className={appShellClasses}>
-      {!user ? (
-        <Login onLogin={handleLogin} />
-      ) : (
-        <>
-          <header className="fixed top-0 left-0 right-0 z-40 w-full flex justify-center px-2 sm:px-0">
-            <div className="w-full max-w-6xl px-3">
-              <div className="relative overflow-hidden lg:overflow-visible rounded-2xl border border-white/70 dark:border-slate-800 bg-white/70 dark:bg-slate-900/70 backdrop-blur-2xl shadow-[0_20px_70px_-35px_rgba(15,23,42,0.6)]">
-                <div
-                  className="pointer-events-none absolute inset-0 bg-gradient-to-r from-blue-50/60 via-white/0 to-indigo-100/40 dark:from-slate-800/50 dark:via-slate-950/20 dark:to-indigo-900/50"
-                  aria-hidden="true"
-                />
-                <div className="relative flex items-center gap-3 sm:gap-4 px-4 sm:px-6 py-3">
-                  <div className="flex items-center gap-3">
-                    <div className="h-11 w-11 rounded-xl bg-gradient-to-br from-blue-500 via-indigo-500 to-cyan-400 text-white flex items-center justify-center shadow-lg shadow-blue-500/20 ring-4 ring-white/60 dark:ring-slate-800/60">
-                      <span className="text-lg" aria-hidden="true">
-                        ✨
-                      </span>
-                    </div>
-                    <div className="leading-tight">
-                      <p className="text-lg font-semibold text-slate-900 dark:text-white tracking-tight">
-                        InformeBF
-                      </p>
-                      <p className="text-xs text-slate-500 dark:text-slate-300">Insights con IA</p>
-                    </div>
-                  </div>
+    <div className="app-shell">
+      <aside>
+        <h1>Agenda SaaS</h1>
+        <nav>
+          {[
+            ["clientes", "Clientes"],
+            ["bots", "Bots"],
+            ["servicios", "Servicios"],
+            ["reservas", "Reservas"],
+            ["estado", "Estado"],
+          ].map(([key, label]) => (
+            <button
+              key={key}
+              className={activeTab === key ? "active" : ""}
+              onClick={() => setActiveTab(key)}
+            >
+              {label}
+            </button>
+          ))}
+        </nav>
+        <div className="sidebar-footer">
+          <span>{username}</span>
+          <button className="ghost" onClick={handleLogout}>
+            Cerrar sesión
+          </button>
+        </div>
+      </aside>
 
-                  <nav className="hidden lg:flex items-center gap-1 ml-4">
-                    <button
-                      onClick={() => navigateTo("home")}
-                      className={`group flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold transition-all duration-200 ${
-                        activePage === "home"
-                          ? "bg-blue-600 text-white shadow-lg shadow-blue-500/30"
-                          : "text-slate-700 dark:text-slate-100 hover:bg-slate-100/70 dark:hover:bg-slate-800/70"
-                      }`}
-                    >
-                      <HomeIcon className="h-4 w-4 transition-transform duration-200 group-hover:-translate-y-0.5" />
-                      Inicio
-                    </button>
-
-                    <button
-                      onClick={() => navigateTo("planes")}
-                      className={`group flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold transition-all duration-200 ${
-                        activePage === "planes"
-                          ? "bg-indigo-600 text-white shadow-lg shadow-indigo-500/30"
-                          : "text-slate-700 dark:text-slate-100 hover:bg-slate-100/70 dark:hover:bg-slate-800/70"
-                      }`}
-                    >
-                      <ShieldIcon className="h-4 w-4 transition-transform duration-200 group-hover:-translate-y-0.5" />
-                      Planes
-                    </button>
-
-                    <div className="relative">
-                      <button
-                        onClick={() => setModulesOpen((prev) => !prev)}
-                        className={`group flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold transition-all duration-200 ${
-                          modulesOpen
-                            ? "bg-slate-900 text-white shadow-lg shadow-indigo-500/20"
-                            : "text-slate-700 dark:text-slate-100 hover:bg-slate-100/70 dark:hover:bg-slate-800/70"
-                        }`}
-                        aria-expanded={modulesOpen}
-                        aria-haspopup="menu"
-                      >
-                        <BoxIcon className="h-4 w-4 transition-transform duration-200 group-hover:-translate-y-0.5" />
-                        Módulos
-                        <span className={`transition-transform duration-200 ${modulesOpen ? "rotate-180" : "rotate-0"}`}>
-                          ▾
-                        </span>
-                      </button>
-
-                      {modulesOpen && (
-                        <div className="absolute left-0 mt-2 w-64 rounded-2xl border border-white/70 dark:border-slate-800 bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl shadow-xl p-2 space-y-1">
-                          <button
-                            onClick={() => navigateToModule("sales")}
-                            className={`group flex w-full items-start justify-between gap-2 rounded-xl px-3 py-2 text-sm text-left transition-all duration-200 hover:-translate-y-0.5 ${
-                              currentModule === "sales"
-                                ? "bg-blue-600 text-white shadow-lg shadow-blue-500/30"
-                                : "text-slate-700 dark:text-slate-100 hover:bg-slate-100/80 dark:hover:bg-slate-800/70"
-                            }`}
-                          >
-                            <div className="flex flex-col gap-0.5">
-                              <span className="font-semibold">Ventas</span>
-                              <span className="text-xs text-slate-500 dark:text-slate-300">KPIs y vistas manuales</span>
-                            </div>
-                            <span className="rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-200 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide">
-                              Recomendado
-                            </span>
-                          </button>
-                          <button
-                            onClick={() => navigateToModule("stock")}
-                            className={`group flex w-full items-start gap-2 rounded-xl px-3 py-2 text-sm text-left transition-all duration-200 hover:-translate-y-0.5 ${
-                              currentModule === "stock"
-                                ? "bg-blue-600 text-white shadow-lg shadow-blue-500/30"
-                                : "text-slate-700 dark:text-slate-100 hover:bg-slate-100/80 dark:hover:bg-slate-800/70"
-                            }`}
-                          >
-                            <div className="flex flex-col gap-0.5">
-                              <span className="font-semibold">Stock</span>
-                              <span className="text-xs text-slate-500 dark:text-slate-300">Rotación y riesgo</span>
-                            </div>
-                          </button>
-                          <button
-                            onClick={() => navigateToModule("comparatives")}
-                            className={`group flex w-full items-start gap-2 rounded-xl px-3 py-2 text-sm text-left transition-all duration-200 hover:-translate-y-0.5 ${
-                              currentModule === "comparatives"
-                                ? "bg-blue-600 text-white shadow-lg shadow-blue-500/30"
-                                : "text-slate-700 dark:text-slate-100 hover:bg-slate-100/80 dark:hover:bg-slate-800/70"
-                            }`}
-                          >
-                            <div className="flex flex-col gap-0.5">
-                              <span className="font-semibold">Comparativas</span>
-                              <span className="text-xs text-slate-500 dark:text-slate-300">Mes vs mes y períodos</span>
-                            </div>
-                          </button>
-                          <button
-                            onClick={() => navigateToModule("reports")}
-                            className={`group flex w-full items-start gap-2 rounded-xl px-3 py-2 text-sm text-left transition-all duration-200 hover:-translate-y-0.5 ${
-                              currentModule === "reports"
-                                ? "bg-blue-600 text-white shadow-lg shadow-blue-500/30"
-                                : "text-slate-700 dark:text-slate-100 hover:bg-slate-100/80 dark:hover:bg-slate-800/70"
-                            }`}
-                          >
-                            <div className="flex flex-col gap-0.5">
-                              <span className="font-semibold">Report Builder</span>
-                              <span className="text-xs text-slate-500 dark:text-slate-300">Métrica + dimensión</span>
-                            </div>
-                          </button>
-                          <button
-                            onClick={() => navigateToModule("data")}
-                            className={`group flex w-full items-start gap-2 rounded-xl px-3 py-2 text-sm text-left transition-all duration-200 hover:-translate-y-0.5 ${
-                              currentModule === "data"
-                                ? "bg-blue-600 text-white shadow-lg shadow-blue-500/30"
-                                : "text-slate-700 dark:text-slate-100 hover:bg-slate-100/80 dark:hover:bg-slate-800/70"
-                            }`}
-                          >
-                            <div className="flex flex-col gap-0.5">
-                              <span className="font-semibold">Datos / Integraciones</span>
-                              <span className="text-xs text-slate-500 dark:text-slate-300">Mercado Libre y archivos</span>
-                            </div>
-                          </button>
-                        </div>
-                      )}
-                    </div>
-
-                    <button
-                      onClick={() => navigateTo("integrations")}
-                      className={`group flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold transition-all duration-200 ${
-                        activePage === "integrations"
-                          ? "bg-emerald-600 text-white shadow-lg shadow-emerald-500/30"
-                          : "text-slate-700 dark:text-slate-100 hover:bg-slate-100/70 dark:hover:bg-slate-800/70"
-                      }`}
-                    >
-                      <SparklesIcon className="h-4 w-4 transition-transform duration-200 group-hover:-translate-y-0.5" />
-                      Integraciones
-                    </button>
-
-                    {user?.role === "admin" && (
-                      <button
-                        onClick={() => navigateTo("config")}
-                        className={`group flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold transition-all duration-200 ${
-                          activePage === "config"
-                            ? "bg-slate-900 text-white shadow-lg shadow-slate-900/30"
-                            : "text-slate-700 dark:text-slate-100 hover:bg-slate-100/70 dark:hover:bg-slate-800/70"
-                        }`}
-                      >
-                        <GearIcon className="h-4 w-4 transition-transform duration-200 group-hover:-translate-y-0.5" />
-                        Configuración
-                      </button>
-                    )}
-                  </nav>
-
-                  <div className="hidden sm:flex items-center gap-3 sm:ml-auto">
-                    <div className="text-right leading-tight">
-                      <p className="text-sm font-semibold text-slate-800 dark:text-slate-50">
-                        Hola, {user.username} 👋
-                      </p>
-                      <p className="text-xs text-slate-500 dark:text-slate-300">Sesión activa y segura</p>
-                    </div>
-
-                    <button
-                      onClick={toggleTheme}
-                      aria-pressed={theme === "dark"}
-                      className="relative inline-flex items-center gap-2 rounded-full border border-white/70 dark:border-slate-700 bg-slate-100/80 dark:bg-slate-800/70 px-2 py-1 text-xs font-semibold text-slate-700 dark:text-slate-100 shadow-inner shadow-white/60 dark:shadow-none transition-all duration-300 hover:shadow-md hover:-translate-y-0.5"
-                    >
-                      <span
-                        className={`flex items-center justify-center h-6 w-6 rounded-full bg-white/90 dark:bg-slate-700 text-slate-800 dark:text-amber-100 shadow-sm transition-transform duration-300 ${
-                          theme === "dark" ? "translate-x-8" : "translate-x-0"
-                        }`}
-                      >
-                        {theme === "dark" ? (
-                          <MoonIcon className="h-3.5 w-3.5" />
-                        ) : (
-                          <SunIcon className="h-3.5 w-3.5" />
-                        )}
-                      </span>
-                      <span className="px-2">{theme === "dark" ? "Modo oscuro" : "Modo claro"}</span>
-                    </button>
-
-                    <button
-                      onClick={handleLogout}
-                      className="group inline-flex items-center gap-2 rounded-xl border border-slate-200 dark:border-slate-700 px-3 py-2 text-sm font-semibold text-slate-700 dark:text-slate-100 bg-white/70 dark:bg-slate-800/70 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md"
-                    >
-                      <LogoutIcon className="h-4 w-4 opacity-80 transition-transform duration-200 group-hover:-translate-y-0.5" />
-                      Cerrar sesión
-                    </button>
-                  </div>
-
-                  <button
-                    className="inline-flex items-center justify-center rounded-xl border border-white/70 dark:border-slate-700 bg-white/70 dark:bg-slate-800/70 text-slate-700 dark:text-slate-100 p-2 shadow-sm hover:shadow-md transition lg:hidden ml-auto"
-                    onClick={() => {
-                      setMenuOpen((prev) => !prev);
-                      setModulesOpen(false);
-                    }}
-                    aria-expanded={menuOpen}
-                    aria-label="Abrir menú"
-                  >
-                    <span className="text-lg" aria-hidden="true">
-                      ☰
-                    </span>
-                  </button>
-                </div>
-              </div>
-            </div>
-          </header>
-
-          {menuOpen && (
-            <div className="fixed inset-0 z-30 lg:hidden">
-              <div
-                className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
-                onClick={() => setMenuOpen(false)}
-              />
-              <div className="absolute right-4 top-4 w-72 rounded-2xl border border-white/70 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl shadow-2xl p-4 space-y-3 transform transition duration-200">
-                <div className="flex items-center gap-3 pb-2 border-b border-slate-200/70 dark:border-slate-800">
-                  <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-blue-500 via-indigo-500 to-cyan-400 text-white flex items-center justify-center shadow-lg shadow-blue-500/25">
-                    <span aria-hidden="true">✨</span>
-                  </div>
-                  <div>
-                    <p className="text-sm font-semibold text-slate-900 dark:text-white">InformeBF</p>
-                    <p className="text-xs text-slate-500 dark:text-slate-300">AI Data Visualizer</p>
-                  </div>
-                </div>
-
-                <button
-                  onClick={() => navigateTo("home")}
-                  className={`flex items-center gap-2 w-full rounded-xl px-3 py-2 text-sm font-semibold transition-all duration-200 hover:-translate-y-0.5 ${
-                    activePage === "home"
-                      ? "bg-blue-600 text-white shadow-lg shadow-blue-500/30"
-                      : "text-slate-800 dark:text-slate-100 bg-slate-100/80 dark:bg-slate-800/70"
-                  }`}
-                >
-                  <HomeIcon className="h-4 w-4" />
-                  Inicio
-                </button>
-
-                <div className="space-y-1">
-                  <p className="text-[11px] uppercase tracking-wide text-slate-400 dark:text-slate-500">Módulos</p>
-                  <button
-                    onClick={() => navigateToModule("sales")}
-                    className={`flex items-center gap-2 w-full rounded-xl px-3 py-2 text-sm font-semibold transition-all duration-200 hover:-translate-y-0.5 ${
-                      currentModule === "sales"
-                        ? "bg-blue-600 text-white shadow-lg shadow-blue-500/30"
-                        : "text-slate-800 dark:text-slate-100 bg-slate-100/80 dark:bg-slate-800/70"
-                    }`}
-                  >
-                    <span className="flex-1 text-left">Ventas</span>
-                    <span className="rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-200 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide">
-                      Recomendado
-                    </span>
-                  </button>
-                  <button
-                    onClick={() => navigateToModule("stock")}
-                    className={`flex items-center gap-2 w-full rounded-xl px-3 py-2 text-sm font-semibold transition-all duration-200 hover:-translate-y-0.5 ${
-                      currentModule === "stock"
-                        ? "bg-blue-600 text-white shadow-lg shadow-blue-500/30"
-                        : "text-slate-800 dark:text-slate-100 bg-slate-100/80 dark:bg-slate-800/70"
-                    }`}
-                  >
-                    <span className="flex-1 text-left">Stock</span>
-                  </button>
-                  <button
-                    onClick={() => navigateToModule("comparatives")}
-                    className={`flex items-center gap-2 w-full rounded-xl px-3 py-2 text-sm font-semibold transition-all duration-200 hover:-translate-y-0.5 ${
-                      currentModule === "comparatives"
-                        ? "bg-blue-600 text-white shadow-lg shadow-blue-500/30"
-                        : "text-slate-800 dark:text-slate-100 bg-slate-100/80 dark:bg-slate-800/70"
-                    }`}
-                  >
-                    <span className="flex-1 text-left">Comparativas</span>
-                  </button>
-                  <button
-                    onClick={() => navigateToModule("reports")}
-                    className={`flex items-center gap-2 w-full rounded-xl px-3 py-2 text-sm font-semibold transition-all duration-200 hover:-translate-y-0.5 ${
-                      currentModule === "reports"
-                        ? "bg-blue-600 text-white shadow-lg shadow-blue-500/30"
-                        : "text-slate-800 dark:text-slate-100 bg-slate-100/80 dark:bg-slate-800/70"
-                    }`}
-                  >
-                    <span className="flex-1 text-left">Report Builder</span>
-                  </button>
-                  <button
-                    onClick={() => navigateToModule("data")}
-                    className={`flex items-center gap-2 w-full rounded-xl px-3 py-2 text-sm font-semibold transition-all duration-200 hover:-translate-y-0.5 ${
-                      currentModule === "data"
-                        ? "bg-blue-600 text-white shadow-lg shadow-blue-500/30"
-                        : "text-slate-800 dark:text-slate-100 bg-slate-100/80 dark:bg-slate-800/70"
-                    }`}
-                  >
-                    <span className="flex-1 text-left">Datos / Integraciones</span>
-                  </button>
-                </div>
-
-                <button
-                  onClick={() => navigateTo("integrations")}
-                  className={`flex items-center gap-2 w-full rounded-xl px-3 py-2 text-sm font-semibold transition-all duration-200 hover:-translate-y-0.5 ${
-                    activePage === "integrations"
-                      ? "bg-emerald-600 text-white shadow-lg shadow-emerald-500/30"
-                      : "text-slate-800 dark:text-slate-100 bg-slate-100/80 dark:bg-slate-800/70"
-                  }`}
-                >
-                  <SparklesIcon className="h-4 w-4" />
-                  Integraciones
-                </button>
-
-                {user?.role === "admin" && (
-                  <button
-                    onClick={() => navigateTo("config")}
-                    className={`flex items-center gap-2 w-full rounded-xl px-3 py-2 text-sm font-semibold transition-all duration-200 hover:-translate-y-0.5 ${
-                      activePage === "config"
-                        ? "bg-slate-900 text-white shadow-lg shadow-slate-900/30"
-                        : "text-slate-800 dark:text-slate-100 bg-slate-100/80 dark:bg-slate-800/70"
-                    }`}
-                  >
-                    <GearIcon className="h-4 w-4" />
-                    Configuración
-                  </button>
-                )}
-
-                <button
-                  onClick={toggleTheme}
-                  aria-pressed={theme === "dark"}
-                  className="flex items-center justify-between w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-100/80 dark:bg-slate-800/70 px-3 py-2 text-sm font-semibold text-slate-800 dark:text-slate-100 transition-all duration-200 hover:-translate-y-0.5"
-                >
-                  <span className="flex items-center gap-2">
-                    {theme === "dark" ? <MoonIcon className="h-4 w-4" /> : <SunIcon className="h-4 w-4" />}
-                    {theme === "dark" ? "Modo oscuro" : "Modo claro"}
-                  </span>
-                  <span className="text-xs text-slate-500 dark:text-slate-300">
-                    {theme === "dark" ? "Activo" : "Desactivado"}
-                  </span>
-                </button>
-
-                <button
-                  onClick={() => {
-                    setMenuOpen(false);
-                    handleLogout();
-                  }}
-                  className="group flex items-center gap-2 w-full rounded-xl border border-slate-200 dark:border-slate-700 px-3 py-2 text-sm font-semibold text-slate-700 dark:text-slate-100 bg-white/70 dark:bg-slate-800/70 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md"
-                >
-                  <LogoutIcon className="h-4 w-4 opacity-80 transition-transform duration-200 group-hover:-translate-y-0.5" />
-                  Cerrar sesión
-                </button>
-              </div>
-            </div>
-          )}
-
-          <MainLayout>
-            {subscription && subscription.subscription_status !== "active" && (
-              <div className="mb-4 rounded-xl border border-amber-300 bg-amber-50 text-amber-900 dark:bg-amber-900/30 dark:border-amber-700 dark:text-amber-50 px-4 py-3">
-                Tu suscripción no está activa. Activa o mejora tu plan en la sección de planes.
-              </div>
-            )}
-            <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-6">
-              <div className="space-y-3">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="inline-flex items-center gap-2 rounded-full border border-blue-200/80 dark:border-blue-900/50 bg-blue-50/70 dark:bg-blue-900/40 px-3 py-1 text-xs font-semibold text-blue-700 dark:text-blue-100 shadow-sm">
-                    <SparklesIcon className="h-4 w-4" /> Nueva experiencia
-                  </span>
-                  <span className="inline-flex items-center gap-2 rounded-full border border-emerald-200/80 dark:border-emerald-900/50 bg-emerald-50/70 dark:bg-emerald-900/30 px-3 py-1 text-xs font-semibold text-emerald-700 dark:text-emerald-100 shadow-sm">
-                    <ClockIcon className="h-4 w-4" /> Listo en minutos
-                  </span>
-                  {subscription && (
-                    <span className="inline-flex items-center gap-2 rounded-full border border-indigo-200/80 dark:border-indigo-900/50 bg-indigo-50/70 dark:bg-indigo-900/40 px-3 py-1 text-xs font-semibold text-indigo-700 dark:text-indigo-100 shadow-sm">
-                      <ShieldIcon className="h-4 w-4" />
-                      Plan: {subscription.current_plan?.name || "Sin plan"} ({subscription.subscription_status})
-                    </span>
-                  )}
-                </div>
-              </div>
-            </header>
-
-            <main className="space-y-10">
-              {activePage === "config" && user?.role === "admin" ? (
-                <ConfigurationPage
-                  user={user}
-                  onUnauthorized={handleUnauthorized}
-                />
-              ) : activePage === "planes" ? (
-                <PlansPage
-                  token={token}
-                  onSubscriptionRefresh={() => refreshSubscription(token)}
-                />
-              ) : activePage === "subscription-status" ? (
-                <SubscriptionStatus token={token} />
-              ) : activePage === "integrations" ? (
-                <div className="space-y-6">
-                  <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/70 shadow-sm p-5 space-y-3">
-                    <h3 className="text-lg font-semibold text-slate-900 dark:text-white">
-                      Integraciones disponibles
-                    </h3>
-                    <p className="text-sm text-slate-600 dark:text-slate-300">
-                      Conecta Mercado Libre en modo usuario u administra apps oficiales si eres administrador.
-                    </p>
-                    <div className="flex flex-wrap items-center gap-3">
-                      <button
-                        onClick={goToMeliUser}
-                        className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 text-white px-5 py-2.5 text-sm font-semibold shadow hover:-translate-y-0.5 transition"
-                      >
-                        Ir a integración de usuario
-                      </button>
-                      <button
-                        onClick={goToMeliAdmin}
-                        className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-300 dark:border-slate-700 px-5 py-2.5 text-sm font-semibold text-slate-800 dark:text-slate-100"
-                      >
-                        Panel admin Mercado Libre
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              ) : activePage === "meli-user" ? (
-                <div className="space-y-6">
-                  <MercadoLibreDashboard onUnauthorized={handleUnauthorized} />
-                  <MercadoLibreIntegration onUnauthorized={handleUnauthorized} />
-                </div>
-              ) : activePage === "meli-admin" ? (
-                <AdminMercadoLibreApps onUnauthorized={handleUnauthorized} />
-              ) : (
-                <>
-                  {currentModule !== "home" && (
-                    <div ref={moduleContentRef} className="space-y-8">
-                      {renderModuleContent()}
-                    </div>
-                  )}
-
-                  <HomeView
-                    onUnauthorized={handleUnauthorized}
-                    onNavigate={(module) => {
-                      if (module) {
-                        navigateToModule(module);
-                        return;
-                      }
-                      navigateTo("home");
-                    }}
+      <main>
+        {activeTab === "clientes" && (
+          <section>
+            <SectionHeader
+              title="Clientes"
+              description="Gestiona los tenants del SaaS."
+            />
+            <div className="grid">
+              <form onSubmit={submitClient} className="card">
+                <h3>{editingClientId ? "Editar cliente" : "Nuevo cliente"}</h3>
+                <label>
+                  Nombre
+                  <input
+                    value={clientForm.name}
+                    onChange={(event) =>
+                      setClientForm({ ...clientForm, name: event.target.value })
+                    }
+                    required
                   />
-                </>
-              )}
-            </main>
+                </label>
+                <label>
+                  Email de contacto
+                  <input
+                    value={clientForm.contact_email}
+                    onChange={(event) =>
+                      setClientForm({
+                        ...clientForm,
+                        contact_email: event.target.value,
+                      })
+                    }
+                  />
+                </label>
+                <label>
+                  Zona horaria
+                  <input
+                    value={clientForm.timezone}
+                    onChange={(event) =>
+                      setClientForm({
+                        ...clientForm,
+                        timezone: event.target.value,
+                      })
+                    }
+                  />
+                </label>
+                <label className="checkbox">
+                  <input
+                    type="checkbox"
+                    checked={clientForm.is_active}
+                    onChange={(event) =>
+                      setClientForm({
+                        ...clientForm,
+                        is_active: event.target.checked,
+                      })
+                    }
+                  />
+                  Cliente activo
+                </label>
+                <button className="primary" type="submit">
+                  {editingClientId ? "Guardar cambios" : "Crear cliente"}
+                </button>
+              </form>
 
-            <footer className="mt-16 border-t border-gray-200 dark:border-slate-800 px-6 py-8 text-center text-sm text-gray-500 dark:text-slate-400">
-              <div className="flex flex-col items-center gap-3">
-
-                <span className="font-semibold text-gray-700 dark:text-slate-200 tracking-tight">
-                  InformeBF • Plataforma de Análisis Inteligente
-                </span>
-
-                <p className="max-w-md text-xs text-gray-500 dark:text-slate-500">
-                  Transformando datos en decisiones claras. Tecnología creada para PYMEs, equipos modernos
-                  y mentes curiosas.
-                </p>
-
-                <div className="flex items-center gap-4 mt-2 text-xs">
-                  <a className="hover:text-primary-500 transition-colors" href="/terminos">
-                    Términos & Condiciones
-                  </a>
-                  <span>•</span>
-                  <a className="hover:text-primary-500 transition-colors" href="/privacidad">
-                    Política de Privacidad
-                  </a>
-                  <span>•</span>
-                  <a className="hover:text-primary-500 transition-colors" href="/soporte">
-                    Soporte
-                  </a>
-                </div>
-
-                <div className="mt-4 text-xs text-gray-400 dark:text-slate-600">
-                  © {new Date().getFullYear()} InformeBF — Datos que hablan, decisiones que avanzan.
-                </div>
-
+              <div className="card">
+                <h3>Lista de clientes</h3>
+                <ul className="list">
+                  {clients.map((client) => (
+                    <li key={client.id}>
+                      <div>
+                        <strong>{client.name}</strong>
+                        <span>{client.contact_email || "Sin email"}</span>
+                        <span>{client.timezone}</span>
+                      </div>
+                      <div className="actions">
+                        <button onClick={() => startEditClient(client)}>
+                          Editar
+                        </button>
+                        <button
+                          className="danger"
+                          onClick={() => deleteItem(`/clientes/${client.id}`)}
+                        >
+                          Eliminar
+                        </button>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
               </div>
-            </footer>
+            </div>
+          </section>
+        )}
 
-          </MainLayout>
-        </>
-      )}
+        {activeTab === "bots" && (
+          <section>
+            <SectionHeader
+              title="Bots"
+              description="Configura prompts, Slack y Google Calendar."
+            />
+            <div className="grid">
+              <form onSubmit={submitBot} className="card">
+                <h3>{editingBotId ? "Editar bot" : "Nuevo bot"}</h3>
+                <label>
+                  Cliente
+                  <select
+                    value={botForm.client_id}
+                    onChange={(event) =>
+                      setBotForm({
+                        ...botForm,
+                        client_id: event.target.value,
+                      })
+                    }
+                    required
+                  >
+                    <option value="">Selecciona un cliente</option>
+                    {clients.map((client) => (
+                      <option key={client.id} value={client.id}>
+                        {client.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  Nombre del bot
+                  <input
+                    value={botForm.name}
+                    onChange={(event) =>
+                      setBotForm({ ...botForm, name: event.target.value })
+                    }
+                    required
+                  />
+                </label>
+                <label>
+                  Prompt del sistema
+                  <textarea
+                    rows={4}
+                    value={botForm.system_prompt}
+                    onChange={(event) =>
+                      setBotForm({
+                        ...botForm,
+                        system_prompt: event.target.value,
+                      })
+                    }
+                  />
+                </label>
+                <label>
+                  Slack Channel ID
+                  <input
+                    value={botForm.slack_channel_id}
+                    onChange={(event) =>
+                      setBotForm({
+                        ...botForm,
+                        slack_channel_id: event.target.value,
+                      })
+                    }
+                    required
+                  />
+                </label>
+                <label>
+                  Slack Team ID
+                  <input
+                    value={botForm.slack_team_id}
+                    onChange={(event) =>
+                      setBotForm({
+                        ...botForm,
+                        slack_team_id: event.target.value,
+                      })
+                    }
+                  />
+                </label>
+                <label>
+                  Slack Bot User ID
+                  <input
+                    value={botForm.slack_bot_user_id}
+                    onChange={(event) =>
+                      setBotForm({
+                        ...botForm,
+                        slack_bot_user_id: event.target.value,
+                      })
+                    }
+                  />
+                </label>
+                <label>
+                  Google Calendar ID
+                  <input
+                    value={botForm.google_calendar_id}
+                    onChange={(event) =>
+                      setBotForm({
+                        ...botForm,
+                        google_calendar_id: event.target.value,
+                      })
+                    }
+                    required
+                  />
+                </label>
+                <label>
+                  Modelo OpenAI
+                  <input
+                    value={botForm.openai_model}
+                    onChange={(event) =>
+                      setBotForm({
+                        ...botForm,
+                        openai_model: event.target.value,
+                      })
+                    }
+                  />
+                </label>
+                <label>
+                  Temperatura OpenAI
+                  <input
+                    type="number"
+                    step="0.1"
+                    min="0"
+                    max="1"
+                    value={botForm.openai_temperature}
+                    onChange={(event) =>
+                      setBotForm({
+                        ...botForm,
+                        openai_temperature: event.target.value,
+                      })
+                    }
+                  />
+                </label>
+                <label className="checkbox">
+                  <input
+                    type="checkbox"
+                    checked={botForm.is_active}
+                    onChange={(event) =>
+                      setBotForm({
+                        ...botForm,
+                        is_active: event.target.checked,
+                      })
+                    }
+                  />
+                  Bot activo
+                </label>
+                <button className="primary" type="submit">
+                  {editingBotId ? "Guardar cambios" : "Crear bot"}
+                </button>
+              </form>
+
+              <div className="card">
+                <h3>Lista de bots</h3>
+                <ul className="list">
+                  {bots.map((bot) => (
+                    <li key={bot.id}>
+                      <div>
+                        <strong>{bot.name}</strong>
+                        <span>Cliente #{bot.client_id}</span>
+                        <span>{bot.slack_channel_id}</span>
+                      </div>
+                      <div className="actions">
+                        <button onClick={() => startEditBot(bot)}>
+                          Editar
+                        </button>
+                        <button
+                          className="danger"
+                          onClick={() => deleteItem(`/bots/${bot.id}`)}
+                        >
+                          Eliminar
+                        </button>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          </section>
+        )}
+
+        {activeTab === "servicios" && (
+          <section>
+            <SectionHeader
+              title="Servicios"
+              description="Define los servicios y duraciones por bot."
+            />
+            <div className="grid">
+              <form onSubmit={submitService} className="card">
+                <h3>{editingServiceId ? "Editar servicio" : "Nuevo servicio"}</h3>
+                <label>
+                  Bot
+                  <select
+                    value={serviceForm.bot_id}
+                    onChange={(event) =>
+                      setServiceForm({
+                        ...serviceForm,
+                        bot_id: event.target.value,
+                      })
+                    }
+                    required
+                  >
+                    <option value="">Selecciona un bot</option>
+                    {bots.map((bot) => (
+                      <option key={bot.id} value={bot.id}>
+                        {bot.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  Nombre
+                  <input
+                    value={serviceForm.name}
+                    onChange={(event) =>
+                      setServiceForm({
+                        ...serviceForm,
+                        name: event.target.value,
+                      })
+                    }
+                    required
+                  />
+                </label>
+                <label>
+                  Duración (minutos)
+                  <input
+                    type="number"
+                    min="5"
+                    max="480"
+                    value={serviceForm.duration_minutes}
+                    onChange={(event) =>
+                      setServiceForm({
+                        ...serviceForm,
+                        duration_minutes: event.target.value,
+                      })
+                    }
+                    required
+                  />
+                </label>
+                <label className="checkbox">
+                  <input
+                    type="checkbox"
+                    checked={serviceForm.is_active}
+                    onChange={(event) =>
+                      setServiceForm({
+                        ...serviceForm,
+                        is_active: event.target.checked,
+                      })
+                    }
+                  />
+                  Servicio activo
+                </label>
+                <button className="primary" type="submit">
+                  {editingServiceId ? "Guardar cambios" : "Crear servicio"}
+                </button>
+              </form>
+
+              <div className="card">
+                <h3>Lista de servicios</h3>
+                <ul className="list">
+                  {services.map((service) => (
+                    <li key={service.id}>
+                      <div>
+                        <strong>{service.name}</strong>
+                        <span>Bot #{service.bot_id}</span>
+                        <span>{service.duration_minutes} min</span>
+                      </div>
+                      <div className="actions">
+                        <button onClick={() => startEditService(service)}>
+                          Editar
+                        </button>
+                        <button
+                          className="danger"
+                          onClick={() => deleteItem(`/servicios/${service.id}`)}
+                        >
+                          Eliminar
+                        </button>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          </section>
+        )}
+
+        {activeTab === "reservas" && (
+          <section>
+            <SectionHeader
+              title="Reservas"
+              description="Listado centralizado de citas confirmadas."
+            />
+            <div className="card">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Cliente</th>
+                    <th>Bot</th>
+                    <th>Servicio</th>
+                    <th>Usuario Slack</th>
+                    <th>Inicio</th>
+                    <th>Fin</th>
+                    <th>Estado</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {reservations.map((reservation) => (
+                    <tr key={reservation.id}>
+                      <td>{reservation.client_id}</td>
+                      <td>{reservation.bot_id}</td>
+                      <td>{reservation.service_id || "-"}</td>
+                      <td>{reservation.slack_user_id}</td>
+                      <td>{new Date(reservation.start_time).toLocaleString()}</td>
+                      <td>{new Date(reservation.end_time).toLocaleString()}</td>
+                      <td>{reservation.status}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        )}
+
+        {activeTab === "estado" && (
+          <section>
+            <SectionHeader
+              title="Estado del sistema"
+              description="Métricas rápidas de salud del SaaS."
+            />
+            <div className="status-grid">
+              <div className="card">
+                <h3>Salud</h3>
+                <p>{health ? health.status : "Cargando..."}</p>
+              </div>
+              <div className="card">
+                <h3>Clientes</h3>
+                <p>{health ? health.clients : "-"}</p>
+              </div>
+              <div className="card">
+                <h3>Bots</h3>
+                <p>{health ? health.bots : "-"}</p>
+              </div>
+              <div className="card">
+                <h3>Reservas</h3>
+                <p>{health ? health.reservations : "-"}</p>
+              </div>
+            </div>
+          </section>
+        )}
+      </main>
     </div>
   );
 };

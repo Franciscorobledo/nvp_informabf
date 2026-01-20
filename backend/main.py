@@ -83,6 +83,7 @@ from reportlab.lib.utils import ImageReader
 from database import Base, SessionLocal, engine
 from logs_router import router as logs_router
 from models import AppLog
+from saas_router import router as saas_router
 
 # ==============================
 # CONFIGURACIÓN GLOBAL
@@ -185,6 +186,7 @@ app.include_router(ingest_router)
 app.include_router(analysis_router)
 app.include_router(logs_router)
 app.include_router(subscriptions_router)
+app.include_router(saas_router)
 
 
 @app.on_event("startup")
