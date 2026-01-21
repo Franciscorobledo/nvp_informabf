@@ -80,7 +80,7 @@ from reportlab.lib import colors
 from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
 from reportlab.lib.utils import ImageReader
-from database import Base, SessionLocal, engine
+from database import Base, SessionLocal, engine, ensure_schema
 from logs_router import router as logs_router
 from models import AppLog
 from saas_router import router as saas_router
@@ -192,6 +192,7 @@ app.include_router(saas_router)
 @app.on_event("startup")
 def startup_event():
     # Crear tablas automáticamente para permitir arranque con SQLite local vacío.
+    ensure_schema()
     Base.metadata.create_all(bind=engine)
     with SessionLocal() as db:
         ensure_admin_user(db)
