@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import API_URL from "./api";
 import "./index.css";
+import { isTokenExpired } from "./session";
 
 const defaultBot = {
   client_id: "",
@@ -29,7 +30,7 @@ const defaultService = {
   is_active: true,
 };
 
-const useApi = (token) => {
+const useApi = (token, onUnauthorized) => {
   const headers = useMemo(() => {
     const base = { "Content-Type": "application/json" };
     if (token) {
@@ -46,6 +47,11 @@ const useApi = (token) => {
         ...(options.headers || {}),
       },
     });
+    if ([401, 403].includes(response.status)) {
+      const detail = await response.json().catch(() => ({}));
+      onUnauthorized?.(detail.detail || "Tu sesión expiró. Inicia sesión nuevamente.");
+      throw new Error(detail.detail || "Sesión expirada");
+    }
     if (!response.ok) {
       const detail = await response.json().catch(() => ({}));
       throw new Error(detail.detail || "Error de API");
@@ -59,11 +65,15 @@ const useApi = (token) => {
   return { request };
 };
 
-const Login = ({ onLogin }) => {
+const Login = ({ onLogin, message }) => {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
+  const [error, setError] = useState(message || "");
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    setError(message || "");
+  }, [message]);
 
   const handleSubmit = async (event) => {
     event.preventDefault();
@@ -133,8 +143,17 @@ const SectionHeader = ({ title, description }) => (
 );
 
 const App = () => {
-  const [token, setToken] = useState(localStorage.getItem("token"));
-  const [username, setUsername] = useState(localStorage.getItem("username"));
+  const [token, setToken] = useState(() => {
+    const storedToken = localStorage.getItem("token");
+    if (storedToken && isTokenExpired(storedToken)) {
+      localStorage.removeItem("token");
+      localStorage.removeItem("username");
+      return null;
+    }
+    return storedToken;
+  });
+  const [username, setUsername] = useState(() => localStorage.getItem("username"));
+  const [authError, setAuthError] = useState("");
   const [activeTab, setActiveTab] = useState("clientes");
   const [clients, setClients] = useState([]);
   const [bots, setBots] = useState([]);
@@ -154,8 +173,6 @@ const App = () => {
   const [clientSubmitting, setClientSubmitting] = useState(false);
   const [botSubmitting, setBotSubmitting] = useState(false);
   const [serviceSubmitting, setServiceSubmitting] = useState(false);
-
-  const api = useApi(token);
 
   const refreshAll = async () => {
     const [clientData, botData, serviceData, reservationData, healthData] =
@@ -179,13 +196,6 @@ const App = () => {
     }
   }, [token]);
 
-  const handleLogin = (newToken, user) => {
-    localStorage.setItem("token", newToken);
-    localStorage.setItem("username", user);
-    setToken(newToken);
-    setUsername(user);
-  };
-
   const handleLogout = () => {
     localStorage.removeItem("token");
     localStorage.removeItem("username");
@@ -193,8 +203,23 @@ const App = () => {
     setUsername(null);
   };
 
+  const handleUnauthorized = (message) => {
+    setAuthError(message || "Tu sesión expiró. Inicia sesión nuevamente.");
+    handleLogout();
+  };
+
+  const api = useApi(token, handleUnauthorized);
+
+  const handleLogin = (newToken, user) => {
+    localStorage.setItem("token", newToken);
+    localStorage.setItem("username", user);
+    setToken(newToken);
+    setUsername(user);
+    setAuthError("");
+  };
+
   if (!token) {
-    return <Login onLogin={handleLogin} />;
+    return <Login onLogin={handleLogin} message={authError} />;
   }
 
   const validateClientForm = () => {
