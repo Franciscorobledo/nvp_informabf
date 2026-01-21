@@ -148,6 +148,12 @@ const App = () => {
   const [editingClientId, setEditingClientId] = useState(null);
   const [editingBotId, setEditingBotId] = useState(null);
   const [editingServiceId, setEditingServiceId] = useState(null);
+  const [clientError, setClientError] = useState("");
+  const [botError, setBotError] = useState("");
+  const [serviceError, setServiceError] = useState("");
+  const [clientSubmitting, setClientSubmitting] = useState(false);
+  const [botSubmitting, setBotSubmitting] = useState(false);
+  const [serviceSubmitting, setServiceSubmitting] = useState(false);
 
   const api = useApi(token);
 
@@ -191,74 +197,156 @@ const App = () => {
     return <Login onLogin={handleLogin} />;
   }
 
+  const validateClientForm = () => {
+    if (!clientForm.name.trim()) {
+      return "El nombre es obligatorio.";
+    }
+    if (!clientForm.timezone.trim()) {
+      return "La zona horaria es obligatoria.";
+    }
+    if (
+      clientForm.contact_email &&
+      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(clientForm.contact_email)
+    ) {
+      return "El email de contacto no es válido.";
+    }
+    return "";
+  };
+
+  const validateBotForm = () => {
+    if (!botForm.client_id) {
+      return "Selecciona un cliente.";
+    }
+    if (!botForm.name.trim()) {
+      return "El nombre del bot es obligatorio.";
+    }
+    if (!botForm.slack_channel_id.trim()) {
+      return "El Slack Channel ID es obligatorio.";
+    }
+    if (!botForm.google_calendar_id.trim()) {
+      return "El Google Calendar ID es obligatorio.";
+    }
+    return "";
+  };
+
+  const validateServiceForm = () => {
+    if (!serviceForm.bot_id) {
+      return "Selecciona un bot.";
+    }
+    if (!serviceForm.name.trim()) {
+      return "El nombre del servicio es obligatorio.";
+    }
+    if (!serviceForm.duration_minutes || Number(serviceForm.duration_minutes) <= 0) {
+      return "La duración debe ser mayor a 0 minutos.";
+    }
+    return "";
+  };
+
   const submitClient = async (event) => {
     event.preventDefault();
-    if (editingClientId) {
-      await api.request(`/clientes/${editingClientId}`, {
-        method: "PUT",
-        body: JSON.stringify(clientForm),
-      });
-    } else {
-      await api.request("/clientes", {
-        method: "POST",
-        body: JSON.stringify(clientForm),
-      });
+    const validationMessage = validateClientForm();
+    setClientError(validationMessage);
+    if (validationMessage) {
+      return;
     }
-    setClientForm(defaultClient);
-    setEditingClientId(null);
-    refreshAll();
+    setClientSubmitting(true);
+    try {
+      if (editingClientId) {
+        await api.request(`/clientes/${editingClientId}`, {
+          method: "PUT",
+          body: JSON.stringify(clientForm),
+        });
+      } else {
+        await api.request("/clientes", {
+          method: "POST",
+          body: JSON.stringify(clientForm),
+        });
+      }
+      setClientForm(defaultClient);
+      setEditingClientId(null);
+      refreshAll();
+    } catch (error) {
+      setClientError(error.message || "No se pudo guardar el cliente.");
+    } finally {
+      setClientSubmitting(false);
+    }
   };
 
   const submitBot = async (event) => {
     event.preventDefault();
+    const validationMessage = validateBotForm();
+    setBotError(validationMessage);
+    if (validationMessage) {
+      return;
+    }
+    setBotSubmitting(true);
     const payload = {
       ...botForm,
       client_id: Number(botForm.client_id),
       openai_temperature: Number(botForm.openai_temperature),
       is_active: Boolean(botForm.is_active),
     };
-    if (editingBotId) {
-      await api.request(`/bots/${editingBotId}`, {
-        method: "PUT",
-        body: JSON.stringify(payload),
-      });
-    } else {
-      await api.request("/bots", {
-        method: "POST",
-        body: JSON.stringify(payload),
-      });
+    try {
+      if (editingBotId) {
+        await api.request(`/bots/${editingBotId}`, {
+          method: "PUT",
+          body: JSON.stringify(payload),
+        });
+      } else {
+        await api.request("/bots", {
+          method: "POST",
+          body: JSON.stringify(payload),
+        });
+      }
+      setBotForm(defaultBot);
+      setEditingBotId(null);
+      refreshAll();
+    } catch (error) {
+      setBotError(error.message || "No se pudo guardar el bot.");
+    } finally {
+      setBotSubmitting(false);
     }
-    setBotForm(defaultBot);
-    setEditingBotId(null);
-    refreshAll();
   };
 
   const submitService = async (event) => {
     event.preventDefault();
+    const validationMessage = validateServiceForm();
+    setServiceError(validationMessage);
+    if (validationMessage) {
+      return;
+    }
+    setServiceSubmitting(true);
     const payload = {
       ...serviceForm,
       bot_id: Number(serviceForm.bot_id),
       duration_minutes: Number(serviceForm.duration_minutes),
       is_active: Boolean(serviceForm.is_active),
     };
-    if (editingServiceId) {
-      await api.request(`/servicios/${editingServiceId}`, {
-        method: "PUT",
-        body: JSON.stringify(payload),
-      });
-    } else {
-      await api.request("/servicios", {
-        method: "POST",
-        body: JSON.stringify(payload),
-      });
+    try {
+      if (editingServiceId) {
+        await api.request(`/servicios/${editingServiceId}`, {
+          method: "PUT",
+          body: JSON.stringify(payload),
+        });
+      } else {
+        await api.request("/servicios", {
+          method: "POST",
+          body: JSON.stringify(payload),
+        });
+      }
+      setServiceForm(defaultService);
+      setEditingServiceId(null);
+      refreshAll();
+    } catch (error) {
+      setServiceError(error.message || "No se pudo guardar el servicio.");
+    } finally {
+      setServiceSubmitting(false);
     }
-    setServiceForm(defaultService);
-    setEditingServiceId(null);
-    refreshAll();
   };
 
   const startEditClient = (client) => {
     setEditingClientId(client.id);
+    setClientError("");
     setClientForm({
       name: client.name,
       contact_email: client.contact_email || "",
@@ -269,6 +357,7 @@ const App = () => {
 
   const startEditBot = (bot) => {
     setEditingBotId(bot.id);
+    setBotError("");
     setBotForm({
       client_id: bot.client_id,
       name: bot.name,
@@ -285,6 +374,7 @@ const App = () => {
 
   const startEditService = (service) => {
     setEditingServiceId(service.id);
+    setServiceError("");
     setServiceForm({
       bot_id: service.bot_id,
       name: service.name,
@@ -384,8 +474,13 @@ const App = () => {
                   />
                   Cliente activo
                 </label>
-                <button className="primary" type="submit">
-                  {editingClientId ? "Guardar cambios" : "Crear cliente"}
+                {clientError && <div className="error">{clientError}</div>}
+                <button className="primary" type="submit" disabled={clientSubmitting}>
+                  {clientSubmitting
+                    ? "Guardando..."
+                    : editingClientId
+                      ? "Guardar cambios"
+                      : "Crear cliente"}
                 </button>
               </form>
 
@@ -561,8 +656,13 @@ const App = () => {
                   />
                   Bot activo
                 </label>
-                <button className="primary" type="submit">
-                  {editingBotId ? "Guardar cambios" : "Crear bot"}
+                {botError && <div className="error">{botError}</div>}
+                <button className="primary" type="submit" disabled={botSubmitting}>
+                  {botSubmitting
+                    ? "Guardando..."
+                    : editingBotId
+                      ? "Guardar cambios"
+                      : "Crear bot"}
                 </button>
               </form>
 
@@ -666,8 +766,13 @@ const App = () => {
                   />
                   Servicio activo
                 </label>
-                <button className="primary" type="submit">
-                  {editingServiceId ? "Guardar cambios" : "Crear servicio"}
+                {serviceError && <div className="error">{serviceError}</div>}
+                <button className="primary" type="submit" disabled={serviceSubmitting}>
+                  {serviceSubmitting
+                    ? "Guardando..."
+                    : editingServiceId
+                      ? "Guardar cambios"
+                      : "Crear servicio"}
                 </button>
               </form>
 
