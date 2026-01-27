@@ -159,3 +159,27 @@ VITE_API_URL=https://tu-backend.onrender.com
 4. Confirmación con el usuario.
 5. Creación del evento.
 6. Confirmación final por Slack.
+
+---
+
+## QA de configuración del bot (paso a paso)
+
+### 1) Pre-requisitos técnicos
+- Backend con variables de entorno configuradas:
+  - `SLACK_SIGNING_SECRET`, `SLACK_BOT_TOKEN`, `OPENAI_API_KEY`, `GOOGLE_SERVICE_ACCOUNT_INFO`.
+- Calendario compartido con la cuenta de servicio de Google.
+
+### 2) Configuración en Slack
+- App instalada en el workspace.
+- Events API apunta a `https://<tu-backend>/slack/events`.
+- Permisos mínimos: `chat:write` y `channels:history`.
+
+### 3) Checklist de QA (antes de probar)
+- El bot está **activo** y el `Slack Channel ID` coincide con el canal real.
+- El `Google Calendar ID` pertenece al calendario compartido.
+- Existe al menos **un servicio activo** para el bot.
+- El endpoint `/health` responde con `status=ok`.
+
+### 4) Prueba rápida
+- En Slack escribe: “Quiero agendar una cita”.
+- Confirma que el bot solicita servicio/fecha/hora y responde con confirmación.
