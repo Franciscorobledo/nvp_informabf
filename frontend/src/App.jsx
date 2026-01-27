@@ -545,6 +545,23 @@ const App = () => {
               description="Configura prompts, Slack y Google Calendar."
             />
             <div className="grid">
+              <div className="card qa-card">
+                <h3>Guía rápida de configuración</h3>
+                <ol className="steps">
+                  <li>Selecciona el cliente y define el nombre del bot.</li>
+                  <li>Completa los IDs de Slack y comparte el canal con tu app.</li>
+                  <li>Agrega el Google Calendar ID y comparte el calendario con la cuenta de servicio.</li>
+                  <li>Guarda el bot y crea al menos un servicio activo.</li>
+                </ol>
+                <h4>Checklist QA antes de probar</h4>
+                <ul className="checklist">
+                  <li>SLACK_SIGNING_SECRET y SLACK_BOT_TOKEN definidos en el backend.</li>
+                  <li>El endpoint <code>/slack/events</code> configurado en Slack (Events API).</li>
+                  <li>El bot está activo y el canal coincide con el Slack Channel ID.</li>
+                  <li>OPENAI_API_KEY y GOOGLE_SERVICE_ACCOUNT_INFO configurados.</li>
+                  <li>El calendario está compartido con la cuenta de servicio.</li>
+                </ul>
+              </div>
               <form onSubmit={submitBot} className="card">
                 <h3>{editingBotId ? "Editar bot" : "Nuevo bot"}</h3>
                 <label>
@@ -576,6 +593,7 @@ const App = () => {
                     }
                     required
                   />
+                  <span className="helper-text">Nombre visible en el panel y en los logs.</span>
                 </label>
                 <label>
                   Prompt del sistema
@@ -589,6 +607,9 @@ const App = () => {
                       })
                     }
                   />
+                  <span className="helper-text">
+                    Indica tono, reglas y límites del bot para agendar.
+                  </span>
                 </label>
                 <label>
                   Slack Channel ID
@@ -602,6 +623,9 @@ const App = () => {
                     }
                     required
                   />
+                  <span className="helper-text">
+                    Es el ID del canal donde vive el bot (ej: C0123ABC).
+                  </span>
                 </label>
                 <label>
                   Slack Team ID
@@ -614,6 +638,7 @@ const App = () => {
                       })
                     }
                   />
+                  <span className="helper-text">Opcional, útil para instalaciones multi-team.</span>
                 </label>
                 <label>
                   Slack Bot User ID
@@ -626,6 +651,9 @@ const App = () => {
                       })
                     }
                   />
+                  <span className="helper-text">
+                    Evita que el bot se responda a sí mismo.
+                  </span>
                 </label>
                 <label>
                   Google Calendar ID
@@ -639,6 +667,9 @@ const App = () => {
                     }
                     required
                   />
+                  <span className="helper-text">
+                    Usa el ID del calendario compartido con la cuenta de servicio.
+                  </span>
                 </label>
                 <label>
                   Modelo OpenAI
@@ -651,6 +682,9 @@ const App = () => {
                       })
                     }
                   />
+                  <span className="helper-text">
+                    Recomendado: gpt-4o-mini para extracción rápida.
+                  </span>
                 </label>
                 <label>
                   Temperatura OpenAI
@@ -667,6 +701,9 @@ const App = () => {
                       })
                     }
                   />
+                  <span className="helper-text">
+                    0.2 es estable; sube si deseas respuestas más creativas.
+                  </span>
                 </label>
                 <label className="checkbox">
                   <input

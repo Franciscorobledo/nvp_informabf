@@ -101,12 +101,26 @@ main {
   margin-top: 0;
 }
 
+.card h4 {
+  margin: 16px 0 8px;
+  font-size: 15px;
+}
+
+.qa-card {
+  background: linear-gradient(135deg, #eef2ff, #ffffff);
+}
+
 label {
   display: flex;
   flex-direction: column;
   gap: 6px;
   font-size: 14px;
   margin-bottom: 12px;
+}
+
+.helper-text {
+  font-size: 12px;
+  color: #64748b;
 }
 
 input,
@@ -120,6 +134,20 @@ textarea {
 
 textarea {
   resize: vertical;
+}
+
+.steps,
+.checklist {
+  margin: 0;
+  padding-left: 18px;
+  color: #334155;
+  font-size: 14px;
+  display: grid;
+  gap: 8px;
+}
+
+.checklist {
+  list-style: "✅ ";
 }
 
 .checkbox {
