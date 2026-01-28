@@ -12,6 +12,7 @@ from auth import admin_required, get_current_user
 from database import get_db
 from models import Subscription, SubscriptionPlan, User
 from utils.mercadopago_keys import get_mp_access_token, persist_mp_access_token
+from utils.plan_pricing_store import load_plan_pricing_overrides, persist_plan_pricing_override
 
 router = APIRouter(prefix="/subscriptions", tags=["Suscripciones"])
 
@@ -93,6 +94,25 @@ def ensure_default_plans(db: Session) -> None:
         db.commit()
         logging.info("Planes creados por defecto: %s", created)
 
+    overrides = load_plan_pricing_overrides()
+    if not overrides:
+        return
+
+    updated = False
+    for plan in db.query(SubscriptionPlan).all():
+        override = overrides.get(plan.alias)
+        if not override:
+            continue
+        if override.get("price_monthly") is not None:
+            plan.price_monthly = override["price_monthly"]
+            updated = True
+        if override.get("currency"):
+            plan.currency = override["currency"]
+            updated = True
+
+    if updated:
+        db.commit()
+
 
 def _resolve_plan_priority(alias: Optional[str]) -> int:
     if not alias:
@@ -163,6 +183,10 @@ def update_plan(plan_id: int, payload: PlanUpdate, db: Session = Depends(get_db)
         db.add(plan)
         db.commit()
         db.refresh(plan)
+        try:
+            persist_plan_pricing_override(plan.alias, plan.price_monthly, plan.currency)
+        except Exception as exc:
+            logging.warning("No se pudo persistir el precio del plan en JSON: %s", exc)
 
     return {
         "status": "ok",
