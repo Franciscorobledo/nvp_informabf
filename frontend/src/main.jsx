@@ -8,7 +8,9 @@ import { registerGlobalErrorHandlers } from "./api";
 
 registerGlobalErrorHandlers();
 
-const isShortsStudio = typeof window !== "undefined" && window.location.pathname.includes("shorts-studio");
+const pathname = typeof window !== "undefined" ? window.location.pathname.toLowerCase() : "";
+const isAgendaPath = pathname.includes("agenda");
+const isShortsStudio = !isAgendaPath;
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
