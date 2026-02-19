@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: shorts-autopublisher-api
+    env: docker
+    plan: starter
+    autoDeploy: true
+    envVars:
+      - key: PORT
+        value: 10000
+      - key: SHORTS_MASTER_KEY
+        sync: false
+      - key: SHORTS_DATABASE_URL
+        value: sqlite:///./shorts_studio.db
