@@ -10,3 +10,7 @@ google-auth
 moviepy
 imageio-ffmpeg
 python-multipart
+beautifulsoup4
+pandas
+openpyxl
+playwright
